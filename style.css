@@ -244,7 +244,7 @@ ul {
   inset: 0;
   width: 100%;
   height: 100%;
-  filter: blur(50px);
+  filter: blur(35px);
 }
 
 .noise-overlay {
