@@ -443,7 +443,6 @@
       prevX = mouse.x;
       prevY = mouse.y;
 
-      // Throttle: spawn one particle every other move event
       frameCount++;
       if (frameCount % 2 !== 0) return;
 
@@ -464,7 +463,6 @@
     function draw() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Base orbs
       baseOrbs.forEach(orb => {
         orb.x += (mouse.x + orb.ox - orb.x) * orb.speed;
         orb.y += (mouse.y + orb.oy - orb.y) * orb.speed;
@@ -475,7 +473,6 @@
         ctx.fillRect(0, 0, canvas.width, canvas.height);
       });
 
-      // Trail particles
       for (let i = trail.length - 1; i >= 0; i--) {
         const p = trail[i];
         const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r * p.life);
