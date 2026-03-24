@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>All Projects — Ali Koaik</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    /* Page-specific overrides */
+    #projects-page {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 7rem 2rem 5rem;
+    }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      margin-bottom: 3.5rem;
+      transition: all var(--transition);
+    }
+
+    .back-link:hover {
+      color: var(--accent-purple);
+      gap: 0.75rem;
+    }
+
+    .page-hero {
+      margin-bottom: 4rem;
+      text-align: center;
+    }
+
+    .projects-count {
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      letter-spacing: 2px;
+      margin-top: 0.75rem;
+    }
+
+    @media (max-width: 768px) {
+      #projects-page {
+        padding: 5rem 1.5rem 4rem;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAVBAR -->
+  <nav id="navbar">
+    <a href="index.html" class="nav-logo">AK</a>
+    <ul class="nav-links" id="navLinks">
+      <li><a href="index.html#hero">Home</a></li>
+      <li><a href="index.html#about">About</a></li>
+      <li><a href="index.html#skills">Skills</a></li>
+      <li><a href="index.html#projects">Projects</a></li>
+      <li><a href="index.html#education">Education</a></li>
+      <li><a href="index.html#contact">Contact</a></li>
+    </ul>
+    <button class="hamburger" id="hamburger" aria-label="Toggle menu">
+      <span></span><span></span><span></span>
+    </button>
+  </nav>
+
+  <main id="projects-page">
+
+    <!-- Back link -->
+    <a href="index.html#projects" class="back-link">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+      Back to Portfolio
+    </a>
+
+    <!-- Page heading -->
+    <div class="page-hero">
+      <span class="section-tag">// projects</span>
+      <h1 class="section-title" style="margin-top:0.5rem;">All Projects</h1>
+      <p class="projects-count" id="projectsCount"></p>
+    </div>
+
+    <!-- Cards grid -->
+    <div class="projects-grid" id="projectsGrid"></div>
+
+  </main>
+
+  <footer>
+    <p id="footerText"></p>
+  </footer>
+
+  <script src="data.js"></script>
+  <script>
+    (function () {
+      function buildProjectCard(project, index) {
+        const card = document.createElement('div');
+        card.className = 'project-card';
+
+        const techTags = project.tech
+          .map(t => `<span class="tech-tag">${t}</span>`)
+          .join('');
+
+        const demoLink = project.demo
+          ? `<a href="${project.demo}" target="_blank" rel="noopener" class="project-link project-link-demo">▶ Demo</a>`
+          : '';
+
+        card.innerHTML = `
+          <div class="project-icon">${project.icon}</div>
+          <h3 class="project-name">${project.name}</h3>
+          <p class="project-description">${project.description}</p>
+          <div class="project-tech">${techTags}</div>
+          <div class="project-links">
+            <a href="${project.github}" target="_blank" rel="noopener" class="project-link">↗ GitHub</a>
+            ${demoLink}
+          </div>
+        `;
+
+        return card;
+      }
+
+function initNavbar() {
+        const navbar = document.getElementById('navbar');
+        const hamburger = document.getElementById('hamburger');
+        const navLinks = document.getElementById('navLinks');
+
+        hamburger.addEventListener('click', () => {
+          hamburger.classList.toggle('open');
+          navLinks.classList.toggle('open');
+        });
+
+        navLinks.querySelectorAll('a').forEach(link => {
+          link.addEventListener('click', () => {
+            hamburger.classList.remove('open');
+            navLinks.classList.remove('open');
+          });
+        });
+
+        window.addEventListener('scroll', () => {
+          navbar.classList.toggle('scrolled', window.scrollY > 50);
+        }, { passive: true });
+      }
+
+      document.addEventListener('DOMContentLoaded', () => {
+        const data = window.portfolioData;
+        if (!data) return;
+
+        const grid = document.getElementById('projectsGrid');
+        data.projects.forEach((project, i) => {
+          grid.appendChild(buildProjectCard(project, i));
+        });
+
+        document.getElementById('projectsCount').textContent =
+          `${data.projects.length} projects total`;
+
+        document.getElementById('footerText').textContent =
+          `© ${new Date().getFullYear()} ${data.personal.name} · Built with pure HTML, CSS & JS`;
+
+        initNavbar();
+      });
+    })();
+  </script>
+</body>
+</html>
