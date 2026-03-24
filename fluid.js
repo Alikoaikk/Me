@@ -12,9 +12,9 @@
     PRESSURE: 0.5,
     PRESSURE_ITERATIONS: 8,
     CURL: 6,
-    SPLAT_RADIUS: 0.055,
-    SPLAT_FORCE: 80,
-    DT_SCALE: 0.35,
+    SPLAT_RADIUS: 0.035,
+    SPLAT_FORCE: 35,
+    DT_SCALE: 0.18,
   };
 
   // Theme colors: purple, cyan, violet, blue
