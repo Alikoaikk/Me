@@ -302,7 +302,7 @@
      ============================================================ */
   function renderFooter(data) {
     document.getElementById('footerText').textContent =
-      `© ${new Date().getFullYear()} ${data.personal.name} · Built with pure HTML, CSS & JS`;
+      `© ${new Date().getFullYear()} ${data.personal.name}`;
   }
 
   /* ============================================================
