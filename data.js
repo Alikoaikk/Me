@@ -47,8 +47,7 @@ const portfolioData = {
       icon: "🐚",
       description: "A fully functional Unix shell built in C, replicating core Bash behavior — command execution, pipes, redirections, environment variables, built-in commands, and signal handling. One of the most comprehensive systems projects.",
       tech: ["C", "Bash", "Processes", "Pipes", "Unix"],
-      github: "https://github.com/akoaik-msafa/minishell",
-      demo: "terminal2.html"
+      github: "https://github.com/akoaik-msafa/minishell"
     },
     {
       name: "CPP MODULES",
