@@ -376,6 +376,14 @@
       });
     }
 
+    const progressBar = document.getElementById('scrollProgress');
+    function updateProgress() {
+      const scrolled = window.scrollY;
+      const total = document.documentElement.scrollHeight - window.innerHeight;
+      progressBar.style.width = (total > 0 ? (scrolled / total) * 100 : 0) + '%';
+    }
+    window.addEventListener('scroll', updateProgress, { passive: true });
+
     window.addEventListener('scroll', onScroll, { passive: true });
     onScroll(); // run once on load
   }

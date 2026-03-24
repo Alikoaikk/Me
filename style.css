@@ -131,6 +131,17 @@ ul {
 /* ============================================================
    NAVBAR
    ============================================================ */
+#scrollProgress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 0%;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent-purple), var(--accent-cyan));
+  z-index: 1001;
+  transition: width 0.1s linear;
+}
+
 #navbar {
   position: fixed;
   top: 0;
