@@ -15,7 +15,7 @@ const portfolioData = {
   socials: {
     email: "alikoaik004@gmail.com",
     github: "https://github.com/alikoaikk",
-    linkedin: "https://linkedin.com/in/ali-koaikkoaik-86a4b4272"
+    linkedin: "https://www.linkedin.com/in/alikoaik"
   },
 
   stats: {
