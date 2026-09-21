@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ali Koaik — Portfolio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <!-- Hero overrides for the galaxy scene; must follow style.css. -->
+  <link rel="stylesheet" href="galaxy.css" />
+</head>
+<body>
+
+  <!-- SCROLL PROGRESS -->
+  <div id="scrollProgress"></div>
+
+  <!-- NAVBAR -->
+  <nav id="navbar">
+    <a href="#hero" class="nav-logo">AK</a>
+    <ul class="nav-links" id="navLinks">
+      <li><a href="#hero">Home</a></li>
+      <li><a href="index.html#about">About</a></li>
+      <li><a href="index.html#skills">Skills</a></li>
+      <li><a href="index.html#projects">Projects</a></li>
+      <li><a href="index.html#education">Education</a></li>
+      <li><a href="index.html#contact">Contact</a></li>
+    </ul>
+    <button class="hamburger" id="hamburger" aria-label="Toggle menu">
+      <span></span><span></span><span></span>
+    </button>
+  </nav>
+
+  <!-- HERO — the galaxy owns the screen. The canvas is fixed so it
+       stays put while the page scrolls over it. -->
+  <section id="hero">
+    <div class="hero-bg">
+      <canvas id="heroCanvas"></canvas>
+      <div class="noise-overlay"></div>
+    </div>
+    <a href="#burst" class="scroll-indicator" aria-label="Scroll down">
+      <span class="scroll-indicator-label">scroll</span>
+      <span class="scroll-dot"></span>
+    </a>
+  </section>
+
+  <!-- INTRO — scroll length only. The galaxy holds the screen here
+       before the burst fires; there is no text over it. -->
+  <section id="intro" aria-hidden="true"></section>
+
+  <!-- BURST — an empty screen of scroll that gives the galaxy room to
+       explode and settle before the content begins. -->
+  <section id="burst" aria-hidden="true"></section>
+
+  <!-- PLANET — pure scroll length for the approach. Empty by design:
+       the gas giant grows behind it and any content would be lost. -->
+  <section id="planet" aria-hidden="true"></section>
+
+  <script src="galaxy.js"></script>
+  <script>
+    /* Mirrors the galaxy's scroll drift onto the CSS core bloom so the
+       two pan together. Page-specific, so it lives here. */
+    (function () {
+      'use strict';
+
+      // Keep the CSS bloom aligned with the canvas pan. Matches
+      // SCROLL_DRIFT's 0..1 progress in galaxy.js.
+      const root = document.documentElement;
+      let ticking = false;
+      function onScroll() {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(() => {
+          const h = window.innerHeight || 1;
+          const p = Math.min(1, Math.max(0, window.scrollY / h));
+          root.style.setProperty('--drift', p.toFixed(4));
+          ticking = false;
+        });
+      }
+      window.addEventListener('scroll', onScroll, { passive: true });
+      onScroll();
+    })();
+  </script>
+</body>
+</html>

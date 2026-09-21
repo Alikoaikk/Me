@@ -248,6 +248,15 @@ ul {
   position: absolute;
   inset: 0;
   z-index: 0;
+  /* Deep-space gradient: the globe canvas renders on top of this. */
+  background:
+    radial-gradient(ellipse 120% 80% at 50% 45%,
+      rgba(108, 99, 255, 0.10) 0%,
+      rgba(10, 10, 20, 0.0) 60%),
+    radial-gradient(ellipse 100% 100% at 50% 100%,
+      rgba(0, 212, 255, 0.06) 0%,
+      rgba(10, 10, 15, 0) 55%),
+    #05050c;
 }
 
 #heroCanvas {
@@ -255,6 +264,32 @@ ul {
   inset: 0;
   width: 100%;
   height: 100%;
+}
+
+/* Atmospheric halo behind the globe — a pure CSS glow, so the
+   shader doesn't have to pay for a bloom pass. */
+.hero-bg::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(74vh, 74vw);
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(circle,
+    rgba(0, 212, 255, 0.11) 0%,
+    rgba(108, 99, 255, 0.09) 42%,
+    rgba(108, 99, 255, 0.03) 62%,
+    transparent 72%);
+  filter: blur(22px);
+  pointer-events: none;
+  animation: haloBreathe 9s ease-in-out infinite;
+}
+
+@keyframes haloBreathe {
+  0%, 100% { opacity: 0.75; transform: translate(-50%, -50%) scale(1); }
+  50%      { opacity: 1;    transform: translate(-50%, -50%) scale(1.045); }
 }
 
 .noise-overlay {
@@ -275,6 +310,20 @@ ul {
   padding-top: 70px;
 }
 
+/* Scrim: darkens the globe directly behind the headline so the
+   text keeps its contrast without dimming the whole scene. */
+.hero-content::before {
+  content: '';
+  position: absolute;
+  inset: -12% -18%;
+  z-index: -1;
+  background: radial-gradient(ellipse 46% 40% at 50% 46%,
+    rgba(5, 5, 12, 0.46) 0%,
+    rgba(5, 5, 12, 0.22) 55%,
+    transparent 82%);
+  pointer-events: none;
+}
+
 .hero-greeting {
   font-family: var(--font-mono);
   color: var(--accent-cyan);
@@ -284,6 +333,7 @@ ul {
   margin-bottom: 0.75rem;
   opacity: 0;
   animation: fadeInUp 0.6s ease 0.2s forwards;
+  text-shadow: 0 2px 12px rgba(5, 5, 12, 0.85);
 }
 
 .hero-name {
@@ -308,6 +358,8 @@ ul {
   margin-bottom: 2.5rem;
   opacity: 0;
   animation: fadeInUp 0.6s ease 0.5s forwards;
+  /* Keeps the line legible where it crosses the globe's dots. */
+  text-shadow: 0 2px 14px rgba(5, 5, 12, 0.9);
 }
 
 .cursor {

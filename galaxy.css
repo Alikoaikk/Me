@@ -1,0 +1,153 @@
+/* ============================================================
+   GALAXY HERO — overrides for galaxy.html
+   Loaded after style.css; only touches the hero and intro panel.
+   ============================================================ */
+
+/* The page opens on the galaxy alone. */
+#hero {
+  min-height: 100vh;
+  position: relative;
+}
+
+/* The canvas is fixed so the galaxy stays put while the intro panel
+   scrolls over it — the stars drift sideways rather than scrolling away. */
+#hero .hero-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  /* Cold near-black, lifting very slightly toward the galaxy's plane,
+     with a vignette at the corners. Not flat black — the faint
+     gradient is what stops the field banding. */
+  background:
+    radial-gradient(ellipse 85% 65% at 50% 50%,
+      #0A0D16 0%,
+      #05070D 55%,
+      #030409 100%);
+}
+
+/* Warm bloom behind the galactic core, panning with the disc. */
+#hero .hero-bg::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: min(22vh, 22vw);
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  /* Corona around the little sun: white-hot core bleeding to gold. */
+  background: radial-gradient(circle,
+    rgba(255, 255, 252, 0.72) 0%,
+    rgba(255, 246, 214, 0.46) 16%,
+    rgba(252, 226, 158, 0.22) 36%,
+    rgba(230, 180, 110, 0.08) 58%,
+    transparent 78%);
+  filter: blur(16px);
+  pointer-events: none;
+  /* The corona swells as the core swallows stars. --core-glow is
+     published by galaxy.js from what it actually consumed, so this
+     reacts to the infall instead of pulsing on a fixed timer. */
+  opacity: calc(0.82 + var(--core-glow, 0) * 0.5);
+  scale: calc(1 + var(--core-glow, 0) * 0.22);
+  transition: opacity 0.25s ease-out, scale 0.3s ease-out;
+  animation: coreBreathe 11s ease-in-out infinite;
+  /* --nucleus-x is published by galaxy.js from its own projection, so
+     the bloom sits exactly on the rendered nucleus. Recomputing the
+     projection here in CSS let the two disagree and the centre showed
+     as two separate glows.
+
+     `left` rather than `translate`, so the swell below cannot
+     multiply the offset. */
+  left: calc(50% + var(--nucleus-x, 0vw));
+}
+
+/* Only a slow shimmer now — the real pulse comes from --core-glow.
+   This must not animate `transform` or `opacity` wholesale, or it
+   would override the feed response above. */
+@keyframes coreBreathe {
+  0%, 100% { filter: blur(16px) brightness(1); }
+  50%      { filter: blur(18px) brightness(1.1); }
+}
+
+/* Vignette + grain. The grain matters: an additive star field on flat
+   black shows visible banding in the faint gradients, and a little
+   noise breaks it up the way film grain does. */
+#hero .noise-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  /* Vignette only; the grain rides on ::after at low opacity. */
+  background-image: radial-gradient(ellipse 78% 78% at 50% 50%,
+    transparent 42%,
+    rgba(0, 0, 0, 0.30) 82%,
+    rgba(0, 0, 0, 0.58) 100%);
+  animation: none;
+}
+
+#hero .noise-overlay::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 200px 200px;
+  opacity: 0.030;
+  pointer-events: none;
+}
+
+/* The scroll cue belongs to the opening screen only — it fades out as
+   soon as the page moves, instead of hanging over the intro panel.
+   The entry animation is replaced (not just overridden) because
+   `forwards` would otherwise pin opacity at 1. */
+#hero .scroll-indicator {
+  position: fixed;
+  bottom: 2.5rem;
+  left: 50%;
+  z-index: 2;
+  transform: translateX(-50%);
+  pointer-events: none;
+  animation: cueIn 0.6s ease 1.0s both;
+  /* Multiplied by the entry animation's opacity via the parent. */
+  opacity: calc(1 - var(--drift, 0) * 3.2);
+}
+
+@keyframes cueIn {
+  from { visibility: hidden; }
+  to   { visibility: visible; }
+}
+
+/* ============================================================
+   INTRO PANEL
+   Sits above the fixed canvas and fades in as it scrolls into view.
+   ============================================================ */
+/* The intro is pure scroll length now: the galaxy holds the screen
+   here before the burst fires, with no text over it. */
+#intro {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  pointer-events: none;
+}
+
+/* The burst no longer consumes scroll: it fires as a timed event when
+   the page passes BURST_TRIGGER and plays out on its own clock. This
+   section is only the small run-up that carries the reader past that
+   point while the explosion begins. */
+#burst {
+  position: relative;
+  z-index: 1;
+  height: 40vh;
+  pointer-events: none;
+}
+
+/* Pure scroll length for the planet approach. Empty by design: the
+   gas giant grows behind it, so any content here would be lost. */
+#planet {
+  position: relative;
+  z-index: 1;
+  height: 300vh;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #hero .hero-bg::after { animation: none; }
+}
