@@ -100,16 +100,31 @@
 
     /* ── Camera ── */
     TILT:            0.34,     // near face-on, slight depth
+    /* How far the disc rolls toward edge-on over the approach, in
+       radians: 19 deg -> 37 deg. Enough to read as looking at the
+       galaxy from the side rather than onto its face, while still
+       showing the arms.
+
+       Positive lifts the BOTTOM edge toward the viewer, so the disc
+       opens from below. See ZOOM_PUSH — these two share a depth
+       budget and cannot both be raised. */
+    TILT_ROLL:       0.30,
     POINT_SIZE:      0.88,
     /* The approach is a straight push down the view axis — no lateral
        pan. Drifting the disc sideways while zooming read as the galaxy
        sliding off the screen rather than coming at the viewer. */
     SCROLL_DRIFT:    0.0,
     /* How far the camera closes in, in world units, against a CAM_DIST
-       of 3.0. At 2.2 the disc grows ~3.75x and the nearest stars stop
-       at w = 0.45 — still clear of the camera plane, which is what
-       caps this: past ~2.5 stars cross z = 0 and smear. */
-    ZOOM_PUSH:       2.20,
+       of 3.0, giving ~2.07x growth.
+
+       The cap is NOT the disc thickness — it is the tilt. Rolling the
+       disc turns its RADIUS into depth: at 37 deg the near edge sits
+       0.68 in front of centre, so the push and the roll compete for
+       the same headroom. At 2.20 with the roll applied the near edge
+       reached w = -0.05, crossing the camera plane and flinging that
+       half of the galaxy off-screen. Raise either of these and
+       re-check w_min = 3.0 - ZOOM_PUSH - (sin(tilt) + 0.22*cos(tilt)). */
+    ZOOM_PUSH:       1.55,
 
     /* ── HDR / bloom ── */
     EXPOSURE:        0.85,
@@ -388,6 +403,8 @@
     uniform float uTime;
     uniform float uScale;
     uniform float uCamDist;
+    uniform float uZoom;      // 0..1, matches the star field
+    uniform float uZoomPush;  // world units travelled at uZoom = 1
     uniform float uTilt;
     uniform float uDrift;
     uniform float uPattern;
@@ -428,7 +445,10 @@
       vec2 ndc = (vUv - 0.5) * 2.0;
       vec2 sp = vec2(ndc.x * aspect, ndc.y);
 
-      vec3 ro = vec3(0.0, 0.0, uCamDist);
+      // The dust shares the star field's camera. Leaving this pinned at
+      // uCamDist while the stars flew in split the disc into two layers:
+      // the points rushed past a set of lanes that never grew.
+      vec3 ro = vec3(0.0, 0.0, uCamDist - uZoom * uZoomPush);
       vec3 rd = normalize(vec3(sp / uScale, -1.0));
 
       // Into the disc's frame (inverse tilt about X).
@@ -510,9 +530,18 @@
         // away; the inward squeeze is what gives the blast its recoil.
         float collapse = smoothstep(0.0, 0.34, uBurst)
                        * (1.0 - smoothstep(0.30, 0.42, uBurst));
-        // Outer stars fall furthest, so the disc visibly tightens.
-        world.xy *= 1.0 - collapse * 0.58 * (0.45 + r0 * 0.55);
-        world.z  *= 1.0 - collapse * 0.40;
+        // Outer stars fall furthest, so the disc visibly tightens. The
+        // rim ends at ~0.21 of its radius — the whole galaxy crushes
+        // into a dense knot of stars before it lets go.
+        //
+        // The slope is deliberately shallower than the base (0.30 vs
+        // 0.62): pushing the outer term harder packs the rim tighter
+        // than the mid-disc, which turns the disc inside out. These
+        // numbers keep the radial ordering intact all the way down.
+        world.xy *= 1.0 - collapse * 0.86 * (0.62 + r0 * 0.30);
+        // Flattened harder too, or the knot stays a disc seen edge-on
+        // once the tilt has rolled over.
+        world.z  *= 1.0 - collapse * 0.72;
 
         float blast = smoothstep(0.34, 1.0, uBurst);
         // Ease-out cubic: violent at the instant of release, gliding to
@@ -1060,6 +1089,10 @@
 
     aspect = w / h;
     const FILL = 0.80;
+    // The RESTING tilt on purpose, not currentTilt(): this sizes the
+    // galaxy to the frame once. Tracking the live roll here would
+    // rescale the disc every frame as it tipped, cancelling out the
+    // foreshortening that makes the roll visible at all.
     const vertical = Math.max(Math.cos(config.TILT), 0.25);
     scale = Math.min(FILL * CAM_DIST / (config.DISC_RADIUS * vertical),
                      FILL * CAM_DIST * aspect / config.DISC_RADIUS);
@@ -1111,6 +1144,7 @@
   // glides instead of snapping.
   let zoom = 0, burst = 0, planet = 0;
   let lastPublishedDrift = NaN, lastPublishedGlow = NaN;
+  let lastPublishedZoom = NaN;
   let swallowFeed = 0, coreGlow = 0;
   let leanX = 0, leanY = 0;
   let lastTime = performance.now();
@@ -1134,16 +1168,22 @@
   /* ── Scroll stages ──
      The page tells one continuous story as it scrolls:
 
-       0 .. 1 vh   hero: the galaxy holds
-       1 .. 2 vh   intro: the name reads over it
-       1.75 vh     BURST FIRES — a timed event, not scroll-driven.
-                   The disc collapses inward, detonates, and settles
-                   into a starfield over BURST_DURATION seconds.
-       2 .. 5 vh   planet: a gas giant approaches and fills the centre
+       0 .. 1 vh      hero: the galaxy holds
+       0.25 .. 2.6 vh the approach: the camera flies straight in along
+                      the view axis while the disc rolls from 19 deg to
+                      37 deg, opening from the bottom edge so the
+                      galaxy is seen from the side rather than face-on.
+                      It ends ~2.07x oversize with the stars reading as
+                      discs rather than points.
+       2.6 vh         BURST FIRES — a timed event, not scroll-driven.
+                      The disc collapses inward, detonates, and settles
+                      into a starfield over BURST_DURATION seconds.
+       2.85 .. 5.75   planet: a gas giant approaches and fills the centre
 
      The scroll-driven stages must line up with the section heights in
      galaxy.css, or a stage finishes while its screen is still on view
-     and the scene sits frozen for a full screen of scrolling.
+     and the scene sits frozen for a full screen of scrolling. The
+     approach needs #intro at 180vh for BURST_TRIGGER to land inside it.
 
      Each stage's progress is derived here so the renderer only reads
      smooth 0..1 values and never has to know about pixels. */
@@ -1191,7 +1231,7 @@
     // fires so the two do not overlap. Anchored to the trigger for the
     // same reason as the zoom.
     planetT = Math.min(1, Math.max(0,
-      (y / h - (config.BURST_TRIGGER + 0.25)) / 2.9));
+      (y / h - (config.BURST_TRIGGER + 0.25)) / 2.35));
 
     targetDrift = (1 - Math.pow(1 - scrollProgress, 2)) * config.SCROLL_DRIFT;
   }
@@ -1204,10 +1244,14 @@
   let wakeDirX = 0, wakeDirY = 0, wakeEnergy = 0;
   const _a = [0, 0], _b = [0, 0];
 
+  /* Screen point -> disc plane. This has to mirror the vertex shader's
+     projection exactly, including the camera push and the live tilt —
+     using the resting values here sent the cursor wake to where the
+     galaxy used to be once the approach had started. */
   function unprojectToDisc(px, py, out) {
-    const w = CAM_DIST;
+    const w = CAM_DIST - zoom * config.ZOOM_PUSH;
     out[0] = px * aspect * w / scale - driftX;
-    out[1] = (py * w / scale) / (Math.cos(config.TILT) || 1e-3);
+    out[1] = (py * w / scale) / (Math.cos(currentTilt()) || 1e-3);
   }
 
   function updateWake(dt) {
@@ -1328,11 +1372,26 @@
     }
   }
 
+  /* The viewing tilt for this frame.
+
+     Derived from the already-smoothed `zoom` rather than smoothed
+     separately, so the roll and the push are guaranteed to stay in
+     lockstep — two independently smoothed values drift apart under a
+     fast scroll and the disc appears to swing on its own. */
+  function currentTilt() {
+    return config.TILT + zoom * config.TILT_ROLL;
+  }
+
   function rotMatrix() {
-    // Tilt only. The disc orientation is FIXED — real galaxies rotate
-    // differentially, which shears the arms apart (+438 deg of winding
-    // in two minutes, measured). The stars carry the rotation instead.
-    const c = Math.cos(config.TILT), s = Math.sin(config.TILT);
+    // Tilt only — no spin. The disc orientation is otherwise FIXED:
+    // real galaxies rotate differentially, which shears the arms apart
+    // (+438 deg of winding in two minutes, measured). The stars carry
+    // the rotation instead.
+    //
+    // The tilt angle itself does change over the approach: the disc
+    // rolls from near face-on toward edge-on as the camera closes in.
+    const t = currentTilt();
+    const c = Math.cos(t), s = Math.sin(t);
     return new Float32Array([1, 0, 0, 0, c, s, 0, -s, c]);
   }
 
@@ -1366,7 +1425,9 @@
     gl.uniform1f(dustProg.u.uTime, time);
     gl.uniform1f(dustProg.u.uScale, scale);
     gl.uniform1f(dustProg.u.uCamDist, CAM_DIST);
-    gl.uniform1f(dustProg.u.uTilt, config.TILT);
+    gl.uniform1f(dustProg.u.uZoom, zoom);
+    gl.uniform1f(dustProg.u.uZoomPush, config.ZOOM_PUSH);
+    gl.uniform1f(dustProg.u.uTilt, currentTilt());
     gl.uniform1f(dustProg.u.uDrift, driftX);
     gl.uniform1f(dustProg.u.uPattern, patternAngle);
     // The dust cannot fly apart like the particles, so it dissolves as
@@ -1515,6 +1576,16 @@
       document.documentElement.style.setProperty(
         '--nucleus-x', (ndcX * 50).toFixed(3) + 'vw');
     }
+    /* The corona is a CSS circle of fixed size, but the rendered
+       nucleus grows with the approach — without this the glow detached
+       and sat as a small blob inside a much larger core. Quantised so
+       it only writes on real change. */
+    const zq = Math.round(zoom * 50) / 50;
+    if (zq !== lastPublishedZoom) {
+      lastPublishedZoom = zq;
+      document.documentElement.style.setProperty('--zoom', zq.toFixed(2));
+    }
+
     const gq = Math.round(coreGlow * 50) / 50;
     if (gq !== lastPublishedGlow) {
       lastPublishedGlow = gq;

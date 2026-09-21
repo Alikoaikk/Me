@@ -9,8 +9,9 @@
   position: relative;
 }
 
-/* The canvas is fixed so the galaxy stays put while the intro panel
-   scrolls over it — the stars drift sideways rather than scrolling away. */
+/* The canvas is fixed so the galaxy stays put while the page scrolls
+   over it — the camera flies into the disc rather than the disc
+   scrolling away. */
 #hero .hero-bg {
   position: fixed;
   inset: 0;
@@ -47,7 +48,13 @@
      published by galaxy.js from what it actually consumed, so this
      reacts to the infall instead of pulsing on a fixed timer. */
   opacity: calc(0.82 + var(--core-glow, 0) * 0.5);
-  scale: calc(1 + var(--core-glow, 0) * 0.22);
+  /* Two independent swells, multiplied: the feeding pulse, and the
+     camera approach. --zoom is published by galaxy.js; the 1.07
+     matches the 2.07x the renderer's own projection grows the nucleus
+     by at full zoom (1 + 1.07 = 2.07), so the CSS glow and the
+     rendered core stay the same size as the camera closes in. Keep
+     this in step with ZOOM_PUSH in galaxy.js. */
+  scale: calc((1 + var(--core-glow, 0) * 0.22) * (1 + var(--zoom, 0) * 1.07));
   transition: opacity 0.25s ease-out, scale 0.3s ease-out;
   animation: coreBreathe 11s ease-in-out infinite;
   /* --nucleus-x is published by galaxy.js from its own projection, so
@@ -120,11 +127,17 @@
    Sits above the fixed canvas and fades in as it scrolls into view.
    ============================================================ */
 /* The intro is pure scroll length now: the galaxy holds the screen
-   here before the burst fires, with no text over it. */
+   here before the burst fires, with no text over it.
+
+   180vh, not 100vh, because this is the approach — the camera spends
+   the whole section closing in, and the zoom needs room to read as a
+   long push rather than a jump. It must stay long enough that
+   BURST_TRIGGER (2.60vh in galaxy.js) falls inside it; shorten it and
+   the galaxy detonates before it has finished growing. */
 #intro {
   position: relative;
   z-index: 1;
-  min-height: 100vh;
+  min-height: 180vh;
   pointer-events: none;
 }
 
