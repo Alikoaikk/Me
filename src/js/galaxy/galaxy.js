@@ -30,6 +30,12 @@
 (function () {
   'use strict';
 
+  /* Captured while the script is still executing synchronously, which
+     is the only time document.currentScript is set. Sibling assets are
+     resolved against this so they follow the script when it moves. */
+  const SCRIPT_URL = (document.currentScript && document.currentScript.src)
+    || location.href;
+
   const canvas = document.getElementById('heroCanvas');
   if (!canvas) return;
 
@@ -207,7 +213,9 @@
        legacy script can do nothing either. */
     document.documentElement.setAttribute('data-no-webgl', '');
     const fallback = document.createElement('script');
-    fallback.src = 'galaxy.legacy.js';
+    /* Resolved against this script's own URL rather than the page's, so
+       the fallback keeps loading wherever the hero page lives. */
+    fallback.src = new URL('galaxy.legacy.js', SCRIPT_URL).href;
     document.head.appendChild(fallback);
     return;
   }

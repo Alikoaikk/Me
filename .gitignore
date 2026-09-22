@@ -1,0 +1,4 @@
+# Build output — regenerate with `make build`
+dist/
+
+.DS_Store
