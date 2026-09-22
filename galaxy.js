@@ -94,9 +94,26 @@
        collapse and detonation need their own pacing. Scrolling back up
        reverses it, so the galaxy reassembles and can be watched again. */
     BURST_TRIGGER:   2.60,     // in viewport heights
-    BURST_DURATION:  2.6,      // seconds, collapse through dispersal
+    /* Longer than the old detonation's 2.6s. An explosion wants to be
+       over quickly; a migration is the opposite — the stars should be
+       seen travelling, and the per-star stagger (up to 45% of the
+       burst) needs room to read as a ripple across the disc rather
+       than as one sheet sliding over. */
+    BURST_DURATION:  4.2,      // seconds, first star leaves to last arrives
     BURST_REWIND:    1.1,      // seconds to reassemble when scrolling up
     BURST_HYSTERESIS: 0.25,    // dead band, so hovering cannot strobe it
+    /* The simulation freezes here, very early, because every star's
+       destination is hashed from its position: if the spiral kept
+       turning underneath, a star's sky home would move with it and
+       the arrivals would never hold still. Freezing hands the shader
+       one fixed field to migrate. See simulate(). */
+    BURST_FREEZE:    0.02,
+    /* How quickly the disc's gas and dust fade out once the stars
+       begin leaving. Faster than the migration on purpose: the dust
+       should be gone by the time the last stars arrive, so the sky is
+       left clean rather than with a haze hanging where the galaxy
+       used to be. See the uDensity term in draw(). */
+    DUST_FADE:       1.9,
 
     /* ── Camera ── */
     TILT:            0.34,     // near face-on, slight depth
@@ -126,19 +143,37 @@
        re-check w_min = 3.0 - ZOOM_PUSH - (sin(tilt) + 0.22*cos(tilt)). */
     ZOOM_PUSH:       1.55,
 
-    /* ── HDR / bloom ── */
-    EXPOSURE:        0.85,
-    BLOOM_THRESHOLD: 0.95,
-    BLOOM_STRENGTH:  0.55,
+    /* ── HDR / bloom ──
+       Exposure is the master brightness. Lowered from 0.85: the field
+       was bright enough that the bloom smeared neighbouring stars into
+       a single wash and the arms lost their structure. Dimmer points
+       with the same dynamic range read as more stars, not fewer.
+
+       The threshold rises with it — the two have to move together, or
+       lowering exposure alone just dims everything uniformly and the
+       bright stars stop blooming at all. Raising the threshold keeps
+       the bloom for the genuinely hot cores while the ordinary field
+       stays a clean point. */
+    EXPOSURE:        0.62,
+    BLOOM_THRESHOLD: 1.15,
+    BLOOM_STRENGTH:  0.46,
     BLOOM_MIPS:      3,
 
     /* ── Volumetric dust ── */
     DUST_STEPS:      16,       // raymarch samples through the disc
     DUST_DENSITY:    0.78,
 
-    /* ── Sky ── */
-    METEOR_COUNT:    3,
-    METEOR_CHANCE:   0.06,     // spawn probability per second per slot
+    /* ── Sky ──
+       COUNT is how many meteors can be in flight at once; CHANCE is
+       the per-second spawn probability of each idle slot. The two
+       multiply, so the felt rate is roughly COUNT * CHANCE per second
+       while the sky is empty: 3 * 0.06 was about one streak every five
+       seconds, which is realistic for a real night sky but reads as
+       nothing at all on a hero someone looks at for ten. 9 * 0.16 is
+       ~1.4/sec, so there is almost always one crossing and often two
+       or three at once, without becoming a rain of them. */
+    METEOR_COUNT:    5,
+    METEOR_CHANCE:   0.14,     // spawn probability per second per slot
 
     /* ── Cursor ── */
     PUSH_RADIUS:     0.34,
@@ -160,9 +195,17 @@
     premultipliedAlpha: true, powerPreference: 'high-performance',
   });
   if (!gl) {
-    // WebGL2 is required for the HDR pipeline (float render targets,
-    // multiple render passes). Without it, fall back to the previous
-    // WebGL1 particle renderer rather than leaving the hero empty.
+    /* WebGL2 is required for the HDR pipeline (float render targets,
+       multiple render passes). Without it, fall back to the previous
+       WebGL1 particle renderer rather than leaving the hero empty.
+
+       The flag matters more than it used to. The name has no fill and
+       no stroke — the stars ARE the letterforms — so if nothing can
+       render them the hero is a blank screen with no name on it. CSS
+       keys off this attribute to paint the name conventionally, which
+       also covers the case where even WebGL1 is unavailable and the
+       legacy script can do nothing either. */
+    document.documentElement.setAttribute('data-no-webgl', '');
     const fallback = document.createElement('script');
     fallback.src = 'galaxy.legacy.js';
     document.head.appendChild(fallback);
@@ -328,27 +371,67 @@
     in vec2 vUv;
     out vec4 frag;
     uniform vec2 uRes;
-    uniform float uTime;
     uniform vec2 uParallax;
+    uniform float uSkyTime;
     ${NOISE}
 
     // Jittered grid: evenly spread without the clumping of pure random.
+    /* The cull has climbed 0.30 -> 0.58 -> 0.72, so the painted sky now
+       keeps only 28% of its grid cells. It is deliberately SPARSE,
+       because it is only PART of the sky. The rest arrives when the
+       galaxy bursts and its stars settle into the empty cells as
+       permanent points.
+
+       This is the half of the effect that cannot be fixed in the star
+       shader. However well the arrivals are matched for size, colour
+       and brightness, if the background is already a full sky then
+       every one of them is a star too many: they land on top of a
+       finished field and read as debris in front of it. Emptying the
+       background first is what gives them somewhere to belong — the
+       burst then visibly POPULATES the sky rather than decorating it,
+       and the total density before and after is what a sky should be.
+
+       Going sparser still starts to read as an overcast night before
+       the burst has fired, which undersells the hero. */
     vec3 starLayer(vec2 uv, float density, float bright, float seed) {
       vec2 g = uv * density;
       vec2 id = floor(g);
       vec2 f = fract(g) - 0.5;
       vec3 h = hash33(vec3(id, seed));
-      if (h.z < 0.30) return vec3(0.0);
-      vec2 off = h.xy * 0.38;
+      if (h.z < 0.72) return vec3(0.0);
+
+      /* Per-star drift. Each star gets its own phase and its own pair
+         of frequencies from the hash, so the field never moves as a
+         sheet — which is what made the parallax read as a texture
+         sliding rather than as sky. The amplitude is a fraction of a
+         cell (0.10 of 0.38) so a star wanders within its own cell and
+         can never cross into a neighbour's, keeping the jittered grid
+         evenly spread. */
+      float ph = h.x * 6.2831853;
+      vec2 wob = vec2(
+        sin(uSkyTime * (0.09 + h.y * 0.11) + ph),
+        cos(uSkyTime * (0.07 + h.x * 0.10) + ph * 1.37)) * 0.10;
+
+      vec2 off = h.xy * 0.38 + wob;
       float d = length(f - off);
       float mag = fract(h.z * 91.7);
       float lum = pow(mag, 3.2) * bright;
+
+      /* Twinkle. Real scintillation is fast, shallow and uncorrelated
+         between stars; a slow deep pulse reads as blinking fairy
+         lights. Two incommensurate sines per star keep it irregular,
+         and the depth is scaled by (1 - mag) so the faintest stars
+         flicker most and the bright ones stay steady — which is how
+         atmospheric seeing actually behaves. */
+      float tw = sin(uSkyTime * (1.7 + h.y * 2.3) + ph)
+               * sin(uSkyTime * (1.1 + h.z * 1.9) + ph * 2.1);
+      lum *= 1.0 + tw * 0.28 * (1.0 - mag);
+
       float core = exp(-d * d * 520.0) * lum;
       float t = fract(h.x * 57.3);
       vec3 col = mix(vec3(1.0, 0.84, 0.66), vec3(0.74, 0.86, 1.0),
                      smoothstep(0.25, 0.85, t));
-      float tw = 1.0 + (1.0 - lum) * 0.32 * sin(uTime * 1.1 + h.y * 30.0);
-      return col * core * tw;
+      return col * core;
     }
 
     // A far galaxy: small inclined ellipse with a core and faint arms.
@@ -495,15 +578,15 @@
   const starProg = program(`
     precision highp float;
     layout(location = 0) in vec3 aPos;
-    layout(location = 1) in vec3 aAttr;   // radius, twinkle seed, alpha
+    layout(location = 1) in vec3 aAttr;   // radius, variation seed, alpha
     layout(location = 2) in vec4 aTint;   // rgb + size
     layout(location = 3) in float aLum;
+    layout(location = 4) in vec3 aName;  // xy = NDC home in the word, z = 1 if a fill star
     uniform mat3 uRot;
     uniform float uCamDist;
     uniform float uScale;
     uniform float uAspect;
     uniform float uPointScale;
-    uniform float uTime;
     uniform float uDrift;
     uniform float uZoom;      // 0..1, camera closes in
     uniform float uZoomPush;  // world units the camera travels at uZoom=1
@@ -511,95 +594,213 @@
     out vec3  vColor;
     out float vAlpha;
     out float vBright;
+    out float vSettled;
     void main() {
       vec3 world = aPos;
 
-      // ── Burst ──
-      // Each star flies outward along its own direction, accelerating
-      // then easing. A hash of the position gives every star a slightly
-      // different speed so the front is ragged rather than a clean ring.
-      if (uBurst > 0.0) {
-        float h = fract(sin(dot(world.xy, vec2(12.9898, 78.233))) * 43758.5453);
-        float r0 = length(world.xy);
-        vec3 dir = normalize(vec3(world.xy, world.z * 2.0 + 0.001));
+      /* ── The migration ──
+         There is no explosion. The galaxy does not collapse, detonate
+         or recede: each of its stars simply MOVES to a fixed place on
+         the night sky and stays there, at sky size and sky brightness,
+         while the disc's gas and dust fade out behind them.
 
-        // ── Collapse, then detonate ──
-        // 0.00-0.34  the disc is pulled inward and tightens
-        // 0.34-1.00  it detonates outward, decelerating as it goes
-        // Simply expanding from the start read as the galaxy shrinking
-        // away; the inward squeeze is what gives the blast its recoil.
-        float collapse = smoothstep(0.0, 0.34, uBurst)
-                       * (1.0 - smoothstep(0.30, 0.42, uBurst));
-        // Outer stars fall furthest, so the disc visibly tightens. The
-        // rim ends at ~0.21 of its radius — the whole galaxy crushes
-        // into a dense knot of stars before it lets go.
-        //
-        // The slope is deliberately shallower than the base (0.30 vs
-        // 0.62): pushing the outer term harder packs the rim tighter
-        // than the mid-disc, which turns the disc inside out. These
-        // numbers keep the radial ordering intact all the way down.
-        world.xy *= 1.0 - collapse * 0.86 * (0.62 + r0 * 0.30);
-        // Flattened harder too, or the knot stays a disc seen edge-on
-        // once the tilt has rolled over.
-        world.z  *= 1.0 - collapse * 0.72;
+         Everything that made the old version read as debris came from
+         modelling this as a physical event in world space:
 
-        float blast = smoothstep(0.34, 1.0, uBurst);
-        // Ease-out cubic: violent at the instant of release, gliding to
-        // a stop as the debris spreads.
-        float e = 1.0 - blast;
-        float ease = 1.0 - e * e * e;
-        world += dir * ease * (2.4 + h * 5.8);
-        // Flatten toward the sky plane as the shell disperses.
-        world.z *= 1.0 - blast * 0.75;
-      }
+           · stars "settled" by being pushed 11-30 world units into
+             DEPTH, so perspective shrank them to sub-pixel specks. The
+             shrinking was not a styling mistake, it was the method.
+             Distance is now never used to make a star look like a sky
+             star — it simply stops at the right size.
+           · the outward throw ran along each star's own radial
+             direction while the disc's tilt was still rolling, so the
+             paths swept sideways as they travelled: the "flying in a
+             circle". Nothing here follows a radial direction.
 
-      world += vec3(uDrift, 0.0, 0.0);
-      vec3 p = uRot * world;
-      // Camera pulls back as the galaxy zooms out.
-      // The camera pushes IN as the page scrolls, so the galaxy grows
-      // toward the viewer before it detonates. A positive term here
-      // pulled the camera back instead, which read as the galaxy
-      // shrinking away from the explosion rather than rushing at it.
-      float w = uCamDist - uZoom * uZoomPush - p.z;
-      vec2 ndc = vec2(p.x, p.y) * uScale / w;
-      ndc.x /= uAspect;
+         So the destination is computed directly in SCREEN space and
+         the star is interpolated to it. A sky star's position is a
+         point on the celestial sphere — it has no depth to fall
+         through and no orbit to follow. Treating it as a 2D fact is
+         both what it actually is and what removes every artefact at
+         once. */
+      float h  = fract(sin(dot(aPos.xy, vec2(12.9898, 78.233))) * 43758.5453);
+      float h2 = fract(sin(dot(aPos.xy, vec2(39.3468, 11.1357))) * 24634.6345);
+      float h3 = fract(sin(dot(aPos.xy, vec2(73.1567, 52.8129))) * 31415.9265);
+
+      /* ── Per-star timing ──
+         The field must not arrive as one sheet on a single curve —
+         that reads as a slide transition. Staggering the departure
+         lets the migration ripple across the disc: some stars are
+         already parked while others have not yet left.
+
+         Sky stars and name stars are deliberately on DIFFERENT
+         schedules, because the sequence has to be legible in this
+         order: the galaxy empties into the sky first, and only then
+         do the remaining stars gather into the word. Running both at
+         once buried the writing inside the general exodus — the name
+         simply resolved out of noise instead of being drawn.
+
+         Sky stars:  leave early (0.00-0.45), all home by ~0.80.
+         Name stars: leave late (0.46-0.72), arriving 0.62-0.92, so
+         the word is visibly assembling against a sky that has already
+         settled. Their spread is tighter too, so they read as one
+         deliberate gathering rather than a second scatter. */
+      bool fill = aName.z > 0.5;
+      float delay = fill ? (0.46 + h3 * 0.26) : (h3 * 0.45);
+      float span  = fill ? 0.94 : 0.80;
+      float t = clamp((uBurst - delay) / max(0.0001, span - delay), 0.0, 1.0);
+      // Ease in and out: leaves gently, arrives gently, no hard stop.
+      float m = t * t * (3.0 - 2.0 * t);
+      float scatter = m;   // 0..1, how far this star has joined the sky
+
+      // ── Where the galaxy puts this star this frame ──
+      vec3 gw = world + vec3(uDrift, 0.0, 0.0);
+      vec3 gp = uRot * gw;
+      float w = uCamDist - uZoom * uZoomPush - gp.z;
+      vec2 gNdc = vec2(gp.x, gp.y) * uScale / w;
+      gNdc.x /= uAspect;
+
+      /* ── Where it ends up on the sky ──
+         A fixed point in NDC, spread over the whole frame. It is keyed
+         only to the star's own hashes, so it is CONSTANT: the star has
+         one home from the first frame to the last and cannot drift,
+         swim or be re-randomised. That is what makes it stay put.
+
+         Deliberately uncorrelated with the star's place in the disc.
+         Preserving the galaxy's layout as it expanded just looked like
+         a zoom, with the spiral still legible as a ghost. Scattering
+         breaks the disc up so the sky ends up evenly populated, the
+         way a real star field is. */
+      vec2 sNdc = vec2(h * 2.0 - 1.0, h2 * 2.0 - 1.0);
+      /* Pushed out toward the edges. The galaxy's stars start bunched
+         in the middle of the frame, so a uniform square leaves a
+         visible thinning around the rim. */
+      sNdc *= 1.02 + h3 * 0.16;
+
+      /* ── Some stars land in the name instead ──
+         aName carries a point inside the KOAIK letterforms, sampled
+         from the real rasterised glyphs on the CPU. A star flagged as
+         a fill star flies there rather than out to the sky, so the
+         outlined word is filled by the galaxy's own material.
+
+         The sky destination is kept as the fallback for when the mask
+         could not be built (tiny viewport, tainted canvas): aName.z is
+         0 there and every star simply goes to the sky, which is the
+         previous behaviour rather than a broken screen. */
+      vec2 dest = fill ? aName.xy : sNdc;
+
+      /* The path. Straight in screen space — a star crossing the frame
+         has no reason to curve, and every curve in the old version was
+         an artefact of world-space motion under a rolling camera.
+
+         A small perpendicular bow keeps thousands of straight paths
+         from reading as a mechanical starburst. It peaks mid-flight
+         and is exactly zero at both ends, so it cannot disturb either
+         the departure or the arrival. */
+      vec2 delta = dest - gNdc;
+      vec2 perp = normalize(vec2(-delta.y, delta.x) + 1e-6);
+      /* The bow is dropped almost entirely for fill stars: a curve on
+         the way in is fine for the open sky, but the word has to end
+         up crisp, and a star still swinging as it arrives blurs the
+         edge of the letter it is supposed to define. */
+      float bow = sin(m * 3.14159) * (h3 - 0.5) * (fill ? 0.02 : 0.10);
+      vec2 ndc = mix(gNdc, dest, m) + perp * bow;
+
       gl_Position = vec4(ndc, 0.0, 1.0);
 
       vColor = aTint.rgb;
-      float amp = mix(0.30, 0.05, clamp(aLum / 3.2, 0.0, 1.0));
-      float tw = (1.0 - amp) + amp * sin(uTime * 1.7 + aAttr.y * 6.283);
-      // HDR: allowed to exceed 1.0 so it blooms downstream.
-      vAlpha = aAttr.z * tw * (0.14 + pow(aLum, 0.85) * 0.52);
-      vBright = smoothstep(1.4, 4.4, aLum);
+      // HDR: allowed to exceed 1.0 so it blooms downstream. The 0.52
+      // was 0.52 at EXPOSURE 0.85; the exposure now carries the
+      // dimming, so the per-star range is left alone and the faint
+      // stars do not get crushed to nothing.
+      vAlpha = aAttr.z * (0.14 + pow(aLum, 0.85) * 0.52);
+      // Raised from 1.4 to match the higher bloom threshold: fewer
+      // stars earn diffraction spikes, so the ones that do stand out
+      // instead of the whole field glittering.
+      vBright = smoothstep(2.2, 5.0, aLum);
 
-      // Flash at the instant of detonation (0.34), not at the start:
-      // during the collapse the disc should darken and tighten, and the
-      // light should arrive with the blast.
-      float squeeze = smoothstep(0.0, 0.32, uBurst)
-                    * (1.0 - smoothstep(0.28, 0.40, uBurst));
-      float flash = exp(-pow((uBurst - 0.38) * 11.0, 2.0)) * 0.85;
-      // Brighten as the disc compresses, then flare on release.
-      vAlpha *= 1.0 + squeeze * 0.55 + flash;
-      vBright = min(1.0, vBright + flash * 0.55);
-      // Once dispersed the stars read as distant background points.
-      vAlpha *= 1.0 - smoothstep(0.34, 1.0, uBurst) * 0.45;
+      /* ── Brightness: galaxy star -> sky star ──
+         No flash and no swell. Those belonged to a detonation; this is
+         a migration, and a bright pulse in the middle of it would only
+         draw the eye to an event that is not happening.
 
+         The star does not fade out. It arrives at the brightness of a
+         real deep-field star and stays there — permanently part of the
+         background. The floor varies per star so the arrivals carry
+         the same mixed magnitudes as the sky they join; one uniform
+         value reads as a grid. */
+      /* Fill stars stay bright. They are not joining the background —
+         they ARE the word, and dimming them to deep-field magnitude
+         would leave the name barely legible against the sky it sits
+         on. Slight per-star variation keeps the fill alive rather
+         than flat, but the floor is far higher than the sky's. */
+      float skyFloor = 0.30 + fract(aAttr.y * 7.31) * 0.42;
+      float fillFloor = 1.05 + fract(aAttr.y * 3.17) * 0.55;
+      vAlpha *= mix(1.0, fill ? fillFloor : skyFloor, scatter);
+      /* Diffraction spikes retire on the way. A sky star is a ~1.6 px
+         point and far too small to carry them; keeping them made the
+         arrivals look nearer than the field around them. */
+      /* Sky arrivals lose their spikes; fill stars keep a little, so
+         the word carries some sparkle instead of reading as a flat
+         stencil of dots. */
+      vBright *= fill ? (1.0 - scatter * 0.45) : (1.0 - scatter);
+
+      /* ── Size: galaxy star -> sky star ──
+         The single most important line in the migration.
+
+         As part of the galaxy the star is sized by perspective, so it
+         swells as the camera closes in — correct, and what makes the
+         approach work. As part of the sky it must be a fixed ~1.6 px
+         point, because that is what every other star in the deep field
+         already is.
+
+         The old code tried to reach that by pushing the star into the
+         distance and then propping the result up with a max() floor.
+         That is what produced the shrinking: perspective was driving
+         the size down toward zero and the floor was fighting it. Both
+         are gone. The size is now interpolated DIRECTLY from its
+         galaxy value to its sky value on the same curve as everything
+         else, so it can never overshoot, never go sub-pixel, and never
+         needs rescuing.
+
+         SKY_SIZE is a multiple of uPointScale rather than a pixel
+         count because uPointScale already carries the device pixel
+         ratio — a flat number renders half-size on a retina display. */
       float persp = uCamDist / w;
-      gl_PointSize = uPointScale * persp * aTint.a *
-                     (0.62 + pow(aLum, 0.50) * 0.44);
+      float galaxySize = uPointScale * persp * aTint.a *
+                         (0.62 + pow(aLum, 0.50) * 0.44);
+      // Slight per-star variation, so the settled field is not uniform.
+      float skySize = uPointScale * (0.92 + h2 * 0.38);
+      /* A touch larger than a sky star so the letters read as solid
+         at a glance, but still a point — big enough to blur the
+         glyph edge and the outline stops looking sharp. */
+      float fillSize = uPointScale * (1.25 + h2 * 0.35);
+      gl_PointSize = mix(galaxySize, fill ? fillSize : skySize, scatter);
+      vSettled = scatter;
     }
   `, `
     precision highp float;
     in vec3  vColor;
     in float vAlpha;
     in float vBright;
+    in float vSettled;
     out vec4 frag;
     void main() {
       vec2 d = gl_PointCoord - 0.5;
       float r2 = dot(d, d);
       if (r2 > 0.25) discard;
       float disc = smoothstep(0.25, 0.0, r2);
-      float core = pow(disc, 3.2);
+      /* The core exponent relaxes as the star settles into the sky.
+
+         At full size a tight core (3.2) is what makes a star look like
+         a star rather than a blob. But a settled star is only ~1.7 px
+         across, and at that size barely any fragment samples near the
+         centre — nearly all of a 3.2-weighted core falls between the
+         pixels and the star renders far dimmer than its alpha asks
+         for. This was the other half of why the settled field looked
+         empty. Flattening to 1.3 spreads the same energy across the
+         few fragments that do get sampled. */
+      float core = pow(disc, mix(3.2, 1.3, vSettled));
       float halo = pow(disc, 0.55);
 
       float spikes = 0.0;
@@ -687,84 +888,6 @@
     uniform sampler2D uSrc;
     void main() { frag = vec4(texture(uSrc, vUv).rgb, 1.0); }`);
 
-
-  /* ── Gas giant ──
-     Grows behind the content sections as the page is read. Banded
-     flow, a persistent storm, terminator shading and an atmospheric
-     rim, all procedural — drawn as a single fullscreen pass that
-     discards outside the disc. */
-  const planetProg = program(QUAD_VS, `
-    precision highp float;
-    in vec2 vUv;
-    out vec4 frag;
-    uniform vec2 uRes;
-    uniform float uTime;
-    uniform float uGrow;      // 0..1 scroll progress
-    ${NOISE}
-
-    void main() {
-      float aspect = uRes.x / uRes.y;
-      vec2 p = vec2((vUv.x - 0.5) * aspect, vUv.y - 0.5);
-
-      // Approaches from a distance and settles dead centre, filling
-      // much of the frame — the destination of the whole sequence.
-      float R = 0.045 + uGrow * uGrow * 0.60;
-      vec2 centre = vec2(0.0, -0.30 * (1.0 - uGrow));
-      vec2 d = p - centre;
-      float r = length(d) / R;
-      if (r > 1.35) { frag = vec4(0.0); return; }
-
-      // Sphere normal, for shading and for mapping the bands.
-      float z = sqrt(max(0.0, 1.0 - r * r));
-      vec3 n = normalize(vec3(d / R, z));
-
-      // Gentle axial tilt so the bands are not perfectly horizontal.
-      float ct = cos(0.34), st = sin(0.34);
-      vec3 sn = vec3(n.x, n.y * ct - n.z * st, n.y * st + n.z * ct);
-
-      // Latitude drives the banding; longitude drifts with time so the
-      // atmosphere flows. Bands shear at different rates by latitude,
-      // which is what makes a gas giant read as fluid rather than
-      // painted stripes.
-      float lat = asin(clamp(sn.y, -1.0, 1.0));
-      float lon = atan(sn.x, sn.z) + uTime * 0.020 + sin(lat * 3.0) * 0.30;
-
-      float bands = sin(lat * 15.0
-                  + fbm(vec3(lon * 1.6, lat * 5.0, uTime * 0.03)) * 3.2);
-      float detail = fbm(vec3(lon * 3.4, lat * 9.0, uTime * 0.05));
-
-      // Warm ochre and cream, like Jupiter.
-      vec3 dark  = vec3(0.42, 0.26, 0.17);
-      vec3 mid   = vec3(0.78, 0.58, 0.38);
-      vec3 light = vec3(0.94, 0.86, 0.72);
-      vec3 col = mix(dark, mid, smoothstep(-0.6, 0.4, bands));
-      col = mix(col, light, smoothstep(0.2, 0.9, bands + detail * 0.5));
-      col = mix(col, col * 0.82, smoothstep(0.3, 0.8, detail));
-
-      // A persistent storm, south of the equator.
-      vec2 sp = vec2(lon - 0.9, lat + 0.42);
-      sp.x = mod(sp.x + 3.14159, 6.28318) - 3.14159;
-      float storm = exp(-dot(sp * vec2(1.6, 3.4), sp * vec2(1.6, 3.4)) * 5.0);
-      float swirl = sin(atan(sp.y, sp.x) * 3.0 - length(sp) * 12.0 + uTime * 0.3);
-      col = mix(col, vec3(0.86, 0.40, 0.26) * (0.85 + swirl * 0.15),
-                storm * 0.85);
-
-      // Lit from the upper left, matching the galaxy's glow.
-      vec3 L = normalize(vec3(-0.55, 0.42, 0.72));
-      float lam = max(0.0, dot(n, L));
-      float term = smoothstep(0.0, 0.32, lam);         // soft terminator
-      col *= 0.06 + term * 1.08;
-
-      // Atmospheric rim: brightest where the limb is lit.
-      float rim = pow(1.0 - z, 2.6);
-      col += vec3(0.44, 0.60, 0.95) * rim * (0.20 + lam * 0.85);
-
-      // Soft edge into the sky, plus the overall fade-in.
-      float edge = smoothstep(1.02, 0.965, r);
-      float vis = smoothstep(0.0, 0.10, uGrow);
-      frag = vec4(col * edge * vis, 1.0);
-    }`);
-
   const compositeProg = program(QUAD_VS, `
     precision highp float;
     in vec2 vUv;
@@ -776,7 +899,6 @@
     uniform float uExposure;
     uniform float uBloomStrength;
     uniform vec2 uRes;
-    uniform float uTime;
 
     // ACES filmic curve: keeps bright cores from clipping to flat white.
     vec3 aces(vec3 x) {
@@ -800,8 +922,8 @@
       vec2 q = vUv - 0.5;
       col *= clamp(1.0 - dot(q, q) * 0.85, 0.0, 1.0);        // vignette
 
-      // Grain, to break banding in the faint gradients.
-      float g = fract(sin(dot(vUv * uRes + uTime, vec2(12.9898, 78.233))) * 43758.5453);
+      // Static grain, to break banding without making bright points sparkle.
+      float g = fract(sin(dot(vUv * uRes, vec2(12.9898, 78.233))) * 43758.5453);
       col += (g - 0.5) * 0.016;
       col = max(col, vec3(0.0));
 
@@ -812,7 +934,6 @@
     }`);
 
   if (!skyProg || !dustProg || !starProg || !meteorProg || !upsampleProg ||
-      !planetProg ||
       !brightProg || !blurProg || !compositeProg) return;
 
   /* ============================================================
@@ -1034,7 +1155,26 @@
   setupAttr(attrBuf, 1, 3, attrArr, gl.DYNAMIC_DRAW);
   setupAttr(tintBuf, 2, 4, tintArr, gl.DYNAMIC_DRAW);
   setupAttr(lumBuf, 3, 1, lum, gl.DYNAMIC_DRAW);
+  /* Where this star lands in the name, in NDC, plus whether it is a
+     fill star at all. Packed as vec3(x, y, isFill) so the word costs
+     one attribute rather than two. Rebuilt on resize, since the
+     letterforms are sized to the viewport. */
+  const nameBuf = gl.createBuffer();
+  const nameArr = new Float32Array(N * 3);
+  setupAttr(nameBuf, 4, 3, nameArr, gl.DYNAMIC_DRAW);
   gl.bindVertexArray(null);
+
+  /* Interleave the sampler's two arrays into the attribute buffer. */
+  function uploadNameTargets() {
+    for (let i = 0; i < N; i++) {
+      nameArr[i * 3]     = nameTargets[i * 2];
+      nameArr[i * 3 + 1] = nameTargets[i * 2 + 1];
+      nameArr[i * 3 + 2] = nameReady ? nameIsFill[i] : 0;
+    }
+    gl.bindBuffer(gl.ARRAY_BUFFER, nameBuf);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, nameArr);
+    nameDirty = false;
+  }
 
   const meteorVAO = gl.createVertexArray();
   gl.bindVertexArray(meteorVAO);
@@ -1076,6 +1216,197 @@
      ============================================================ */
   let dpr = 1, aspect = 1, pointScale = 1, scale = 1, vw = 0, vh = 0;
 
+  /* ============================================================
+     NAME MASK — "KOAIK" filled with the galaxy's own stars
+     ============================================================
+
+     The word is drawn on the page as an OUTLINE with a transparent
+     interior (see .name-koaik in galaxy.css). The fill comes from
+     here: a share of the migrating stars are given a destination
+     inside the letterforms instead of out on the sky, so the word
+     is literally filled by the galaxy that just came apart.
+
+     The interior points are found by rasterising the text once to a
+     2D canvas and keeping pixels that are actually inside a glyph.
+     Sampling the real rasteriser rather than hand-placing points
+     means the fill follows the font exactly — including the counters
+     of O and A, which must stay empty — and keeps working if the
+     font, weight or wording changes.
+
+     Everything is in NDC so it can be handed straight to the vertex
+     shader, which does its arrival in screen space. */
+  const fract = x => x - Math.floor(x);
+  const nameTargets = new Float32Array(N * 2);  // NDC xy per star
+  const nameIsFill  = new Float32Array(N);      // 1 = lands in a glyph
+  let nameReady = false;
+
+  /* Which fraction of the field fills the word. The rest go to the
+     sky. Too high and the sky ends up empty, which defeats the whole
+     migration; too low and the letters read as speckled rather than
+     solid.
+
+     Raised 0.34 -> 0.46 when the outline was removed. With a stroke
+     around it the fill only had to SUGGEST the letterform — the line
+     carried the shape. Now the stars are the only thing defining the
+     glyphs, so a speckled fill just reads as a smudge; the word needs
+     enough density to hold its own edges. The string also nearly
+     doubled in length (KOAIK -> ALI KOAIK), so the same share would
+     have spread thinner over more glyph area. */
+  const NAME_FILL_SHARE = 0.46;
+
+  /* Mirrors .gname-full in galaxy.css. If these drift apart the
+     stars fill a word that is not where the CSS box is measured, so
+     both are derived from the same numbers: font size as a fraction
+     of the smaller viewport axis, and the baseline offsets below. */
+  /* The WHOLE name is written by the stars — both words, one string,
+     one size. "ALI" used to be a small CSS-only lead-in above it; a
+     name split across two weights and two sizes reads as a label and
+     a headline rather than one signature, so it is now a single line
+     that the burst writes in full.
+
+     The gap between the words is a space in this string: it measures
+     and lays out like any other glyph, which keeps the two words on
+     the same baseline and the same tracking automatically. */
+  const NAME_TEXT = 'ALI KOAIK';
+  /* Orbitron: geometric, wide, and built on circles — the letterforms
+     echo the disc the stars arrive from, where Space Grotesk (still
+     the UI font everywhere else) reads as a product heading. 800 over
+     700 because the counters must stay open enough to hold stars once
+     the glyphs are this wide. */
+  const NAME_FONT = '800 {SIZE}px "Orbitron", "Space Grotesk", system-ui, sans-serif';
+  /* 11vmin, not 17: the string went from 5 glyphs to 9, and Orbitron
+     is a markedly wider face than Space Grotesk. At 17vmin the name
+     overflowed a laptop viewport entirely. Mirrored by the CSS clamp
+     mid on .gname-full. */
+  const NAME_SIZE_VMIN = 0.11;
+  const NAME_LETTER_SPACING = 0.08; // em, matches CSS letter-spacing
+  /* Vertical centre of the name as a fraction of viewport height.
+     Now that it is a single line rather than a stacked pair, it sits
+     closer to the optical middle. */
+  const NAME_CENTER_Y = 0.52;
+
+  function buildNameTargets() {
+    if (vw === 0 || vh === 0) return;
+    const cssW = vw / dpr, cssH = vh / dpr;
+    const px = Math.round(Math.min(cssW, cssH) * NAME_SIZE_VMIN);
+    if (px < 8) { nameReady = false; return; }
+
+    const c = document.createElement('canvas');
+    c.width = vw; c.height = vh;
+    const g = c.getContext('2d', { willReadFrequently: true });
+    if (!g) { nameReady = false; return; }
+
+    g.clearRect(0, 0, vw, vh);
+    g.fillStyle = '#fff';
+    g.textBaseline = 'middle';
+    g.textAlign = 'left';
+    g.font = NAME_FONT.replace('{SIZE}', String(px * dpr));
+
+    /* Letter spacing is applied by hand: canvas letterSpacing is not
+       supported everywhere, and the CSS outline uses it, so the two
+       would disagree on total width exactly where it matters most. */
+    const track = px * dpr * NAME_LETTER_SPACING;
+    const chars = NAME_TEXT.split('');
+    let total = 0;
+    const widths = chars.map(ch => {
+      const w = g.measureText(ch).width;
+      total += w + track;
+      return w;
+    });
+    total -= track;   // no trailing gap
+
+    let x = (vw - total) / 2;
+    const y = vh * NAME_CENTER_Y;
+    for (let i = 0; i < chars.length; i++) {
+      g.fillText(chars[i], x, y);
+      x += widths[i] + track;
+    }
+
+    /* Read back and collect interior pixels. Alpha is thresholded
+       high so antialiased edge pixels are not counted — a star
+       sitting half outside the glyph is what makes a filled word look
+       furry instead of crisp. */
+    let data;
+    try {
+      data = g.getImageData(0, 0, vw, vh).data;
+    } catch (e) {
+      nameReady = false; return;    // tainted canvas; fall back to sky
+    }
+
+    /* Step the scan rather than testing every pixel: at 26k stars a
+       full-resolution list is far more candidates than needed, and the
+       stride keeps the cost flat as resolution rises. */
+    const want = Math.max(1, Math.floor(N * NAME_FILL_SHARE));
+    const pts = [];
+    const stride = Math.max(1, Math.floor(Math.sqrt((vw * vh) / (want * 6))));
+    for (let py = 0; py < vh; py += stride) {
+      for (let pxx = 0; pxx < vw; pxx += stride) {
+        if (data[(py * vw + pxx) * 4 + 3] > 200) pts.push(pxx, py);
+      }
+    }
+    if (pts.length < 8) { nameReady = false; return; }
+
+    const count = pts.length / 2;
+    /* Assign by star index so the choice is stable across rebuilds —
+       a star that fills the K must not become a sky star on resize. */
+    for (let i = 0; i < N; i++) {
+      const pick = fract(Math.sin(i * 12.9898) * 43758.5453) < NAME_FILL_SHARE;
+      nameIsFill[i] = pick ? 1 : 0;
+      if (!pick) continue;
+      const j = (Math.floor(fract(Math.sin(i * 78.233) * 24634.6345) * count)) % count;
+      /* Jitter within the sampling cell, so the fill is not a visible
+         lattice at the stride's spacing. */
+      const jx = (fract(Math.sin(i * 39.346) * 31415.9265) - 0.5) * stride;
+      const jy = (fract(Math.sin(i * 11.135) * 27182.8182) - 0.5) * stride;
+      const sx = pts[j * 2] + jx, sy = pts[j * 2 + 1] + jy;
+      nameTargets[i * 2]     = (sx / vw) * 2 - 1;
+      nameTargets[i * 2 + 1] = 1 - (sy / vh) * 2;   // GL y is up
+    }
+    /* The centroid of the sampled glyph pixels, in CSS px. This is
+       the ground truth the CSS outline has to line up with. */
+    let sumY = 0;
+    for (let k = 1; k < pts.length; k += 2) sumY += pts[k];
+    starMidY = (sumY / count) / dpr;
+
+    nameReady = true;
+    nameDirty = true;
+    alignNameToStars();
+  }
+
+  /* Where the sampled glyphs actually sit, in CSS px from the top. */
+  let starMidY = 0;
+
+  /* ── Align the CSS outline to the sampled glyphs ──
+     The sampler draws with a `middle` baseline, which centres the
+     CAPITALS. The CSS box, centred with translateY(-50%), centres the
+     font's full em box instead — ascent and descent included — which
+     sits noticeably lower. Measured at 1280x717 the gap was 26px,
+     easily enough to see the outline floating below its own fill.
+
+     Rather than derive the correction from font metrics (which means
+     assuming how a family distributes its em box, and breaks on the
+     fallback face), this MEASURES the rendered element and shifts it
+     by whatever it is actually out by. It is self-correcting: it ends
+     up right for whatever font loaded, at whatever size, on whatever
+     platform, because it compares the two things that must match
+     rather than modelling them. */
+  function alignNameToStars() {
+    const el = document.querySelector('.gname-full');
+    if (!el || !nameReady || !starMidY) return;
+    const root = document.documentElement;
+    // Measure with the current shift applied, then correct the residual.
+    const prev = parseFloat(
+      getComputedStyle(root).getPropertyValue('--cap-shift')) || 0;
+    const r = el.getBoundingClientRect();
+    if (!r.height) return;
+    const cssMid = r.top + r.height / 2;
+    const shift = prev + (starMidY - cssMid);
+    root.style.setProperty('--cap-shift', shift.toFixed(2) + 'px');
+  }
+
+
+  let nameDirty = true;
+
   function resize() {
     // The whole HDR chain (scene + bright + 4 blurred mips + composite)
     // is per-pixel, so internal resolution dominates GPU cost: measured
@@ -1103,6 +1434,9 @@
     vw = w; vh = h;
     canvas.width = w; canvas.height = h;
     buildTargets(w, h);
+    // The letterforms are sized to the viewport, so their interior
+    // points have to be resampled whenever it changes.
+    buildNameTargets();
     return true;
   }
 
@@ -1137,14 +1471,16 @@
   let patternAngle = 0;
   let driftX = 0, targetDrift = 0, scrollProgress = 0;
   // Stage progress, all 0..1. See readScroll().
-  let zoomT = 0, planetT = 0;
+  let zoomT = 0;
   // The burst runs on its own clock once fired, not on scroll.
   let burstFired = false, burstClock = 0;
   // Smoothed values the renderer actually uses, so a flick of the wheel
   // glides instead of snapping.
-  let zoom = 0, burst = 0, planet = 0;
+  let zoom = 0, burst = 0;
   let lastPublishedDrift = NaN, lastPublishedGlow = NaN;
   let lastPublishedZoom = NaN;
+  let lastPublishedBurst = NaN, lastPublishedName = NaN;
+  let lastPublishedKoaik = NaN;
   let swallowFeed = 0, coreGlow = 0;
   let leanX = 0, leanY = 0;
   let lastTime = performance.now();
@@ -1176,9 +1512,19 @@
                       It ends ~2.07x oversize with the stars reading as
                       discs rather than points.
        2.6 vh         BURST FIRES — a timed event, not scroll-driven.
-                      The disc collapses inward, detonates, and settles
-                      into a starfield over BURST_DURATION seconds.
-       2.85 .. 5.75   planet: a gas giant approaches and fills the centre
+                      The disc collapses to a knot, lets go, and the
+                      stars recede into the background sky: each keeps
+                      drifting the way it was already going while
+                      falling away from the camera, sorted into the
+                      same three depth tiers the sky itself is drawn
+                      in, until perspective has shrunk them to ~0.15x
+                      size at 0.22 alpha and they read as deep field.
+                      The camera eases back to a third of its push over
+                      the same beat, so the view opens out as the
+                      galaxy dissolves rather than staying pressed
+                      against an empty frame. Nothing moves to a
+                      destination — the motion never arrives, it just
+                      recedes past the point of being distinguishable.
 
      The scroll-driven stages must line up with the section heights in
      galaxy.css, or a stage finishes while its screen is still on view
@@ -1227,12 +1573,6 @@
       burstClock = 0;
     }
 
-    // Stage 3: the planet approach, beginning just after the burst
-    // fires so the two do not overlap. Anchored to the trigger for the
-    // same reason as the zoom.
-    planetT = Math.min(1, Math.max(0,
-      (y / h - (config.BURST_TRIGGER + 0.25)) / 2.35));
-
     targetDrift = (1 - Math.pow(1 - scrollProgress, 2)) * config.SCROLL_DRIFT;
   }
   window.addEventListener('scroll', readScroll, { passive: true });
@@ -1249,7 +1589,7 @@
      using the resting values here sent the cursor wake to where the
      galaxy used to be once the approach had started. */
   function unprojectToDisc(px, py, out) {
-    const w = CAM_DIST - zoom * config.ZOOM_PUSH;
+    const w = CAM_DIST - effectiveZoom() * config.ZOOM_PUSH;
     out[0] = px * aspect * w / scale - driftX;
     out[1] = (py * w / scale) / (Math.cos(currentTilt()) || 1e-3);
   }
@@ -1276,6 +1616,36 @@
      SIMULATION
      ============================================================ */
   function simulate(dt) {
+    /* ── Frozen once the collapse starts ──
+       The burst is not a force applied to a living simulation; it is a
+       transformation of a FIXED set of positions, computed entirely in
+       the vertex shader from aPos. Letting the spiral keep running
+       underneath it was why the settled sky would not hold:
+
+         · stars kept falling inward, so any one of them eventually hit
+           CORE_RADIUS (or ran out of life) and spawnStar() teleported
+           it back to the rim. Its scattered position is derived from
+           aPos, so a star that had already settled into the deep field
+           silently vanished from where it was and reappeared somewhere
+           else — the sky churned instead of holding.
+         · the per-star hashes h/h2 are also derived from aPos, so a
+           recycled star drew a new depth tier and a new sky floor on
+           the frame it respawned: a visible twinkle-and-jump.
+
+       Freezing at BURST_FREEZE (just before the collapse bites) hands
+       the shader a stable field to work from, so every star has one
+       origin and one destination for the whole sequence. The wake and
+       the pattern rotation stop mattering at this point anyway: the
+       disc is being crushed into a knot within a few tenths of a
+       second. Position data is already in posArr from the last live
+       frame, so there is nothing to recompute — we simply leave the
+       buffers alone.
+
+       Reversal is handled for free: scrolling back up drives burst
+       below the threshold and the simulation picks up exactly where it
+       was parked, with no discontinuity. */
+    if (burst >= config.BURST_FREEZE) return;
+
     swallowFeed = 0;
     const pr2 = config.PUSH_RADIUS * config.PUSH_RADIUS;
     const maxOff2 = config.MAX_OFFSET * config.MAX_OFFSET;
@@ -1336,18 +1706,9 @@
         offX[i] *= k; offY[i] *= k; velX[i] *= 0.5; velY[i] *= 0.5;
       }
 
-      const l = life[i];
-      let alpha = smooth01(l / 0.30) * smooth01((1 - l) / 0.30);
-      if (pop !== 4 && pop !== 0) {
-        // Swallowed by the core: flare on the plunge, then extinguish.
-        const fall = 1 - smooth01((r - config.CORE_RADIUS) / config.SWALLOW_REACH);
-        const flare = 1 + fall * fall * config.SWALLOW_FLARE;
-        const consumed = smooth01((r - config.CORE_RADIUS) / 0.022);
-        const enter = 1 - smooth01((r - config.RIM_LO) /
-                                   (config.DISC_RADIUS - config.RIM_LO) - 0.55);
-        alpha *= flare * consumed * Math.max(0.35, enter);
-        if (fall > 0.75) swallowFeed += (fall - 0.75) * 4.0 * alpha;
-      }
+      // Stars keep a fixed luminosity throughout their path. The old
+      // lifecycle fade and core flare made the field read as flickering.
+      const alpha = 1;
 
       const o = i * 3;
       posArr[o] = hx + offX[i];
@@ -1379,7 +1740,27 @@
      lockstep — two independently smoothed values drift apart under a
      fast scroll and the disc appears to swing on its own. */
   function currentTilt() {
-    return config.TILT + zoom * config.TILT_ROLL;
+    return config.TILT + effectiveZoom() * config.TILT_ROLL;
+  }
+
+  /* The camera push actually in force this frame.
+
+     The scroll drives `zoom` to 1 by the time the burst fires, but
+     holding it there through the burst is wrong on both counts. It is
+     wrong visually — the galaxy is dissolving, and a camera still
+     pressed against it has nothing left to look at. And it is wrong
+     geometrically: the release throws the rim out to ~1.4 radius, and
+     at a 37 deg roll that radius lands in DEPTH, so the nearest stars
+     crowd the camera plane (w = 0.67 at the tightest) and perspective
+     swells them 4.5x for a few frames — a smear of fat blobs exactly
+     where the effect wants small receding points.
+
+     Easing the push back to a third over the release solves both: the
+     view opens out as the debris spreads, and the depth budget that
+     the roll is eating gets handed back. Kept on the same `burst`
+     clock as everything else, so it cannot drift out of step. */
+  function effectiveZoom() {
+    return zoom * (1 - smooth01(Math.max(0, (burst - 0.30) / 0.45)) * 0.67);
   }
 
   function rotMatrix() {
@@ -1407,15 +1788,27 @@
 
     gl.useProgram(skyProg.p);
     gl.uniform2f(skyProg.u.uRes, vw, vh);
-    gl.uniform1f(skyProg.u.uTime, time);
-    gl.uniform2f(skyProg.u.uParallax, leanX * 0.012, leanY * 0.012);
+    /* Sky parallax = pointer lean + a slow autonomous drift.
+       The lean was 0.012, which is below the threshold where the eye
+       reads the layers as separated depths; 0.030 is still a shift of
+       a few pixels at the near layer, so the sky reacts without
+       sliding around under the galaxy.
+
+       The drift term keeps the field alive when the pointer is
+       still — two incommensurate periods (23s / 31s) so the motion
+       never visibly repeats. It is a third of the lean's amplitude:
+       enough to float, not enough to notice as movement. */
+    gl.uniform2f(skyProg.u.uParallax,
+      leanX * 0.030 + Math.sin(time * 0.2731) * 0.010,
+      leanY * 0.030 + Math.cos(time * 0.2026) * 0.010);
+    gl.uniform1f(skyProg.u.uSkyTime, time);
     gl.bindVertexArray(quadVAO);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
     // ── Dust at half resolution, into its own buffer ──
     // Skipped once the burst has dissolved it: this is the most
     // expensive pass in the frame and adds nothing after that point.
-    const dustVisible = burst < 0.7;
+    const dustVisible = burst * config.DUST_FADE < 1.0;
     gl.disable(gl.BLEND);
     bindTarget(dustRT);
     gl.clear(gl.COLOR_BUFFER_BIT);
@@ -1425,7 +1818,7 @@
     gl.uniform1f(dustProg.u.uTime, time);
     gl.uniform1f(dustProg.u.uScale, scale);
     gl.uniform1f(dustProg.u.uCamDist, CAM_DIST);
-    gl.uniform1f(dustProg.u.uZoom, zoom);
+    gl.uniform1f(dustProg.u.uZoom, effectiveZoom());
     gl.uniform1f(dustProg.u.uZoomPush, config.ZOOM_PUSH);
     gl.uniform1f(dustProg.u.uTilt, currentTilt());
     gl.uniform1f(dustProg.u.uDrift, driftX);
@@ -1434,7 +1827,7 @@
     // the burst takes over; leaving it up would anchor the old disc in
     // place while the stars scattered around it.
     gl.uniform1f(dustProg.u.uDensity,
-                 config.DUST_DENSITY * Math.max(0, 1 - burst * 1.5));
+                 config.DUST_DENSITY * Math.max(0, 1 - burst * config.DUST_FADE));
     gl.uniform1i(dustProg.u.uSteps, config.DUST_STEPS);
     gl.uniform1f(dustProg.u.uArms, config.ARMS);
     gl.uniform1f(dustProg.u.uTightness, config.ARM_TIGHTNESS);
@@ -1482,6 +1875,7 @@
       gl.bufferSubData(gl.ARRAY_BUFFER, 0, tintArr);
       tintDirty = false;
     }
+    if (nameDirty) uploadNameTargets();
     if (lumDirty) {
       gl.bindBuffer(gl.ARRAY_BUFFER, lumBuf);
       gl.bufferSubData(gl.ARRAY_BUFFER, 0, lum);
@@ -1492,22 +1886,11 @@
     gl.uniform1f(starProg.u.uScale, scale);
     gl.uniform1f(starProg.u.uAspect, aspect);
     gl.uniform1f(starProg.u.uPointScale, pointScale);
-    gl.uniform1f(starProg.u.uTime, time);
     gl.uniform1f(starProg.u.uDrift, driftX);
-    gl.uniform1f(starProg.u.uZoom, zoom);
+    gl.uniform1f(starProg.u.uZoom, effectiveZoom());
     gl.uniform1f(starProg.u.uZoomPush, config.ZOOM_PUSH);
     gl.uniform1f(starProg.u.uBurst, burst);
     gl.drawArrays(gl.POINTS, 0, N);
-
-    // ── Planet, behind the content sections ──
-    if (planet > 0.001) {
-      gl.useProgram(planetProg.p);
-      gl.uniform2f(planetProg.u.uRes, vw, vh);
-      gl.uniform1f(planetProg.u.uTime, time);
-      gl.uniform1f(planetProg.u.uGrow, planet);
-      gl.bindVertexArray(quadVAO);
-      gl.drawArrays(gl.TRIANGLES, 0, 3);
-    }
 
     /* 2. bright pass */
     gl.disable(gl.BLEND);
@@ -1564,7 +1947,6 @@
     gl.uniform1f(compositeProg.u.uExposure, config.EXPOSURE);
     gl.uniform1f(compositeProg.u.uBloomStrength, config.BLOOM_STRENGTH);
     gl.uniform2f(compositeProg.u.uRes, vw, vh);
-    gl.uniform1f(compositeProg.u.uTime, time);
     gl.bindVertexArray(quadVAO);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.bindVertexArray(null);
@@ -1580,7 +1962,11 @@
        nucleus grows with the approach — without this the glow detached
        and sat as a small blob inside a much larger core. Quantised so
        it only writes on real change. */
-    const zq = Math.round(zoom * 50) / 50;
+    // effectiveZoom(), not zoom: the corona tracks the rendered
+    // nucleus, so it has to shrink with the camera when the burst
+    // pulls back. Publishing raw `zoom` left a large glow hanging
+    // over a galaxy that had already receded.
+    const zq = Math.round(effectiveZoom() * 50) / 50;
     if (zq !== lastPublishedZoom) {
       lastPublishedZoom = zq;
       document.documentElement.style.setProperty('--zoom', zq.toFixed(2));
@@ -1590,6 +1976,44 @@
     if (gq !== lastPublishedGlow) {
       lastPublishedGlow = gq;
       document.documentElement.style.setProperty('--core-glow', gq.toFixed(2));
+    }
+
+    /* The corona has to go out with the galaxy. It is a CSS glow with
+       no knowledge of the burst, so without this it stays lit over an
+       empty sky — a bright halo around nothing. */
+    /* ── The name arrives in two beats ──
+       Both words are now written by the stars as one string, so the
+       two tokens no longer mean "Ali" and "Koaik". They mean:
+
+       1. --name-ali (0.62 -> 0.88). The OUTLINE of the full name,
+          fading in once the field has largely parked, so the stroke
+          settles around the letters the stars have drawn rather than
+          presenting itself as the title they land inside.
+       2. --name-koaik (0.86 -> 1.00). The portfolio rows beneath it —
+          role, status, links. They come last: the identity resolves
+          first, then the framing that makes it a portfolio.
+
+       The token NAMES are kept as-is because they are written from
+       here and read in galaxy.css, and renaming them buys nothing but
+       a chance to miss one. */
+    const aliT = smooth01(Math.max(0, (burst - 0.62) / 0.26));
+    const aq = Math.round(aliT * 50) / 50;
+    if (aq !== lastPublishedName) {
+      lastPublishedName = aq;
+      document.documentElement.style.setProperty('--name-ali', aq.toFixed(2));
+    }
+
+    const koaikT = smooth01(Math.max(0, (burst - 0.86) / 0.14));
+    const kq = Math.round(koaikT * 50) / 50;
+    if (kq !== lastPublishedKoaik) {
+      lastPublishedKoaik = kq;
+      document.documentElement.style.setProperty('--name-koaik', kq.toFixed(2));
+    }
+
+    const bq = Math.round(burst * 50) / 50;
+    if (bq !== lastPublishedBurst) {
+      lastPublishedBurst = bq;
+      document.documentElement.style.setProperty('--burst', bq.toFixed(2));
     }
   }
 
@@ -1618,8 +2042,6 @@
     driftX += (targetDrift - driftX) * Math.min(1, dt * 4.5);
     // Ease the scroll-driven stages so a flick of the wheel glides.
     zoom   += (zoomT   - zoom)   * Math.min(1, dt * 4.0);
-    planet += (planetT - planet) * Math.min(1, dt * 3.2);
-
     // The burst plays on its own timeline once fired, and rewinds when
     // it is un-fired — faster on the way back, since a reversed
     // explosion is a transition rather than the main event.
@@ -1655,6 +2077,139 @@
 
     draw(now / 1000);
     requestAnimationFrame(frame);
+  }
+
+  /* The mask is rasterised with Space Grotesk, but web fonts load
+     asynchronously: if the first build runs before the font arrives,
+     the sampler measures a fallback and the star fill ends up in the
+     shape of the WRONG typeface while the CSS outline uses the right
+     one. Rebuilding once the font is ready realigns them.
+
+     Guarded because document.fonts is absent on older browsers, where
+     the fallback rasterisation is still a usable word. */
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(() => {
+      buildNameTargets();
+      alignNameToStars();
+      wake();
+    }).catch(() => {});
+  }
+
+  /* ============================================================
+     THE QUOTE — short lines from Interstellar, in rotation
+     ============================================================
+     Fades one line out, swaps the text while it is invisible, then
+     fades the next in. The swap happens at zero opacity so the reader
+     never sees the text change; the CSS reserves two lines of height
+     so the ship below does not move as the lines change length.
+
+     Kept to brief, widely-quoted fragments rather than long passages
+     of the screenplay.
+
+     The rotation is paused while the tab is hidden — an interval left
+     running in a background tab burns wakeups and, worse, would
+     advance through several lines unseen. */
+  const quoteEl = document.getElementById('gnameQuote');
+  if (quoteEl) {
+    const textEl = quoteEl.querySelector('.gname-quote-text');
+    /* Lines only — no per-line attribution. Repeating the same source
+       under every quote added a word of noise to each rotation and
+       told the reader nothing new after the first one. */
+    const QUOTES = [
+      'Do not go gentle into that good night.',
+      'We used to look up and wonder at our place in the stars.',
+      'Mankind was born on Earth. It was never meant to die here.',
+      "Love isn't something we invented.",
+      'Love is the one thing that transcends time and space.',
+      'We will find a way. We always have.',
+    ];
+
+    const HOLD = 5200;   // how long a line stays up
+    const FADE = 900;    // must match the CSS transition
+    let qi = 0, timer = 0;
+
+    function showQuote(i) {
+      textEl.textContent = QUOTES[i];
+      quoteEl.classList.add('is-visible');
+    }
+
+    function cycle() {
+      quoteEl.classList.remove('is-visible');       // fade out
+      timer = setTimeout(() => {
+        qi = (qi + 1) % QUOTES.length;
+        showQuote(qi);                              // swap + fade in
+        timer = setTimeout(cycle, HOLD);
+      }, FADE);
+    }
+
+    function startQuotes() {
+      clearTimeout(timer);
+      timer = setTimeout(cycle, HOLD);
+    }
+
+    showQuote(0);
+    if (!reduceMotion) {
+      startQuotes();
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) clearTimeout(timer);
+        else startQuotes();
+      });
+    }
+  }
+
+  /* ============================================================
+     LAUNCH — "press here to start the trip"
+     ============================================================
+     The CTA flies the page to just past BURST_TRIGGER, which is what
+     detonates the galaxy. Native smooth scrolling is not used: its
+     duration is fixed by the browser and is far too brisk over the
+     ~2.6 viewport heights involved, so the approach flicks past
+     instead of reading as a journey. This eases it by hand over a
+     duration proportional to the distance left.
+
+     It also cooperates with a reader who takes over: any wheel,
+     touch or key input cancels the flight mid-way rather than
+     fighting the user for the scroll position. */
+  const launchBtn = document.getElementById('launchBtn');
+  if (launchBtn) {
+    let flying = false;
+
+    const cancelFlight = () => { flying = false; };
+
+    launchBtn.addEventListener('click', () => {
+      if (flying) return;
+      const h = window.innerHeight || 1;
+      // A little past the trigger, so the burst is certain to fire.
+      const target = (config.BURST_TRIGGER + 0.06) * h;
+      const from = window.scrollY;
+      const dist = target - from;
+      if (dist <= 0) return;
+
+      /* ~950ms per viewport height travelled, clamped so a short hop
+         is not sluggish and a long one does not overstay. */
+      const dur = Math.max(1200, Math.min(3200, (dist / h) * 950));
+      const t0 = performance.now();
+      flying = true;
+
+      /* easeInOutCubic: the ship accelerates away from rest and
+         settles at the far end, which is the shape of a launch. */
+      const ease = t => t < 0.5
+        ? 4 * t * t * t
+        : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
+      const step = now => {
+        if (!flying) return;
+        const p = Math.min(1, (now - t0) / dur);
+        window.scrollTo(0, from + dist * ease(p));
+        if (p < 1) requestAnimationFrame(step);
+        else flying = false;
+      };
+      requestAnimationFrame(step);
+    });
+
+    /* passive: these only ever cancel; they never block the gesture. */
+    ['wheel', 'touchstart', 'keydown'].forEach(evt =>
+      window.addEventListener(evt, cancelFlight, { passive: true }));
   }
 
   paintOnce();

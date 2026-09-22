@@ -46,8 +46,14 @@
   pointer-events: none;
   /* The corona swells as the core swallows stars. --core-glow is
      published by galaxy.js from what it actually consumed, so this
-     reacts to the infall instead of pulsing on a fixed timer. */
-  opacity: calc(0.82 + var(--core-glow, 0) * 0.5);
+     reacts to the infall instead of pulsing on a fixed timer.
+
+     It is then extinguished by the burst. --burst runs 0..1 over the
+     detonation; the 1.6 multiplier puts the glow fully out by ~0.62,
+     just as the stars start receding into the sky, so the halo does
+     not linger over a galaxy that is no longer there. */
+  opacity: calc((0.82 + var(--core-glow, 0) * 0.5) *
+                max(0, 1 - var(--burst, 0) * 1.6));
   /* Two independent swells, multiplied: the feeding pulse, and the
      camera approach. --zoom is published by galaxy.js; the 1.07
      matches the 2.07x the renderer's own projection grows the nucleus
@@ -101,27 +107,6 @@
   pointer-events: none;
 }
 
-/* The scroll cue belongs to the opening screen only — it fades out as
-   soon as the page moves, instead of hanging over the intro panel.
-   The entry animation is replaced (not just overridden) because
-   `forwards` would otherwise pin opacity at 1. */
-#hero .scroll-indicator {
-  position: fixed;
-  bottom: 2.5rem;
-  left: 50%;
-  z-index: 2;
-  transform: translateX(-50%);
-  pointer-events: none;
-  animation: cueIn 0.6s ease 1.0s both;
-  /* Multiplied by the entry animation's opacity via the parent. */
-  opacity: calc(1 - var(--drift, 0) * 3.2);
-}
-
-@keyframes cueIn {
-  from { visibility: hidden; }
-  to   { visibility: visible; }
-}
-
 /* ============================================================
    INTRO PANEL
    Sits above the fixed canvas and fades in as it scrolls into view.
@@ -141,26 +126,418 @@
   pointer-events: none;
 }
 
-/* The burst no longer consumes scroll: it fires as a timed event when
-   the page passes BURST_TRIGGER and plays out on its own clock. This
-   section is only the small run-up that carries the reader past that
-   point while the explosion begins. */
+/* The burst does not consume scroll — it fires as a timed event when
+   the page passes BURST_TRIGGER and then plays out on its own clock.
+   But the page still has to be TALL enough to reach that trigger, and
+   then to hold the reader there while the ~2.6s of explosion plays.
+
+   The arithmetic, which has to be rechecked whenever a section height
+   or BURST_TRIGGER changes: max scrollY = (total height - 100vh), in
+   viewport units. With hero 100 + intro 180 + burst 120 = 400vh, that
+   is 3.00 — comfortably past the 2.60 trigger, leaving 0.40vh of
+   scroll beyond it for the burst to play against.
+
+   At the previous 40vh the total came to 320vh and max scrollY was
+   2.20, BELOW the trigger: the burst could never fire at all. That is
+   what removing the 300vh planet section exposed — the planet had been
+   supplying the page height the trigger depended on. */
 #burst {
   position: relative;
   z-index: 1;
-  height: 40vh;
-  pointer-events: none;
-}
-
-/* Pure scroll length for the planet approach. Empty by design: the
-   gas giant grows behind it, so any content here would be lost. */
-#planet {
-  position: relative;
-  z-index: 1;
-  height: 300vh;
+  height: 120vh;
   pointer-events: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
   #hero .hero-bg::after { animation: none; }
+}
+
+/* ============================================================
+   THE NAME — "ALI KOAIK", written in full by the stars
+   ============================================================
+
+   NOTE ON NAMING: these classes are prefixed `galaxy-`/`gname-`
+   rather than the obvious `hero-name`/`name-*`. style.css already
+   defines .hero-name for the other page, and that rule sets
+   `-webkit-text-fill-color: transparent` over an accent GRADIENT plus
+   `animation: fadeInUp ... both`. Inherited here it painted the word
+   purple-to-cyan and, because `both` holds the animation's final
+   opacity:1, pinned it visible from the first frame — overriding the
+   opacity these rules animate. Keeping the namespaces separate is
+   what stops that, so do not rename these back.
+
+   The geometry note now lives on .gname-full itself, next to the
+   numbers it constrains. */
+.galaxy-name {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* The name is positioned from the SAME anchor the star sampler uses,
+   rather than by flex flow: the sampler centres the capitals on
+   NAME_CENTER_Y, and no arrangement of line-heights and margins can
+   be trusted to land on that exact line.
+
+   --cap-shift is measured at runtime by alignNameToStars() in
+   galaxy.js. translateY(-50%) centres the text BOX, which carries the
+   font's full ascent and descent and therefore sits below the middle
+   of the capitals; the shift corrects that residual against the real
+   star centroid, so it is right for whatever font actually loads.
+
+   CRITICAL: the geometry here is mirrored in galaxy.js — NAME_FONT,
+   NAME_SIZE_VMIN, NAME_LETTER_SPACING and NAME_CENTER_Y. The star
+   fill is sampled from a canvas rasterisation of the same text at the
+   same size and position, so if these drift apart the stars fill a
+   word that is not where the outline is drawn. Change both together.
+
+   ONE rule for the whole name, not one per word: "Ali" and "Koaik"
+   previously had separate weights, sizes and treatments, which left
+   Koaik outlined and Ali solid — two typographic ideas fighting
+   inside a single signature. */
+.gname-full {
+  position: absolute;
+  left: 50%;
+  top: 52%;                 /* = NAME_CENTER_Y in galaxy.js */
+  margin: 0;
+  white-space: nowrap;
+  display: block;
+  transform: translate(-50%, calc(-50% + var(--cap-shift, 0px)));
+
+  /* Must match NAME_FONT / NAME_SIZE_VMIN / NAME_LETTER_SPACING. */
+  font-family: 'Orbitron', var(--font-heading, 'Space Grotesk'), system-ui, sans-serif;
+  font-weight: 800;
+  font-size: clamp(1.6rem, 11vmin, 7.5rem);
+  letter-spacing: 0.08em;
+  text-indent: 0.08em;
+  text-transform: uppercase;
+  line-height: 1;
+
+  /* FULLY INVISIBLE — no fill, no stroke. The stars are the only
+     thing that draws this name.
+
+     An outline, even a hairline, competes with the fill: it states
+     the letterform exactly, so the eye reads the stroke as the real
+     word and the stars as decoration landing inside it. Removing it
+     inverts that — the constellation IS the letterform, and its edges
+     are as soft or as ragged as the stars that happen to be there.
+
+     The element is still rendered (not display:none) because
+     alignNameToStars() measures its box every resize to align the
+     star centroid, and a removed box has no geometry to measure. */
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  -webkit-text-stroke: 0;
+  text-stroke: 0;
+
+  /* Defensive: neutralise the gradient-fill and animation style.css
+     applies to its own hero heading, in case a future rule there
+     widens its selector to reach this one. */
+  background: none;
+  -webkit-background-clip: border-box;
+  background-clip: border-box;
+  animation: none;
+
+  opacity: var(--name-ali, 0);
+  will-change: opacity;
+}
+
+/* ── The portfolio line ──
+   "Ali Koaik" alone is a title card; these three rows are what make it
+   a portfolio — what he does, whether he's available, and where to go
+   next. All are anchored to the SAME top/left as the name and offset
+   downward in units of the cap height, so they ride the star centroid
+   through resize instead of being laid out independently.
+
+   They share --name-koaik with the name: the stars finish writing it,
+   then the framing resolves under it. A separate token would have to
+   be driven from galaxy.js; reusing this one keeps the reveal in a
+   single place. */
+.gname-quote {
+  position: absolute;
+  left: 50%;
+  top: 52%;                 /* = NAME_CENTER_Y, as above */
+  margin: 0;
+  opacity: var(--name-koaik, 0);
+  will-change: opacity;
+  /* Sits directly under the name; the ship follows below it. */
+  transform: translate(-50%,
+    calc(-50% + var(--cap-shift, 0px) + 1.05 * clamp(1.6rem, 11vmin, 7.5rem)));
+  /* Wraps on narrow screens rather than running off the sides, so the
+     longer lines stay readable. Centred because the text is a
+     rotating quotation, not a label. */
+  width: min(90vw, 46ch);
+  text-align: center;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: clamp(0.78rem, 1.5vmin, 0.95rem);
+  line-height: 1.7;
+  letter-spacing: 0.08em;
+  color: rgba(176, 190, 210, 0.92);
+  /* The element must not collapse as lines swap, or the ship below it
+     would jump. Two lines of the above line-height, reserved. */
+  min-height: calc(2 * 1.7em);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* The line itself fades and lifts. Only this inner span animates, so
+   the reserved box above stays put. */
+.gname-quote-text {
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.9s ease, transform 0.9s ease;
+}
+
+.gname-quote.is-visible .gname-quote-text {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (max-width: 640px) {
+  /* A 1px stroke around a name this wide reads as heavy on a phone. */
+  .gname-full {
+    -webkit-text-stroke-width: 0.75px;
+    text-stroke-width: 0.75px;
+    letter-spacing: 0.05em;
+    text-indent: 0.05em;
+  }
+
+  .gname-quote { font-size: 0.78rem; letter-spacing: 0.05em; }
+}
+
+/* Reduced motion: the burst never plays, so the name is simply
+   present rather than assembling. */
+@media (prefers-reduced-motion: reduce) {
+  .gname-full,
+  .gname-quote { opacity: 1; }
+  .gname-quote-text { opacity: 1; transform: none; }
+}
+
+/* ── No WebGL: the stars can never arrive ──
+   Set by galaxy.js when a WebGL2 context cannot be created. The name
+   is normally invisible because the star fill is the letterform; with
+   no renderer there is no fill, so the whole hero would be a blank
+   screen. Here the name is painted conventionally instead — a gradient
+   fill in the site's accent colours — and the reveal tokens are
+   forced on, since the burst that would have driven them never runs. */
+:root[data-no-webgl] .gname-full {
+  opacity: 1;
+  -webkit-text-fill-color: transparent;
+  background: var(--accent-gradient, linear-gradient(135deg, #6c63ff, #00d4ff));
+  -webkit-background-clip: text;
+  background-clip: text;
+  filter: drop-shadow(0 0 26px rgba(108, 99, 255, 0.34));
+}
+
+:root[data-no-webgl] .gname-quote {
+  opacity: 1;
+}
+
+/* ============================================================
+   START THE TRIP — the spaceship CTA
+   ============================================================
+   Anchored to the same 52% line as the name, offset below the
+   links, so the whole block rides the star centroid together.
+   Revealed on --name-koaik with the rest of the framing. */
+.gname-launch {
+  position: absolute;
+  left: 50%;
+  top: 52%;
+  transform: translate(-50%,
+    calc(-50% + var(--cap-shift, 0px) + 2.30 * clamp(1.6rem, 11vmin, 7.5rem)));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.55rem;
+  /* The overlay sets pointer-events:none so the galaxy stays
+     draggable; this is one of the two things that takes input. */
+  pointer-events: auto;
+  cursor: pointer;
+  /* Reset the UA button box — this is a bare control on a starfield. */
+  margin: 0;
+  padding: 0.5rem 1rem;
+  border: 0;
+  background: none;
+  -webkit-appearance: none;
+  appearance: none;
+  opacity: var(--name-koaik, 0);
+  will-change: opacity;
+}
+
+/* The Endurance. No porthole ring around it: in the film the ship is
+   a bare silhouette against black, and a decorative circle enclosing
+   a circular ship just read as two rings fighting each other.
+
+   The colour is cold instrument-white rather than the site's purple.
+   Interstellar's hardware is deliberately unglamorous — NASA panels
+   and white light, no neon — so accent colour appears only on hover. */
+.gname-launch-ring {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 78px;
+  height: 78px;
+  color: rgba(226, 236, 248, 0.95);
+  /* NO drop-shadow here. A filter on the element that wraps the
+     spinning SVG forces the blur to be recomputed every frame of the
+     rotation, which is what made the spin stutter. The glow now lives
+     on ::before — a static, never-animated layer underneath — so the
+     browser rasterises it once. Only `color` transitions here, which
+     is cheap. */
+  transition: color var(--transition, 0.3s ease);
+}
+
+/* The glow, as its own static layer behind the hull. */
+.gname-launch-ring::before {
+  content: '';
+  position: absolute;
+  inset: -10%;
+  border-radius: 50%;
+  background: radial-gradient(circle,
+    rgba(180, 210, 255, 0.30) 0%,
+    rgba(180, 210, 255, 0.10) 45%,
+    transparent 70%);
+  opacity: 0.85;
+  transition: opacity var(--transition, 0.3s ease);
+  pointer-events: none;
+}
+
+.gname-launch-ring svg { width: 100%; height: 100%; }
+
+/* The spin IS the ship: the Endurance rotates to make its own
+   gravity. Slow — 18s per turn — because anything faster reads as a
+   loading spinner, which is the one thing it must not look like. */
+.gname-endurance {
+  transform-origin: 50% 50%;
+  animation: enduranceSpin 18s linear infinite;
+  /* Promote to its own compositor layer so the rotation runs on the
+     GPU instead of repainting the vector each frame. translateZ(0) is
+     what actually forces the layer; will-change tells the browser to
+     prepare it before the first frame rather than mid-spin. */
+  will-change: transform;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+@keyframes enduranceSpin {
+  from { transform: translateZ(0) rotate(0deg);   }
+  to   { transform: translateZ(0) rotate(360deg); }
+}
+
+/* Docking cue: a faint ring that closes in on hover, as though the
+   ship is being hailed. Sits outside the hull and never moves it. */
+.gname-launch-ring::after {
+  content: '';
+  position: absolute;
+  inset: -7px;
+  border-radius: 50%;
+  border: 1px solid rgba(180, 210, 255, 0.55);
+  opacity: 0;
+  /* The closing cue animates `inset`, not `transform`: this element
+     is a child of the hull, which rotates on hover, and a transform
+     here would compound with that rotation. */
+  inset: -2px;
+  transition: opacity var(--transition, 0.3s ease),
+              inset var(--transition, 0.3s ease);
+}
+
+.gname-launch-label {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: clamp(0.75rem, 1.3vmin, 0.8rem);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(203, 213, 225, 0.95);
+  transition: color var(--transition, 0.3s ease);
+}
+
+/* Hover: the hull brightens, the docking ring closes, and the spin
+   picks up — the engines answering. */
+.gname-launch:hover .gname-launch-ring,
+.gname-launch:focus-visible .gname-launch-ring {
+  color: #ffffff;
+}
+
+/* Counter-spin: these pseudo-elements are children of the element
+   that carries the hover rotation, so without this they orbit with
+   it. Both are radially symmetric so it would not be visible, but it
+   keeps two extra layers churning for nothing. */
+.gname-launch:hover .gname-launch-ring::before,
+.gname-launch:focus-visible .gname-launch-ring::before {
+  opacity: 1;
+  animation: enduranceCounter 3.2s linear infinite;
+}
+
+@keyframes enduranceCounter {
+  from { transform: rotate(0deg);    }
+  to   { transform: rotate(-360deg); }
+}
+
+/* Speeding up on hover by changing animation-duration restarts the
+   animation from 0deg, so the ring visibly SNAPS backwards the moment
+   the cursor lands — the "lag" on hover. Instead the hull keeps its
+   own steady 18s spin and the boost rides on a wrapper, so the two
+   rotations add up and the ship only ever accelerates. */
+.gname-launch:hover .gname-launch-ring,
+.gname-launch:focus-visible .gname-launch-ring {
+  animation: enduranceBoost 3.2s linear infinite;
+}
+
+@keyframes enduranceBoost {
+  from { transform: translateZ(0) rotate(0deg);   }
+  to   { transform: translateZ(0) rotate(360deg); }
+}
+
+.gname-launch:hover .gname-launch-ring::after,
+.gname-launch:focus-visible .gname-launch-ring::after {
+  opacity: 1;
+  inset: -9px;
+  animation: enduranceCounter 3.2s linear infinite;
+}
+
+.gname-launch:hover .gname-launch-label,
+.gname-launch:focus-visible .gname-launch-label {
+  color: #ffffff;
+}
+
+/* The press cue must NOT set transform on the ring: that element
+   now owns the boost rotation, and a competing transform would cancel
+   the spin. Dim the glow instead. */
+.gname-launch:active .gname-launch-ring::before { opacity: 0.55; }
+
+.gname-launch:focus-visible {
+  outline: 1px solid rgba(190, 220, 255, 0.85);
+  outline-offset: 8px;
+  border-radius: 12px;
+}
+
+/* NO --drift fade here, deliberately.
+
+   An earlier version multiplied this by max(0, 1 - --drift * 3.2) to
+   retire the CTA once the trip was under way. That made the button
+   permanently invisible, because the two conditions cannot both hold:
+   --name-koaik only reaches 1 AFTER the burst, and the burst only
+   fires after ~2.6 viewport heights of scrolling — by which point
+   --drift has long since passed the 0.3125 where that factor reaches
+   zero. The reveal and the fade cancelled each other out exactly.
+
+   The CTA belongs to the post-burst screen, which is a resting state
+   the reader sits in, so it simply stays visible there. */
+
+@media (max-width: 640px) {
+  .gname-launch-label { letter-spacing: 0.1em; }
+  .gname-launch-ring { width: 66px; height: 66px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gname-launch { opacity: 1; }
+  /* The ring is the ship's defining feature, so it is slowed to a
+     drift rather than frozen outright. */
+  .gname-endurance { animation-duration: 90s; }
+  .gname-launch:hover .gname-launch-ring,
+  .gname-launch:focus-visible .gname-launch-ring,
+  .gname-launch:hover .gname-launch-ring::before,
+  .gname-launch:hover .gname-launch-ring::after { animation: none; }
 }

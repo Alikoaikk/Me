@@ -177,17 +177,13 @@
     attribute vec3 aPos;
     attribute float aSeed;
     ${PROJECT}
-    uniform float uTime;
     uniform float uPointScale;
     varying float vShade;
-    varying float vTwinkle;
     void main() {
       float z;
       gl_Position = projectPoint(aPos, z);
       // Front hemisphere bright, back hemisphere dim but still visible.
       vShade = smoothstep(-1.0, 1.0, z);
-      // Subtle shimmer so the surface feels alive, not static.
-      vTwinkle = 0.82 + 0.18 * sin(uTime * 1.6 + aSeed * 6.283);
       float persp = uCamDist / (uCamDist - z);
       gl_PointSize = uPointScale * persp * (0.55 + 0.45 * vShade);
     }
@@ -196,7 +192,6 @@
     uniform vec3 uNear;
     uniform vec3 uFar;
     varying float vShade;
-    varying float vTwinkle;
     void main() {
       // Round, soft-edged point.
       vec2 d = gl_PointCoord - vec2(0.5);
@@ -207,7 +202,7 @@
       // Far side stays visible but recedes, so the sphere reads as
       // translucent without the silhouette collapsing into the void.
       float depthFade = mix(0.22, 1.35, vShade);
-      gl_FragColor = vec4(col, alpha * depthFade * vTwinkle);
+      gl_FragColor = vec4(col, alpha * depthFade);
     }
   `);
 
@@ -255,7 +250,6 @@
     attribute vec2 aPos;      // normalized device position
     attribute float aSize;
     attribute float aSeed;
-    uniform float uTime;
     uniform vec2 uParallax;
     uniform float uDpr;
     varying float vAlpha;
@@ -264,8 +258,7 @@
       float depth = aSize;
       vec2 p = aPos + uParallax * (0.35 + depth * 0.65);
       gl_Position = vec4(p, 0.0, 1.0);
-      float tw = 0.55 + 0.45 * sin(uTime * 0.9 + aSeed * 6.283);
-      vAlpha = tw * (0.25 + depth * 0.75);
+      vAlpha = 0.25 + depth * 0.75;
       gl_PointSize = (0.7 + depth * 2.1) * uDpr;
     }
   `, `
@@ -557,7 +550,6 @@
     bindAttrib(starProg, 'aPos', starGeo.pos, 2);
     bindAttrib(starProg, 'aSize', starGeo.size, 1);
     bindAttrib(starProg, 'aSeed', starGeo.seed, 1);
-    gl.uniform1f(starProg.u.uTime, time);
     gl.uniform1f(starProg.u.uDpr, dpr);
     gl.uniform2f(starProg.u.uParallax, -leanX * 0.03, leanY * 0.03);
     gl.uniform3fv(starProg.u.uColor, COLOR.star);
@@ -582,7 +574,6 @@
     setCommon(globeProg, rot);
     bindAttrib(globeProg, 'aPos', globeBuffers.pos, 3);
     bindAttrib(globeProg, 'aSeed', globeBuffers.seed, 1);
-    gl.uniform1f(globeProg.u.uTime, time);
     gl.uniform1f(globeProg.u.uPointScale, pointScale);
     gl.uniform3fv(globeProg.u.uNear, COLOR.land);
     gl.uniform3fv(globeProg.u.uFar, COLOR.landDim);

@@ -237,7 +237,7 @@
 
   /* ── Stars ──
      aPos  : world position on the (untilted) disc, xyz
-     aAttr : x = radius 0..1, y = twinkle phase, z = lifecycle alpha
+     aAttr : x = radius 0..1, y = variation seed, z = lifecycle alpha
      aTint : rgb = spectral colour, a = size multiplier
      aLum  : luminosity from the spectral class                         */
   const starProg = program(`
@@ -251,7 +251,6 @@
     uniform float uScale;
     uniform float uAspect;
     uniform float uPointScale;
-    uniform float uTime;
     uniform float uDrift;
     varying float vRadius;
     varying float vAlpha;
@@ -271,15 +270,12 @@
       vRadius = aAttr.x;
       vColor  = aTint.rgb;
 
-      // Dimmer stars scintillate more, like real atmospheric twinkle.
-      float amp = mix(0.34, 0.06, clamp(aLum / 3.0, 0.0, 1.0));
-      float tw = (1.0 - amp) + amp * sin(uTime * 1.6 + aAttr.y * 6.283);
       // Compress the luminosity range for display without flattening
       // it: faint field stars keep a visible floor so the disc glows,
       // while giants stay several times brighter and read as distinct
       // pinpoints. A hard clamp here erases that contrast entirely.
       float shown = 0.26 + pow(aLum, 0.70) * 0.62;
-      vAlpha = aAttr.z * tw * shown;
+      vAlpha = aAttr.z * shown;
 
       // Brightness also drives apparent size, as it does in a real
       // exposure — bright stars bloom wider than faint ones.
@@ -352,7 +348,7 @@
   const radius   = new Float32Array(N);   // 0..1 on the disc
   const angle    = new Float32Array(N);   // current home angle
   const height   = new Float32Array(N);   // z offset (disc thickness)
-  const seed     = new Float32Array(N);   // twinkle phase
+  const seed     = new Float32Array(N);   // per-star motion variation
   const lum      = new Float32Array(N);   // luminosity from the spectral class
   // Which population a star belongs to (0 bulge, 1 arm, 2 spur,
   // 3 inter-arm, 4 nucleus). Needed in simulate(): only disc stars
@@ -573,7 +569,7 @@
     angle[i]  = (pop === 4 || pop === 0) ? ang : ang - armRidge(r, 0);
     // Disc thins outward; bulge is puffy. Arms are thinnest of all.
     height[i] = gauss() * config.THICKNESS * thickness * (1.0 - r * 0.45);
-    seed[i]   = Math.random();          // twinkle phase, independent of class
+    seed[i]   = Math.random();          // motion variation, independent of class
 
     // ── Spectral class ──
     let type;
@@ -928,35 +924,9 @@
         velX[i] *= 0.5; velY[i] *= 0.5;
       }
 
-      // ── Lifecycle alpha: fade in at the rim, fade out at the core ──
-      const l = life[i];
-      // Long, overlapping fades: a star spends most of its life at full
-      // brightness, easing in and out slowly. Because each slot fades
-      // out before its replacement fades in, the visible count stays
-      // level instead of surging as new stars arrive.
-      const fadeIn  = smooth01(l / 0.30);
-      const fadeOut = smooth01((1 - l) / 0.30);
-      // Disc stars are SWALLOWED by the ball of light: as one falls in
-      // it flares brighter and hotter, then is consumed at the edge of
-      // the core. Simply dimming them on approach read as stars
-      // blinking out; flaring first makes the centre look like it is
-      // eating them. They fade up again on entry at the rim.
-      let alpha = fadeIn * fadeOut;
-      if (popArr[i] !== 4 && popArr[i] !== 0) {
-        // 0 far out .. 1 at the core's edge.
-        const fall = 1.0 - smooth01((r - config.CORE_RADIUS) /
-                                    config.SWALLOW_REACH);
-        // Flare up over most of the plunge, then extinguish abruptly.
-        const flare = 1.0 + fall * fall * config.SWALLOW_FLARE;
-        const consumed = smooth01((r - config.CORE_RADIUS) / 0.022);
-        const enter = 1.0 - smooth01((r - config.RIM_LO) /
-                                     (config.DISC_RADIUS - config.RIM_LO) - 0.55);
-        alpha *= flare * consumed * Math.max(0.35, enter);
-
-        // Accumulate what the core eats this frame; the ball pulses
-        // brighter in response, so it visibly reacts to being fed.
-        if (fall > 0.75) swallowFeed += (fall - 0.75) * 4.0 * alpha;
-      }
+      // Keep every star at a fixed luminosity. The former lifecycle
+      // fade and core flare made the field look as though it blinked.
+      const alpha = 1;
 
       const o = i * 3;
       posArr[o]     = hx + offX[i];
@@ -1015,7 +985,6 @@
     gl.uniform1f(starProg.u.uScale, scale);
     gl.uniform1f(starProg.u.uAspect, aspect);
     gl.uniform1f(starProg.u.uPointScale, pointScale);
-    gl.uniform1f(starProg.u.uTime, time);
     gl.uniform1f(starProg.u.uDrift, driftX);
 
     // Publish where the nucleus actually lands on screen, so the CSS
@@ -1094,7 +1063,7 @@
     resize();
 
     if (reduceMotion) {
-      // Static galaxy: no orbital motion, no wake, no twinkle. Still
+      // Static galaxy: no orbital motion or wake. Still
       // tracks scroll drift, which is a deliberate navigation cue
       // rather than decorative animation.
       updateDrift(dt);

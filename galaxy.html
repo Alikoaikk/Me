@@ -6,31 +6,17 @@
   <title>Ali Koaik — Portfolio</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <!-- Orbitron carries the name itself (see NAME_FONT in galaxy.js);
+       the other two remain the UI faces. -->
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Orbitron:wght@700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
   <!-- Hero overrides for the galaxy scene; must follow style.css. -->
   <link rel="stylesheet" href="galaxy.css" />
 </head>
 <body>
 
-  <!-- SCROLL PROGRESS -->
-  <div id="scrollProgress"></div>
-
-  <!-- NAVBAR -->
-  <nav id="navbar">
-    <a href="#hero" class="nav-logo">AK</a>
-    <ul class="nav-links" id="navLinks">
-      <li><a href="#hero">Home</a></li>
-      <li><a href="index.html#about">About</a></li>
-      <li><a href="index.html#skills">Skills</a></li>
-      <li><a href="index.html#projects">Projects</a></li>
-      <li><a href="index.html#education">Education</a></li>
-      <li><a href="index.html#contact">Contact</a></li>
-    </ul>
-    <button class="hamburger" id="hamburger" aria-label="Toggle menu">
-      <span></span><span></span><span></span>
-    </button>
-  </nav>
+  <!-- No navbar and no scroll indicator by design: the galaxy owns
+       the screen uncontested. A replacement nav is coming later. -->
 
   <!-- HERO — the galaxy owns the screen. The canvas is fixed so it
        stays put while the page scrolls over it. -->
@@ -39,10 +25,54 @@
       <canvas id="heroCanvas"></canvas>
       <div class="noise-overlay"></div>
     </div>
-    <a href="#burst" class="scroll-indicator" aria-label="Scroll down">
-      <span class="scroll-indicator-label">scroll</span>
-      <span class="scroll-dot"></span>
-    </a>
+    <!-- The name. Revealed by galaxy.js as the stars arrive:
+         --name-ali runs 0..1 over the back half of the burst. The
+         text itself has no fill and no stroke — the stars flying in
+         from the galaxy are the only thing that draws it. -->
+    <div class="galaxy-name" aria-label="Ali Koaik">
+      <span class="gname-full">Ali Koaik</span>
+      <!-- Everything below resolves AFTER the stars finish writing the
+           name, on --name-koaik, so the identity lands first and the
+           portfolio framing follows it rather than competing.
+
+           The quote rotates through short lines from Interstellar.
+           aria-live is off, not polite: a line that changes every few
+           seconds would otherwise interrupt a screen reader endlessly.
+           The text is filled by galaxy.js. -->
+      <p class="gname-quote" id="gnameQuote" aria-live="off">
+        <span class="gname-quote-text"></span>
+      </p>
+
+      <!-- START THE TRIP — the ship points down the page because that
+           is the direction it flies: pressing it scrolls into the
+           approach, which is what fires the burst. A real <button>,
+           not a styled <a>, because it performs an action rather than
+           navigating; galaxy.js animates the scroll itself so the
+           journey has a controlled speed instead of a jump. -->
+      <button class="gname-launch" id="launchBtn" type="button">
+        <span class="gname-launch-ring" aria-hidden="true">
+          <!-- The Endurance: twelve modules in a ring around a hub.
+               The ring rotates — the ship spins to make its own
+               gravity, which is the single most recognisable thing
+               about it. Drawn as a dashed circle so each dash reads
+               as a module without needing twelve separate nodes. -->
+          <svg class="gname-endurance" viewBox="0 0 48 48" fill="none"
+               stroke="currentColor" stroke-linecap="butt">
+            <!-- modules -->
+            <circle cx="24" cy="24" r="17" stroke-width="5"
+                    stroke-dasharray="4.45 4.45" opacity="0.92"/>
+            <!-- structural rim, inside and out -->
+            <circle cx="24" cy="24" r="20.2" stroke-width="0.9" opacity="0.5"/>
+            <circle cx="24" cy="24" r="13.8" stroke-width="0.9" opacity="0.5"/>
+            <!-- hub + spokes -->
+            <circle cx="24" cy="24" r="3.2" stroke-width="1.4"/>
+            <path stroke-width="1" opacity="0.65"
+                  d="M24 20.8V13.8M24 27.2v6.9M20.8 24h-7M27.2 24h6.9"/>
+          </svg>
+        </span>
+        <span class="gname-launch-label">Press here to start the trip</span>
+      </button>
+    </div>
   </section>
 
   <!-- INTRO — scroll length only. The galaxy holds the screen here
@@ -52,10 +82,6 @@
   <!-- BURST — an empty screen of scroll that gives the galaxy room to
        explode and settle before the content begins. -->
   <section id="burst" aria-hidden="true"></section>
-
-  <!-- PLANET — pure scroll length for the approach. Empty by design:
-       the gas giant grows behind it and any content would be lost. -->
-  <section id="planet" aria-hidden="true"></section>
 
   <script src="galaxy.js"></script>
   <script>
