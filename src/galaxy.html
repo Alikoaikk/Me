@@ -42,48 +42,132 @@
       <p class="gname-quote" id="gnameQuote" aria-live="off">
         <span class="gname-quote-text"></span>
       </p>
-
-      <!-- START THE TRIP — the ship points down the page because that
-           is the direction it flies: pressing it scrolls into the
-           approach, which is what fires the burst. A real <button>,
-           not a styled <a>, because it performs an action rather than
-           navigating; galaxy.js animates the scroll itself so the
-           journey has a controlled speed instead of a jump. -->
-      <button class="gname-launch" id="launchBtn" type="button">
-        <span class="gname-launch-ring" aria-hidden="true">
-          <!-- The Endurance: twelve modules in a ring around a hub.
-               The ring rotates — the ship spins to make its own
-               gravity, which is the single most recognisable thing
-               about it. Drawn as a dashed circle so each dash reads
-               as a module without needing twelve separate nodes. -->
-          <svg class="gname-endurance" viewBox="0 0 48 48" fill="none"
-               stroke="currentColor" stroke-linecap="butt">
-            <!-- modules -->
-            <circle cx="24" cy="24" r="17" stroke-width="5"
-                    stroke-dasharray="4.45 4.45" opacity="0.92"/>
-            <!-- structural rim, inside and out -->
-            <circle cx="24" cy="24" r="20.2" stroke-width="0.9" opacity="0.5"/>
-            <circle cx="24" cy="24" r="13.8" stroke-width="0.9" opacity="0.5"/>
-            <!-- hub + spokes -->
-            <circle cx="24" cy="24" r="3.2" stroke-width="1.4"/>
-            <path stroke-width="1" opacity="0.65"
-                  d="M24 20.8V13.8M24 27.2v6.9M20.8 24h-7M27.2 24h6.9"/>
-          </svg>
-        </span>
-        <span class="gname-launch-label">Press here to start the trip</span>
-      </button>
+      <!-- Above the name: the greeting. Below the quote: the ways to
+           reach Ali. Both ride the name's anchor and --name-scroll, so
+           they scroll up with the star-written name; profile.js fills
+           the links from portfolioData.socials. -->
+      <p class="gname-hello">Hello, I'm</p>
+      <nav class="gname-links" id="gnameLinks" aria-label="Contact"></nav>
     </div>
+    <!-- The cue at the foot of the name screen: there is more below. -->
+    <a class="gname-cue" href="#profile" id="gnameCue"><span>Who I am</span><span class="gname-cue-chevron" aria-hidden="true"></span></a>
   </section>
+
 
   <!-- INTRO — scroll length only. The galaxy holds the screen here
        before the burst fires; there is no text over it. -->
   <section id="intro" aria-hidden="true"></section>
 
-  <!-- BURST — an empty screen of scroll that gives the galaxy room to
-       explode and settle before the content begins. -->
+  <!-- BURST — just the scroll that reaches the trigger; its end is the
+       name screen. Below it the profile (once the name is written);
+       on the button press the page is sealed and this collapses too
+       (see #burst in galaxy.css). -->
   <section id="burst" aria-hidden="true"></section>
 
+  <!-- PROFILE — who Ali is, below the name. Exists once the stars have
+       written the name (.is-written); scrolling on moves the name up
+       and brings this in. profile.js fills it from portfolioData and
+       counts the numbers up as they come into view. It ends on the
+       one way on: the launch button. Pressing it fades this away
+       (--leave), glides the name back to the centre, lets the letters
+       go and runs the warp to the projects (galaxy.js, warp.js). A
+       div, not a <section>: style.css pads sections at ID level. -->
+  <div class="profile" id="profile" role="region" aria-labelledby="profileTitle">
+    <div class="profile-inner">
+      <p class="profile-label">Who I am</p>
+      <h2 class="profile-title" id="profileTitle"></h2>
+      <p class="profile-status"><span class="dash-dot" aria-hidden="true"></span><span id="profileStatus"></span></p>
+      <div class="profile-bio" id="profileBio"></div>
+      <dl class="profile-stats" id="profileStats"></dl>
+      <div class="profile-schools" id="profileSchools"></div>
+      <div class="profile-launch">
+        <p class="profile-launch-lead" id="profileLead"></p>
+        <button class="gname-launch" id="launchBtn" type="button">
+          <span class="gname-launch-ring" aria-hidden="true">
+            <!-- The Endurance: twelve modules in a ring around a hub.
+                 The ring rotates — the ship spins to make its own
+                 gravity, which is the single most recognisable thing
+                 about it. Drawn as a dashed circle so each dash reads
+                 as a module without needing twelve separate nodes. -->
+            <svg class="gname-endurance" viewBox="0 0 48 48" fill="none"
+                 stroke="currentColor" stroke-linecap="butt">
+              <!-- modules -->
+              <circle cx="24" cy="24" r="17" stroke-width="5"
+                      stroke-dasharray="4.45 4.45" opacity="0.92"/>
+              <!-- structural rim, inside and out -->
+              <circle cx="24" cy="24" r="20.2" stroke-width="0.9" opacity="0.5"/>
+              <circle cx="24" cy="24" r="13.8" stroke-width="0.9" opacity="0.5"/>
+              <!-- hub + spokes -->
+              <circle cx="24" cy="24" r="3.2" stroke-width="1.4"/>
+              <path stroke-width="1" opacity="0.65"
+                    d="M24 20.8V13.8M24 27.2v6.9M20.8 24h-7M27.2 24h6.9"/>
+            </svg>
+          </span>
+          <span class="gname-launch-label">Press here to start the trip</span>
+    </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ARRIVAL — Koaik, and the system around it. The warp (warp.js)
+       lands the page here: system.js grows Ali's own world in over the
+       sky, then pulls the camera back to show it is the star of a
+       system whose planets are the projects. The reader moves through
+       it (drag, scroll, keys, touch) and selects bodies; hud.js writes
+       the caption, the chip, the hint and the panel. Collapsed until
+       the launch button is pressed; the end of the page. -->
+  <section id="planet" class="planet" aria-label="The Koaik system">
+    <canvas id="planetCanvas" aria-hidden="true"></canvas>
+    <!-- Body names, projected onto the canvas by system.js; real
+         buttons, so the keyboard can select a planet too. -->
+    <div class="sys-labels" id="sysLabels"></div>
+    <div class="planet-caption">
+      <p class="planet-label">Arrival <span class="sep">—</span> <span id="planetName"></span></p>
+      <p class="planet-sub" id="planetSub"></p>
+      <p class="planet-hint" id="planetHint"></p>
+    </div>
+    <!-- The HUD: pilot chip (top), map and hint (bottom). Shown once
+         the section has .is-system. -->
+    <div class="sys-hud">
+      <button class="sys-chip" id="sysChip" type="button" aria-label="Open the pilot card">
+        <span class="sys-chip-portrait" aria-hidden="true"><img id="chipPhoto" alt="" hidden><span id="chipInitials"></span></span>
+        <span class="sys-chip-text">
+          <span class="sys-chip-name" id="chipName"></span>
+          <span class="sys-chip-status"><span class="dash-dot" aria-hidden="true"></span><span id="chipStatus"></span></span>
+        </span>
+      </button>
+      <canvas class="sys-map" id="sysMap" width="150" height="150" aria-hidden="true"></canvas>
+      <button class="sys-home" id="sysHome" type="button" aria-label="Back to the whole system">⌂ System</button>
+      <p class="sys-hint" id="sysHint"></p>
+    </div>
+    <!-- The panel a selected body opens; hud.js fills it. -->
+    <aside class="probe" id="sysPanel" aria-live="polite" hidden></aside>
+    <!-- No WebGL (or no module support): the same content as a list. -->
+    <div class="sys-fallback" id="sysFallback" hidden></div>
+  </section>
+
+
+  <!-- WARP — the launch sequence's overlay: the streaking stars and
+       the jump flash, on a 2D canvas. Fixed over everything, invisible
+       until warp.js switches it on. -->
+  <div class="warp" id="warp" aria-hidden="true">
+    <canvas id="warpCanvas"></canvas>
+  </div>
+
   <script src="js/galaxy/galaxy.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/profile.js"></script>
+  <script src="js/hud.js"></script>
+  <script src="js/warp.js"></script>
+  <!-- three.js is vendored (js/vendor/three, MIT) and loaded as ES
+       modules through this import map, so galaxy.html needs to be
+       SERVED (make serve): module scripts do not run from file://.
+       hud.js shows the plain list if the module never runs. -->
+  <script type="importmap">
+    { "imports": { "three": "./js/vendor/three/three.module.js",
+                   "three/addons/": "./js/vendor/three/addons/" } }
+  </script>
+  <script type="module" src="js/system.js"></script>
   <script>
     /* Mirrors the galaxy's scroll drift onto the CSS core bloom so the
        two pan together. Page-specific, so it lives here. */

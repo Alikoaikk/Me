@@ -26,61 +26,6 @@
       #030409 100%);
 }
 
-/* Warm bloom behind the galactic core, panning with the disc. */
-#hero .hero-bg::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  width: min(22vh, 22vw);
-  aspect-ratio: 1;
-  transform: translate(-50%, -50%);
-  border-radius: 50%;
-  /* Corona around the little sun: white-hot core bleeding to gold. */
-  background: radial-gradient(circle,
-    rgba(255, 255, 252, 0.72) 0%,
-    rgba(255, 246, 214, 0.46) 16%,
-    rgba(252, 226, 158, 0.22) 36%,
-    rgba(230, 180, 110, 0.08) 58%,
-    transparent 78%);
-  filter: blur(16px);
-  pointer-events: none;
-  /* The corona swells as the core swallows stars. --core-glow is
-     published by galaxy.js from what it actually consumed, so this
-     reacts to the infall instead of pulsing on a fixed timer.
-
-     It is then extinguished by the burst. --burst runs 0..1 over the
-     detonation; the 1.6 multiplier puts the glow fully out by ~0.62,
-     just as the stars start receding into the sky, so the halo does
-     not linger over a galaxy that is no longer there. */
-  opacity: calc((0.82 + var(--core-glow, 0) * 0.5) *
-                max(0, 1 - var(--burst, 0) * 1.6));
-  /* Two independent swells, multiplied: the feeding pulse, and the
-     camera approach. --zoom is published by galaxy.js; the 1.07
-     matches the 2.07x the renderer's own projection grows the nucleus
-     by at full zoom (1 + 1.07 = 2.07), so the CSS glow and the
-     rendered core stay the same size as the camera closes in. Keep
-     this in step with ZOOM_PUSH in galaxy.js. */
-  scale: calc((1 + var(--core-glow, 0) * 0.22) * (1 + var(--zoom, 0) * 1.07));
-  transition: opacity 0.25s ease-out, scale 0.3s ease-out;
-  animation: coreBreathe 11s ease-in-out infinite;
-  /* --nucleus-x is published by galaxy.js from its own projection, so
-     the bloom sits exactly on the rendered nucleus. Recomputing the
-     projection here in CSS let the two disagree and the centre showed
-     as two separate glows.
-
-     `left` rather than `translate`, so the swell below cannot
-     multiply the offset. */
-  left: calc(50% + var(--nucleus-x, 0vw));
-}
-
-/* Only a slow shimmer now — the real pulse comes from --core-glow.
-   This must not animate `transform` or `opacity` wholesale, or it
-   would override the feed response above. */
-@keyframes coreBreathe {
-  0%, 100% { filter: blur(16px) brightness(1); }
-  50%      { filter: blur(18px) brightness(1.1); }
-}
-
 /* Vignette + grain. The grain matters: an additive star field on flat
    black shows visible banding in the faint gradients, and a little
    noise breaks it up the way film grain does. */
@@ -128,29 +73,31 @@
 
 /* The burst does not consume scroll — it fires as a timed event when
    the page passes BURST_TRIGGER and then plays out on its own clock.
-   But the page still has to be TALL enough to reach that trigger, and
-   then to hold the reader there while the ~2.6s of explosion plays.
+   But the page still has to be TALL enough to reach that trigger.
 
-   The arithmetic, which has to be rechecked whenever a section height
-   or BURST_TRIGGER changes: max scrollY = (total height - 100vh), in
-   viewport units. With hero 100 + intro 180 + burst 120 = 400vh, that
-   is 3.00 — comfortably past the 2.60 trigger, leaving 0.40vh of
-   scroll beyond it for the burst to play against.
+   This section is only that slack. Hero 100 + intro 180 + burst 90 =
+   370vh, so max scrollY is 2.70 and the trigger at 2.60 is reachable
+   with 0.10 to spare. The planet below is display:none
+   until launch, so the document ends here — on the written name with
+   the quote and the button under it. Scrolling back UP is allowed
+   (the burst rewinds); pressing the button is the one-way door:
+   galaxy.js seals the page (`.is-sealed`, rules under the gate
+   below) so this section and #intro collapse to 0, plays the
+   release (timed, RELEASE_TIME), then the warp; on launch the hero
+   collapses as well, so the planet's top is 0 and, the planet being
+   one screen, the page no longer scrolls at all.
 
-   At the previous 40vh the total came to 320vh and max scrollY was
-   2.20, BELOW the trigger: the burst could never fire at all. That is
-   what removing the 300vh planet section exposed — the planet had been
-   supplying the page height the trigger depended on. */
+   Recheck the arithmetic whenever a section height or BURST_TRIGGER
+   changes: max scrollY = total height − 100vh, in viewport units. At
+   an earlier 40vh the total was 320vh and max scrollY 2.20, BELOW the
+   trigger: the burst could never fire at all. */
 #burst {
   position: relative;
   z-index: 1;
-  height: 120vh;
+  height: 90vh;
   pointer-events: none;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  #hero .hero-bg::after { animation: none; }
-}
 
 /* ============================================================
    THE NAME — "ALI KOAIK", written in full by the stars
@@ -259,11 +206,12 @@
   left: 50%;
   top: 52%;                 /* = NAME_CENTER_Y, as above */
   margin: 0;
-  opacity: var(--name-koaik, 0);
+  opacity: calc(var(--name-koaik, 0) * (1 - var(--leave, 0)));
   will-change: opacity;
-  /* Sits directly under the name; the ship follows below it. */
+  /* Sits directly under the name, and scrolls up with it
+     (--name-scroll, galaxy.js). */
   transform: translate(-50%,
-    calc(-50% + var(--cap-shift, 0px) + 1.05 * clamp(1.6rem, 11vmin, 7.5rem)));
+    calc(-50% + var(--cap-shift, 0px) + 1.05 * clamp(1.6rem, 11vmin, 7.5rem) - var(--name-scroll, 0px)));
   /* Wraps on narrow screens rather than running off the sides, so the
      longer lines stay readable. Centred because the text is a
      rotating quotation, not a label. */
@@ -295,6 +243,98 @@
   transform: translateY(0);
 }
 
+/* ── The greeting, above the name ── */
+.gname-hello {
+  position: absolute;
+  left: 50%;
+  top: 52%;                 /* = NAME_CENTER_Y */
+  margin: 0;
+  transform: translate(-50%,
+    calc(-50% + var(--cap-shift, 0px) - 0.86 * clamp(1.6rem, 11vmin, 7.5rem) - var(--name-scroll, 0px)));
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: clamp(0.78rem, 1.7vmin, 1rem);
+  letter-spacing: 0.32em;
+  text-indent: 0.32em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: #F2D28B;
+  opacity: calc(var(--name-koaik, 0) * (1 - var(--leave, 0)));
+}
+
+/* ── The ways to reach Ali, under the quote ── */
+.gname-links {
+  position: absolute;
+  left: 50%;
+  top: 52%;
+  width: min(92vw, 30rem);
+  transform: translate(-50%,
+    calc(-50% + var(--cap-shift, 0px) + 1.05 * clamp(1.6rem, 11vmin, 7.5rem) + 3.7rem - var(--name-scroll, 0px)));
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  opacity: calc(var(--name-koaik, 0) * (1 - var(--leave, 0)));
+  pointer-events: auto;
+}
+:root:not(.is-written) .gname-links { visibility: hidden; }
+.gname-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 15px 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(9, 12, 20, 0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #E6E9F2;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 0.74rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-decoration: none;
+  transition: border-color 0.3s ease, color 0.3s ease, background 0.3s ease;
+}
+.gname-link svg { width: 16px; height: 16px; flex: 0 0 auto; }
+.gname-link:hover, .gname-link:focus-visible { border-color: rgba(242, 210, 139, 0.6); color: #F2D28B; background: rgba(9, 12, 20, 0.75); }
+.gname-link:focus-visible { outline: 2px solid #8FB4FF; outline-offset: 2px; }
+
+/* ── The cue: there is more below ── */
+.gname-cue {
+  position: fixed;
+  left: 50%;
+  bottom: 4vh;
+  z-index: 2;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: #9AA3B8;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 0.66rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  text-decoration: none;
+  /* Gone within a fifth of a screen of scrolling. */
+  opacity: calc(var(--name-koaik, 0) * max(0, 1 - var(--name-scroll-n, 0) * 5) * (1 - var(--leave, 0)));
+  pointer-events: auto;
+}
+:root:not(.is-written) .gname-cue,
+:root.is-launched .gname-cue { visibility: hidden; }
+.gname-cue:hover, .gname-cue:focus-visible { color: #E6E9F2; }
+.gname-cue-chevron {
+  width: 9px; height: 9px;
+  border-right: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+  transform: rotate(45deg);
+  animation: cueBob 2.2s ease-in-out infinite;
+}
+@keyframes cueBob {
+  0%, 100% { transform: translateY(0) rotate(45deg); opacity: 0.6; }
+  50%      { transform: translateY(5px) rotate(45deg); opacity: 1; }
+}
+
 @media (max-width: 640px) {
   /* A 1px stroke around a name this wide reads as heavy on a phone. */
   .gname-full {
@@ -311,7 +351,10 @@
    present rather than assembling. */
 @media (prefers-reduced-motion: reduce) {
   .gname-full,
-  .gname-quote { opacity: 1; }
+  .gname-quote,
+  .gname-hello,
+  .gname-links,
+  .gname-cue { opacity: 1; }
   .gname-quote-text { opacity: 1; transform: none; }
 }
 
@@ -331,39 +374,51 @@
   filter: drop-shadow(0 0 26px rgba(108, 99, 255, 0.34));
 }
 
-:root[data-no-webgl] .gname-quote {
+:root[data-no-webgl] .gname-quote,
+:root[data-no-webgl] .gname-hello,
+:root[data-no-webgl] .gname-links,
+:root[data-no-webgl] .gname-cue {
   opacity: 1;
 }
+/* No WebGL2: nothing publishes --name-scroll, so the name block is
+   placed in the page at the name screen instead of fixed, and simply
+   scrolls away like the rest of the page. 270vh = the end of #burst
+   minus one screen (hero 100 + intro 180 + burst 90 − 100). */
+:root[data-no-webgl] .galaxy-name { position: absolute; top: 270vh; bottom: auto; height: 100vh; }
 
 /* ============================================================
    START THE TRIP — the spaceship CTA
    ============================================================
-   Anchored to the same 52% line as the name, offset below the
-   links, so the whole block rides the star centroid together.
-   Revealed on --name-koaik with the rest of the framing. */
+   Its own fixed layer over the sky, outside the name block: it
+   appears AS the name goes. --release (galaxy.js) runs 0 → 1 as the
+   reader scrolls past the finished name and the stars leave the
+   letters; the name block fades on (1 - release) and this fades on
+   release, so the button takes the name's place at the centre of the
+   screen. --warp-fade takes it away again once the trip starts.
+   Plain multiplies, no transition, same as every JS-driven token.
+   It takes the pointer only once it is mostly there. */
+/* (The button used to sit on its own fixed layer under the quote. It
+   now lives at the end of the profile, in the page flow — see
+   THE PROFILE below.) */
+
 .gname-launch {
-  position: absolute;
-  left: 50%;
-  top: 52%;
-  transform: translate(-50%,
-    calc(-50% + var(--cap-shift, 0px) + 2.30 * clamp(1.6rem, 11vmin, 7.5rem)));
+  /* At the end of the profile, centred, in the page flow. */
+  position: relative;
+  width: fit-content;
+  margin: 1.4rem auto 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.55rem;
-  /* The overlay sets pointer-events:none so the galaxy stays
-     draggable; this is one of the two things that takes input. */
   pointer-events: auto;
   cursor: pointer;
-  /* Reset the UA button box — this is a bare control on a starfield. */
-  margin: 0;
+  /* Reset the UA button box — this is a bare control on a starfield.
+     (Its margin is set above: centred in the profile.) */
   padding: 0.5rem 1rem;
   border: 0;
   background: none;
   -webkit-appearance: none;
   appearance: none;
-  opacity: var(--name-koaik, 0);
-  will-change: opacity;
 }
 
 /* The Endurance. No porthole ring around it: in the film the ship is
@@ -515,16 +570,14 @@
 
 /* NO --drift fade here, deliberately.
 
-   An earlier version multiplied this by max(0, 1 - --drift * 3.2) to
-   retire the CTA once the trip was under way. That made the button
-   permanently invisible, because the two conditions cannot both hold:
-   --name-koaik only reaches 1 AFTER the burst, and the burst only
-   fires after ~2.6 viewport heights of scrolling — by which point
-   --drift has long since passed the 0.3125 where that factor reaches
-   zero. The reveal and the fade cancelled each other out exactly.
-
-   The CTA belongs to the post-burst screen, which is a resting state
-   the reader sits in, so it simply stays visible there. */
+   An earlier version multiplied the CTA by max(0, 1 - --drift * 3.2)
+   to retire it once the trip was under way. That made it permanently
+   invisible: it only appears after ~2.6 viewport heights of
+   scrolling, by which point --drift has long since passed the 0.3125
+   where that factor reaches zero. The CTA belongs to the last screen
+   before the trip, a resting state the reader sits in — the page
+   cannot be scrolled past it (see #burst) — so it simply stays
+   visible there, as the one way on. */
 
 @media (max-width: 640px) {
   .gname-launch-label { letter-spacing: 0.1em; }
@@ -532,7 +585,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .gname-launch { opacity: 1; }
   /* The ring is the ship's defining feature, so it is slowed to a
      drift rather than frozen outright. */
   .gname-endurance { animation-duration: 90s; }
@@ -540,4 +592,487 @@
   .gname-launch:focus-visible .gname-launch-ring,
   .gname-launch:hover .gname-launch-ring::before,
   .gname-launch:hover .gname-launch-ring::after { animation: none; }
+}
+
+/* ============================================================
+   THE PROFILE — who Ali is, below the name
+   ============================================================
+   In the page flow after #burst: scrolling past the name screen moves
+   the name up (galaxy.js) and brings this in. It exists once the name
+   is written (.is-written) and goes on launch. --leave (galaxy.js,
+   0→1 on the press) fades it; no transition on that, it is JS-driven.
+   The parts lift in as they enter the view (.is-in, profile.js). */
+.profile {
+  position: relative;
+  z-index: 3;
+  padding: 2vh 16px 18vh;
+  color: #E6E9F2;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  opacity: calc(1 - var(--leave, 0));
+}
+:root:not(.is-written) .profile,
+:root.is-launched .profile { display: none; }
+:root.is-leaving { overflow: hidden; }
+.profile-inner { max-width: 760px; margin: 0 auto; }
+.profile-inner > * {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.7s cubic-bezier(0.4, 0, 0.2, 1), transform 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.profile-inner > .is-in { opacity: 1; transform: none; }
+.profile-label {
+  margin: 0 0 1rem;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 0.74rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: #F2D28B;
+}
+.profile-title {
+  margin: 0 0 1rem;
+  font-size: clamp(1.45rem, 3.1vw, 2.2rem);
+  font-weight: 600;
+  line-height: 1.28;
+  letter-spacing: -0.01em;
+}
+.profile-status {
+  display: flex; align-items: center; gap: 9px;
+  margin: 0 0 2rem;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 0.74rem;
+  letter-spacing: 0.1em;
+  color: #9AA3B8;
+}
+.profile-bio {
+  padding: 1.4rem 1.6rem;
+  margin-bottom: 1.4rem;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 14px;
+  background: rgba(9, 12, 20, 0.58);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.profile-bio p { margin: 0 0 0.9em; line-height: 1.65; }
+.profile-bio p:last-child { margin-bottom: 0; }
+.profile-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin: 0 0 1.4rem;
+}
+.profile-stat {
+  padding: 16px 16px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 12px;
+  background: rgba(9, 12, 20, 0.58);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.profile-stat dt {
+  margin: 0 0 6px;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 0.64rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #9AA3B8;
+}
+.profile-stat dd {
+  margin: 0;
+  font-size: clamp(1.7rem, 3.4vw, 2.3rem);
+  font-weight: 600;
+  line-height: 1;
+  color: #F2D28B;
+  font-variant-numeric: tabular-nums;
+}
+.profile-schools { display: grid; gap: 10px; }
+.profile-school {
+  display: grid;
+  grid-template-columns: 8.5rem 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 1rem;
+  padding: 12px 16px;
+  border-left: 2px solid rgba(143, 180, 255, 0.5);
+}
+.profile-school-period { grid-row: span 2; font-family: var(--font-mono, 'JetBrains Mono', monospace); font-size: 0.72rem; letter-spacing: 0.08em; color: #9AA3B8; padding-top: 3px; }
+.profile-school-name { font-weight: 600; }
+.profile-school-program { font-size: 0.9rem; color: #9AA3B8; }
+.profile-launch { margin-top: 12vh; text-align: center; }
+.profile-launch-lead { margin: 0; font-size: clamp(1.05rem, 2vw, 1.3rem); color: #C9CFDB; }
+
+@media (max-width: 640px) {
+  .profile-stats { grid-template-columns: repeat(2, 1fr); }
+  .profile-school { grid-template-columns: 1fr; }
+  .profile-school-period { grid-row: auto; padding-top: 0; }
+  .gname-link { padding: 7px 12px 7px 10px; font-size: 0.68rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .profile-inner > * { opacity: 1; transform: none; transition: none; }
+  .gname-cue-chevron { animation: none; }
+}
+
+/* ============================================================
+   AFTER THE NAME — shared tokens, the gate, the seal
+   ============================================================
+   The sky stays (the canvas is fixed); glass panels sit over it.
+   Gold is the bulge, blue-white is the arms; nothing else gets a
+   colour. (The waypoints trip that used to follow the planet was
+   removed on 2026-09-25; it will be redesigned.) */
+:root {
+  --j-gold: #F2D28B;
+  --j-blue: #8FB4FF;
+  --j-text: #E6E9F2;
+  --j-muted: #9AA3B8;
+  --j-ink: rgba(9, 12, 20, 0.58);
+  --j-line: rgba(255, 255, 255, 0.09);
+  --j-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* The name lets go as the stars leave it (--release from galaxy.js),
+   and gives up the pointer once it is mostly gone. */
+/* --warp-fade is warp.js taking the name away under the ship as the
+   trip begins; a plain multiply, no transition, same as --release. */
+.galaxy-name {
+  opacity: calc((1 - var(--release, 0)) * (1 - var(--warp-fade, 0)));
+}
+:root.is-released .galaxy-name { visibility: hidden; }
+
+/* The gate. The planet does not exist until the launch button is
+   pressed: with it collapsed the page ends on the finished name and
+   the reader cannot scroll past it. galaxy.js sets .is-launched on
+   the click. */
+:root:not(.is-launched) .planet { display: none; }
+
+/* THE SEAL — the trip is one-way from the button (galaxy.js seal()).
+   On the press the approach and the burst sections collapse: the
+   page is one screen tall and there is nothing above to scroll back
+   to. Before the press the reader may scroll back up to the galaxy. The sky canvas is fixed, so nothing on
+   screen moves; galaxy.js has frozen its scroll read at the finished
+   state. On launch the hero collapses too, so the planet's top IS the
+   top of the page and the browser's own bound keeps the reader from
+   scrolling up past it. Native bounds, nothing to clamp or fight. */
+/* The :not()s are only for specificity: style.css pads every section
+   with `section:not(#hero):not(#contact)` at (2,0,1), and 7rem of
+   padding top and bottom on two collapsed sections left 448px above
+   the planet. This selector is (3,1,1) and zeroes the padding too. */
+:root.is-sealed #intro:not(#hero):not(#contact),
+:root.is-sealed #burst:not(#hero):not(#contact) { min-height: 0; height: 0; padding: 0; margin: 0; }
+:root.is-launched #hero { min-height: 0; height: 0; padding: 0; margin: 0; }
+
+/* While the launch sequence plays the reader cannot scroll: overflow
+   hidden on the root keeps the scroll offset and still lets warp.js
+   scrollTo() under its cover. (Touch is refused in warp.js itself;
+   iOS ignores this rule for gestures.) */
+:root.is-warping { overflow: hidden; }
+
+/* ============================================================
+   ARRIVAL — the planet
+   ============================================================
+   A screen of its own after the name — the end of the page. The
+   system is system.js (three.js) on the canvas; the sky behind it is
+   the fixed galaxy canvas, so this section is transparent. */
+.planet {
+  position: relative;
+  z-index: 3;
+  height: 100vh;
+  overflow: hidden;
+  color: var(--j-text);
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+}
+.planet canvas#planetCanvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;        /* OrbitControls owns the gestures */
+  cursor: grab;
+}
+.planet canvas#planetCanvas:active { cursor: grabbing; }
+.planet-caption {
+  position: absolute;
+  left: 16px; right: 16px;
+  bottom: 7vh;
+  text-align: center;
+  pointer-events: none;
+  opacity: var(--planet-in, 1);   /* system.js: in with the reveal, out with the pull-back */
+}
+/* The dash in "Arrival — Koaik" and "Pilot — orbiting Koaik". */
+.sep { color: var(--j-muted); margin: 0 0.4em; }
+.planet-label {
+  margin: 0 0 0.45rem;
+  font-family: var(--j-mono);
+  font-size: 0.74rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--j-gold);
+}
+.planet-sub {
+  margin: 0 0 0.6rem;
+  font-size: 1.05rem;
+  letter-spacing: 0.02em;
+  color: var(--j-text);
+}
+.planet-hint {
+  margin: 0;
+  font-family: var(--j-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  color: var(--j-muted);
+}
+/* A chevron under the hint that breathes downward: the one cue on
+   this screen that the trip continues. Sine-eased, slow, ambient. */
+.planet-hint:empty { display: none; }
+.planet-hint::after {
+  content: '';
+  display: block;
+  width: 8px; height: 8px;
+  margin: 0.9rem auto 0;
+  border-right: 1px solid var(--j-muted);
+  border-bottom: 1px solid var(--j-muted);
+  transform: rotate(45deg);
+  animation: hintBob 2.2s ease-in-out infinite;
+}
+@keyframes hintBob {
+  0%, 100% { transform: translateY(0) rotate(45deg); opacity: 0.55; }
+  50%      { transform: translateY(6px) rotate(45deg); opacity: 1; }
+}
+/* ============================================================
+   THE SYSTEM — labels, HUD and the panel over the three.js canvas
+   ============================================================
+   system.js positions the labels and draws the map; hud.js writes the
+   text. Everything here is class-driven (.is-system on the section,
+   .is-open on the panel, .is-hot/.is-active on labels), so it can
+   transition; the only JS-driven token is --planet-in on the caption. */
+.sys-labels { position: absolute; inset: 0; pointer-events: none; }
+.sys-label {
+  position: absolute; left: 0; top: 0;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 8px 4px 6px;
+  margin: 0;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: rgba(9, 12, 20, 0.35);
+  color: var(--j-text);
+  font-family: var(--j-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+  will-change: transform;
+  transition: border-color 0.25s ease, background 0.25s ease, color 0.25s ease;
+}
+.sys-label-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--j-muted); flex: 0 0 auto; transition: background 0.25s ease, box-shadow 0.25s ease; }
+.sys-label--sun .sys-label-dot { background: var(--j-gold); box-shadow: 0 0 8px var(--j-gold); }
+.sys-label:hover, .sys-label.is-hot, .sys-label:focus-visible { border-color: rgba(242, 210, 139, 0.55); background: rgba(9, 12, 20, 0.7); color: #fff; }
+.sys-label.is-hot .sys-label-dot, .sys-label:hover .sys-label-dot { background: var(--j-gold); box-shadow: 0 0 8px var(--j-gold); }
+.sys-label.is-active { border-color: var(--j-gold); color: var(--j-gold); }
+.sys-label:focus-visible { outline: 2px solid var(--j-blue); outline-offset: 2px; }
+/* The reticle: a dashed ring around the hovered body, turning slowly;
+   solid gold and still once the body is selected. Sized and placed
+   by system.js each frame. */
+.sys-reticle {
+  position: absolute; left: 0; top: 0;
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  border: 1px dashed rgba(230, 233, 242, 0.7);
+  box-shadow: 0 0 12px rgba(143, 180, 255, 0.25);
+  pointer-events: none;
+  animation: reticleTurn 14s linear infinite;
+}
+.sys-reticle.is-locked { border-style: solid; border-color: rgba(242, 210, 139, 0.4); box-shadow: none; animation: none; }
+@keyframes reticleTurn { to { rotate: 360deg; } }
+
+/* The HUD fades in once the reader has the controls. */
+.sys-hud { position: absolute; inset: 0; pointer-events: none; opacity: 0; visibility: hidden; transition: opacity 0.8s ease 0.3s, visibility 0s 1.1s; }
+.planet.is-system .sys-hud { opacity: 1; visibility: visible; transition: opacity 0.8s ease 0.3s, visibility 0s; }
+.sys-chip {
+  position: absolute; top: 18px; left: 18px;
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 14px 6px 6px;
+  border: 1px solid var(--j-line);
+  border-radius: 999px;
+  background: var(--j-ink);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  color: var(--j-text);
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  text-align: left;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: border-color 0.3s ease;
+}
+.sys-chip:hover, .sys-chip:focus-visible { border-color: rgba(242, 210, 139, 0.55); }
+.sys-chip:focus-visible { outline: 2px solid var(--j-blue); outline-offset: 2px; }
+.sys-chip-portrait {
+  position: relative; width: 34px; height: 34px; border-radius: 50%; overflow: hidden;
+  border: 1px solid rgba(242, 210, 139, 0.55);
+  background: radial-gradient(circle at 35% 30%, rgba(143, 180, 255, 0.18), rgba(9, 12, 20, 0.6) 70%);
+  display: grid; place-items: center;
+  font-family: 'Orbitron', var(--j-mono); font-weight: 800; font-size: 0.7rem; letter-spacing: 0.04em;
+}
+.sys-chip-portrait img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.sys-chip-portrait img:not([hidden]) + span { display: none; }
+.sys-chip-text { display: grid; gap: 1px; }
+.sys-chip-name { font-size: 0.9rem; font-weight: 600; letter-spacing: 0.01em; }
+.sys-chip-status { display: flex; align-items: center; gap: 6px; font-family: var(--j-mono); font-size: 0.6rem; letter-spacing: 0.1em; color: var(--j-muted); }
+.dash-dot { width: 7px; height: 7px; border-radius: 50%; background: #6EE7A0; box-shadow: 0 0 8px #6EE7A0; flex: 0 0 auto; }
+.sys-map {
+  position: absolute; right: 18px; bottom: 18px;
+  width: 150px; height: 150px;
+  border-radius: 50%;
+  border: 1px solid var(--j-line);
+  background: rgba(9, 12, 20, 0.45);
+  pointer-events: auto;
+  cursor: pointer;
+}
+.sys-home {
+  position: absolute; right: 18px; bottom: 176px;
+  margin: 0; padding: 6px 12px;
+  border: 1px solid var(--j-line); border-radius: 999px;
+  background: var(--j-ink); color: var(--j-muted);
+  font: inherit; font-family: var(--j-mono); font-size: 0.64rem; letter-spacing: 0.14em; text-transform: uppercase;
+  cursor: pointer; pointer-events: auto;
+  transition: color 0.3s ease, border-color 0.3s ease;
+}
+.sys-home:hover, .sys-home:focus-visible { color: var(--j-text); border-color: rgba(242, 210, 139, 0.55); }
+.sys-home:focus-visible { outline: 2px solid var(--j-blue); outline-offset: 2px; }
+.sys-hint {
+  position: absolute; left: 16px; right: 16px; bottom: 22px;
+  margin: 0;
+  text-align: center;
+  font-family: var(--j-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--j-muted);
+}
+
+/* ── The panel ── slides in from the side when a body is selected. */
+.probe {
+  position: absolute;
+  right: 24px; top: 50%;
+  width: min(400px, 40vw);
+  transform: translate(28px, -50%);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.35s cubic-bezier(0.3, 0, 1, 1), transform 0.35s cubic-bezier(0.3, 0, 1, 1), visibility 0s 0.35s;
+}
+.probe.is-open {
+  transform: translate(0, -50%);
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition: opacity 0.55s cubic-bezier(0.4, 0, 0.2, 1), transform 0.55s cubic-bezier(0.4, 0, 0.2, 1), visibility 0s;
+}
+.probe-frame {
+  padding: 22px 24px 20px;
+  background: var(--j-ink);
+  border: 1px solid var(--j-line);
+  border-radius: 14px;
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  color: var(--j-text);
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+}
+/* Parts arrive in order as the panel lands. */
+.probe-frame > * { opacity: 0; transform: translateY(12px); transition: none; }
+.probe.is-open .probe-frame > * { opacity: 1; transform: none; transition: opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1), transform 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
+.probe.is-open .probe-frame > *:nth-child(1) { transition-delay: 0.10s; }
+.probe.is-open .probe-frame > *:nth-child(2) { transition-delay: 0.18s; }
+.probe.is-open .probe-frame > *:nth-child(3) { transition-delay: 0.26s; }
+.probe.is-open .probe-frame > *:nth-child(4) { transition-delay: 0.34s; }
+.probe.is-open .probe-frame > *:nth-child(5) { transition-delay: 0.42s; }
+.probe.is-open .probe-frame > *:nth-child(n + 6) { transition-delay: 0.50s; }
+.probe-label { margin: 0 0 0.9rem; font-family: var(--j-mono); font-size: 0.7rem; letter-spacing: 0.22em; text-transform: uppercase; color: var(--j-gold); }
+.probe-head { display: flex; align-items: center; gap: 16px; margin-bottom: 0.9rem; }
+.probe-icon { font-size: 1.8rem; line-height: 1; flex: 0 0 auto; }
+.probe-portrait {
+  position: relative; flex: 0 0 auto;
+  width: 78px; height: 78px; border-radius: 50%;
+  border: 1px solid rgba(242, 210, 139, 0.55);
+  background: radial-gradient(circle at 35% 30%, rgba(143, 180, 255, 0.18), rgba(9, 12, 20, 0.6) 70%);
+  overflow: hidden; display: grid; place-items: center;
+}
+.probe-portrait::before { content: ''; position: absolute; inset: -7px; border-radius: 50%; border: 1px dashed rgba(242, 210, 139, 0.45); animation: probeOrbit 40s linear infinite; }
+@keyframes probeOrbit { to { transform: rotate(360deg); } }
+.probe-portrait img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+.probe-portrait img + .probe-initials { display: none; }
+.probe-initials { font-family: 'Orbitron', var(--j-mono); font-weight: 800; font-size: 1.4rem; letter-spacing: 0.06em; }
+.probe-id { min-width: 0; }
+.probe-title { margin: 0 0 0.2rem; font-size: clamp(1.2rem, 2vw, 1.5rem); font-weight: 600; letter-spacing: 0.02em; }
+.probe-meta { margin: 0 0 0.3rem; font-size: 0.9rem; color: var(--j-muted); }
+.probe-status { margin: 0; display: flex; align-items: center; gap: 8px; font-family: var(--j-mono); font-size: 0.66rem; letter-spacing: 0.1em; color: var(--j-muted); }
+.probe-desc { margin: 0 0 1rem; font-size: 0.94rem; line-height: 1.55; }
+.probe-tags { list-style: none; margin: 0 0 1rem; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.probe-tags li { padding: 4px 9px; border-radius: 6px; background: rgba(143, 180, 255, 0.12); border: 1px solid rgba(143, 180, 255, 0.25); font-family: var(--j-mono); font-size: 0.7rem; color: var(--j-blue); }
+.probe-readouts { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 0 0 1rem; }
+.probe-readout { padding: 10px 12px; border: 1px solid var(--j-line); border-radius: 10px; background: rgba(255, 255, 255, 0.025); }
+.probe-readout dt { margin: 0 0 2px; font-family: var(--j-mono); font-size: 0.62rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--j-muted); }
+.probe-readout dd { margin: 0; font-size: 1.35rem; font-weight: 600; color: var(--j-gold); font-variant-numeric: tabular-nums; }
+.probe-links { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 1rem; }
+.probe-links a { color: var(--j-gold); text-decoration: none; font-size: 0.88rem; }
+.probe-links a:hover { text-decoration: underline; }
+.probe-back {
+  margin: 0; padding: 0.5em 0;
+  border: 0; border-bottom: 1px solid rgba(242, 210, 139, 0.35);
+  background: none; color: var(--j-gold);
+  font: inherit; font-family: var(--j-mono); font-size: 0.7rem; letter-spacing: 0.18em; text-transform: uppercase;
+  cursor: pointer;
+  transition: color 0.3s ease, border-color 0.3s ease;
+}
+.probe-back:hover, .probe-back:focus-visible { color: var(--j-text); border-color: var(--j-text); }
+
+/* Portrait screens: the panel is a sheet at the bottom, the map goes. */
+@media (max-aspect-ratio: 1/1) {
+  .probe { right: 12px; left: 12px; top: auto; bottom: 12px; width: auto; max-height: 58vh; overflow: auto; transform: translateY(24px); }
+  .probe.is-open { transform: none; }
+  .probe-frame { padding: 16px 16px 14px; }
+  .probe-portrait { width: 60px; height: 60px; }
+  .probe-initials { font-size: 1.1rem; }
+  .probe-readouts { grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .probe-readout { padding: 8px; }
+  .probe-readout dt { font-size: 0.55rem; letter-spacing: 0.12em; }
+  .probe-readout dd { font-size: 1.1rem; }
+  .sys-map { display: none; }
+  .sys-home { right: 12px; bottom: auto; top: 14px; }
+  .sys-chip { top: 12px; left: 12px; }
+  .sys-hint { bottom: 14px; font-size: 0.6rem; }
+  .sys-label { font-size: 0.6rem; padding: 3px 7px 3px 5px; }
+}
+@media (max-aspect-ratio: 1/1) and (max-width: 420px) {
+  .probe-readouts { grid-template-columns: repeat(2, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .probe, .probe.is-open, .probe-frame > *, .probe.is-open .probe-frame > *, .sys-hud, .sys-label { transition: none; }
+  .probe-portrait::before, .sys-reticle { animation: none; }
+}
+
+/* No WebGL, or the module never ran: the same content as a scrolling
+   list of cards, over the sky. The section may scroll then. */
+.planet--css canvas, .planet--css .sys-labels, .planet--css .sys-hud, .planet--css .probe, .planet--css .planet-caption { display: none; }
+.planet--css { height: auto; min-height: 100vh; overflow: auto; }
+.sys-fallback { display: grid; gap: 14px; max-width: 640px; margin: 0 auto; padding: 10vh 16px; }
+.sys-fallback .probe-frame { position: static; }
+
+/* ============================================================
+   WARP — the launch overlay
+   ============================================================
+   Above everything (the planet section is z 3 and the dashboard sits inside it;
+   z 3 context; this is z 6 at the root). Invisible until .is-on;
+   warp.js paints the streaks and the flash on the canvas. */
+.warp {
+  position: fixed;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  visibility: hidden;
+}
+.warp.is-on { visibility: visible; }
+.warp canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
 }

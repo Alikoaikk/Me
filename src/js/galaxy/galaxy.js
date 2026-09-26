@@ -44,15 +44,33 @@
 
   const config = {
     // simulate() is O(n) on the CPU and measured 13.65ms at 46k, which
-    // alone blew the 16.7ms frame budget (49fps). 26k brings the whole
+    // alone blew the 16.7ms frame budget (49fps). 26k brought the whole
     // frame under budget; the volumetric dust carries the density that
-    // the extra particles used to provide.
-    STAR_COUNT:      26000,
+    // the extra particles used to provide. Lowered again to 15.5k when
+    // POINT_SIZE went up: overlap scales as count x size^2, so bigger
+    // sprites at the old count washed the bulge to white.
+    STAR_COUNT:      15500,
+    /* The FIELD: a second, much larger population that never touches
+       the CPU. It is placed once with the same distributions as the
+       live stars and turned rigidly in the vertex shader, so it costs
+       nothing against the frame budget that caps the live count. It
+       is what makes the arms read as bands rather than strings, gives
+       the bulge a smooth glow of thousands of faint points, and turns
+       the dust lanes into visible gaps. It does not migrate in the
+       burst — it dissolves as the bright stars leave, so the sky is
+       not flooded with sixty thousand extra arrivals. */
+    FIELD_COUNT:     48000,    // scaled down with STAR_COUNT (was 80k)
+    FIELD_SIZE:      0.85,     // sprite size relative to a live star
+    FIELD_LUM:       0.38,     // luminosity relative to a live star
+    /* Secondary arms midway between the two primaries: fainter,
+       tighter, mostly older stars — the feathered multi-arm look of
+       an M101 rather than a clean two-arm grand design. */
+    SECONDARY_FRACTION: 0.22,  // share of arm stars on a secondary ridge
 
     /* ── Spiral structure ── */
     ARMS:            2,
     ARM_TIGHTNESS:   3.10,     // ~18 degree pitch angle
-    ARM_SPREAD:      0.30,
+    ARM_SPREAD:      0.40,     // widened: the arms read as bands, not strings
     ARM_BIAS:        0.28,     // bias to the convex side of the arm
     DISC_RADIUS:     1.0,
     DISC_SCALE:      0.46,
@@ -106,8 +124,29 @@
        burst) needs room to read as a ripple across the disc rather
        than as one sheet sliding over. */
     BURST_DURATION:  4.2,      // seconds, first star leaves to last arrives
-    BURST_REWIND:    1.1,      // seconds to reassemble when scrolling up
-    BURST_HYSTERESIS: 0.25,    // dead band, so hovering cannot strobe it
+    /* The reverse is SCROLL-driven, unlike the burst itself. Playing
+       it on a timer (1.1s, then 2.4s) always felt laggy: nothing
+       happened for the first quarter-viewport of scrolling up, then
+       the stars flew home on their own schedule while the reader had
+       already moved on. Now `burst` follows the scroll position back
+       down over BURST_REWIND_SPAN viewport heights above the trigger,
+       eased just enough to hide wheel steps, so the galaxy reassembles
+       in step with the finger and holds wherever it is left. */
+    BURST_REWIND_SPAN: 0.90,   // viewport heights of scroll to fully reassemble
+    BURST_REWIND_EASE: 9.0,    // per-second tracking rate (~0.11s behind the finger)
+    /* Nearly no dead band. Re-firing resumes the clock from the
+       current value, so toggling on the threshold is invisible; the
+       band only has to swallow sub-pixel scroll jitter. */
+    BURST_HYSTERESIS: 0.02,
+    /* ── The release ──
+       Pressing the button lets go of the name: the fill stars slide
+       from their letterforms out to ordinary sky homes, so the word
+       dissolves into the field the trip flies through. It is the
+       take-off — TIMED from the press over RELEASE_TIME seconds, not
+       scrolled (the page is sealed by then and cannot scroll), and
+       the warp starts the moment it has played. Gated on the burst
+       having finished: a name cannot dissolve before it is written. */
+    RELEASE_TIME:    1.8,      // seconds, press to letters gone
     /* The simulation freezes here, very early, because every star's
        destination is hashed from its position: if the spiral kept
        turning underneath, a star's sky home would move with it and
@@ -132,7 +171,9 @@
        opens from below. See ZOOM_PUSH — these two share a depth
        budget and cannot both be raised. */
     TILT_ROLL:       0.30,
-    POINT_SIZE:      0.88,
+    /* Raised from 0.88 with the counts cut by ~40%: fewer, bolder
+       points that resolve as individual stars instead of fine dust. */
+    POINT_SIZE:      1.18,
     /* The approach is a straight push down the view axis — no lateral
        pan. Drifting the disc sideways while zooming read as the galaxy
        sliding off the screen rather than coming at the viewer. */
@@ -165,9 +206,25 @@
     BLOOM_STRENGTH:  0.46,
     BLOOM_MIPS:      3,
 
-    /* ── Volumetric dust ── */
+    /* ── Volumetric dust ──
+       OFF. The continuous glow layer was the one part of the picture
+       that could ever be out of step with the stars, and the detail
+       it provided now comes from the field population instead. The
+       raymarch, the absorption compositing and the split star pass
+       are all kept intact behind this flag. */
+    DUST:            false,
     DUST_STEPS:      16,       // raymarch samples through the disc
     DUST_DENSITY:    0.78,
+    /* The dust ABSORBS as well as glows. Optical depth accumulates
+       along the ray into the dust buffer's alpha, and the scene behind
+       the disc plane is multiplied by exp(-tau * DUST_TINT) before
+       the emission and the near half of the stars go on top. The
+       tint is per channel — blue is scattered out first — so a thick
+       lane goes brown rather than grey, which is the single most
+       recognisable feature of a photographed spiral. */
+    DUST_ABSORB:     60.0,     // optical depth per unit dust density
+    DUST_TINT:       [1.30, 1.00, 0.70],
+    BULGE_GLOW:      5.0,      // smooth spheroid of old stars, in the march
 
     /* ── Sky ──
        COUNT is how many meteors can be in flight at once; CHANCE is
@@ -189,6 +246,8 @@
     RETURN_SPRING:   1.20,
     RETURN_DAMPING:  2.30,
     MAX_OFFSET:      0.34,
+    /* These also drive the field, through simulateField(): the same
+       wake and the same spring, run on the GPU. */
   };
 
   const CAM_DIST = 3.0;
@@ -212,6 +271,9 @@
        also covers the case where even WebGL1 is unavailable and the
        legacy script can do nothing either. */
     document.documentElement.setAttribute('data-no-webgl', '');
+    // No burst here: the name is simply there, so the profile below it
+    // (and the button at its end) must be too.
+    document.documentElement.classList.add('is-written');
     const fallback = document.createElement('script');
     /* Resolved against this script's own URL rather than the page's, so
        the fallback keeps loading wherever the hero page lives. */
@@ -239,12 +301,14 @@
     return s;
   }
 
-  function program(vsSrc, fsSrc) {
+  function program(vsSrc, fsSrc, varyings) {
     const vs = compile(gl.VERTEX_SHADER, '#version 300 es\n' + vsSrc);
     const fs = compile(gl.FRAGMENT_SHADER, '#version 300 es\n' + fsSrc);
     if (!vs || !fs) return null;
     const p = gl.createProgram();
     gl.attachShader(p, vs); gl.attachShader(p, fs);
+    // Must be declared before the link for a transform-feedback program.
+    if (varyings) gl.transformFeedbackVaryings(p, varyings, gl.SEPARATE_ATTRIBS);
     gl.linkProgram(p);
     if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
       console.error('galaxy link:', gl.getProgramInfoLog(p));
@@ -354,7 +418,8 @@
       float v = 0.0, a = 0.5;
       for (int i = 0; i < 4; i++) { v += a * noise3(p); p *= 2.03; a *= 0.5; }
       return v;
-    }`;
+    }
+    float fbm2(vec3 p) { return 0.5 * noise3(p) + 0.25 * noise3(p * 2.03); }`;
 
   // Shared so the dust and the particles agree on where the arms are.
   const SPIRAL = `
@@ -364,7 +429,10 @@
     uniform float uArmFloor;
     float armRidge(float r) {
       float x = max(r, uArmFloor);
-      return log(x / uArmStart + 0.30) * uTightness;
+      // The wobble is what keeps the arms from reading as two perfect
+      // logarithmic curves. Mirrored exactly in the JS armRidge.
+      return log(x / uArmStart + 0.30) * uTightness
+           + 0.09 * sin(x * 11.3) + 0.05 * sin(x * 23.7 + 1.7);
     }
     float armDist(float r, float theta) {
       float gap = 6.28318530718 / uArms;
@@ -504,31 +572,76 @@
     ${NOISE}
     ${SPIRAL}
 
-    float density(vec3 q) {
+    uniform float uArmSpread;
+    uniform float uArmBias;
+    uniform float uDustOffset;
+    uniform float uDustWidth;
+    uniform float uBulgeRadius;
+    uniform float uBulgeGlow;
+    uniform float uAbsorb;
+
+    /* Two fields share one march. GAS is what glows: the young stars
+       and ionised hydrogen strung along the arms, plus the smooth old
+       disc between them. DUST is what absorbs: a cold lane on the
+       concave edge of each arm, broken into threads, over a thin
+       diffuse layer. They are kept apart because in a photograph
+       they sit in different places — the dark lane runs just INSIDE
+       the bright arm, not on top of it. The lane geometry mirrors
+       the particle spawner's, so the stars avoid the same gap. */
+    void discSample(vec3 q, out float gas, out float dust, out vec3 col) {
+      gas = 0.0; dust = 0.0; col = vec3(0.0);
       float r = length(q.xy);
-      if (r > 1.15) return 0.0;
-      float zf = exp(-abs(q.z) * 24.0);            // thin disc
-      float radial = exp(-r * 1.9) * smoothstep(0.02, 0.15, r);
+      if (r > 1.15) return;
       float th = atan(q.y, q.x);
       float d = armDist(r, th);
-      float arm = exp(-d * d * 7.0);               // gas piles on arms
+      float zGas  = exp(-abs(q.z) * 22.0);
+      float zDust = exp(-abs(q.z) * 30.0);           // the thinnest layer
+      float radial = exp(-r * 1.15) * smoothstep(0.02, 0.15, r);
+
       vec3 np = vec3(q.xy * 3.1, q.z * 5.0 + uTime * 0.012);
       float turb  = fbm(np) * 0.5 + 0.5;
-      float turb2 = fbm(np * 2.7 + 11.3) * 0.5 + 0.5;
-      float dens = radial * zf * (0.30 + arm * 1.35) * (0.35 + turb * 0.95);
-      // Dark lanes carved by the second noise field.
-      dens *= mix(1.0, 0.18, smoothstep(0.52, 0.82, turb2) * arm);
-      return dens * uDensity;
-    }
+      /* Cost note: this runs 16 times per half-res pixel and is the
+         heaviest thing in the frame. turb is the only full fbm; the
+         lane threads need two octaves, and the two fine fields are
+         single high-frequency octaves — their lower octaves only
+         duplicated what turb already carries. */
+      float turb2 = fbm2(np * 2.7 + 11.3) * 0.5 + 0.5;
+      float fine  = noise3(np * 9.0 + 3.7) * 0.5 + 0.5;   // clusters
+      float fine2 = noise3(np * 13.0 + 7.1) * 0.5 + 0.5;  // grain within them
 
-    vec3 emission(float r, float armness) {
-      vec3 core = vec3(1.00, 0.72, 0.38);
-      vec3 mid  = vec3(0.60, 0.48, 0.70);
-      vec3 rim  = vec3(0.30, 0.44, 0.86);
-      vec3 c = mix(core, mid, smoothstep(0.03, 0.34, r));
-      c = mix(c, rim, smoothstep(0.30, 0.95, r));
-      // Star-forming arms glow magenta, as HII gas does.
-      return mix(c, c * vec3(1.35, 0.72, 0.95), armness * 0.40);
+      /* Gas rides the CONVEX side of the ridge, where the spawner puts
+         the stars; the lane sits on the concave side. The profile is
+         sharp toward the lane and feathered away from it, so the lane
+         has clear space to be dark in instead of glow piled on it. */
+      float w  = uArmSpread * (0.50 + r * 1.00);
+      float dg = d - uArmBias * w;
+      float arm = exp(-pow(dg / (dg < 0.0 ? w * 0.45 : w * 0.95), 2.0));
+      // HII knots: the brightest, pinkest clumps, only on the arms.
+      // Single-octave noise blobs are larger and smoother than fbm's, so
+      // the thresholds sit high: knots are the rare bright tips, not a
+      // pink wash over half the arm.
+      float knot = smoothstep(0.64, 0.82, fine) * smoothstep(0.60, 0.80, fine2) * arm;
+      // Contrast in the clumping is what survives the march: a gentle
+      // multiplier averages out over 16 samples into a smooth ribbon.
+      float clump = mix(0.12, 1.70, smoothstep(0.28, 0.80, fine));
+      float grain = mix(0.45, 1.25, smoothstep(0.30, 0.75, fine2));
+      gas = radial * zGas * (0.20 + arm * 1.60)
+          * (0.30 + turb * 0.90) * clump * grain
+          * (1.0 + knot * 3.0);
+
+      float lc = -(uArmBias + uDustOffset) * w;
+      float lw = max(uDustWidth * w, 0.02);
+      float lane = exp(-pow((d - lc) / lw, 2.0));
+      float threads = smoothstep(0.30, 0.75, turb2);
+      float diffuse = 0.05 + 0.08 * smoothstep(0.45, 0.80, turb);
+      dust = radial * zDust * (lane * (0.70 + threads * 1.30) + diffuse)
+           * smoothstep(0.06, 0.20, r);               // none over the nucleus
+
+      // Colour: warm old disc, blue-white along the arms, pink knots
+      // where the gas is ionised, everything reddening toward the core.
+      col = mix(vec3(0.96, 0.88, 0.74), vec3(0.55, 0.70, 1.00), arm * 0.90);
+      col = mix(col, vec3(1.00, 0.36, 0.56), knot);
+      col = mix(col, vec3(1.00, 0.84, 0.58), smoothstep(0.32, 0.06, r));
     }
 
     void main() {
@@ -550,9 +663,9 @@
       ro = inv * ro; rd = inv * rd;
       ro.x -= uDrift;
 
-      // Slab containing the disc.
-      float tN = (0.22 - ro.z) / rd.z;
-      float tF = (-0.22 - ro.z) / rd.z;
+      // Slab containing the disc and the bulge.
+      float tN = (0.30 - ro.z) / rd.z;
+      float tF = (-0.30 - ro.z) / rd.z;
       if (tN > tF) { float t = tN; tN = tF; tF = t; }
       tN = max(tN, 0.0);
       if (tF <= tN) { frag = vec4(0.0); return; }
@@ -562,24 +675,27 @@
       float t = tN + stepLen * jit;                // dither out banding
 
       vec3 acc = vec3(0.0);
-      float trans = 1.0;
+      float trans = 1.0, tau = 0.0;
       float cs = cos(-uPattern), ss = sin(-uPattern);
+      const vec3 bulgeCol = vec3(1.00, 0.88, 0.66);
 
       for (int i = 0; i < 48; i++) {
         if (i >= uSteps || trans < 0.02) break;
         vec3 q = ro + rd * t;
         vec3 qq = vec3(q.x * cs - q.y * ss, q.x * ss + q.y * cs, q.z);
-        float dens = density(qq);
-        if (dens > 0.002) {
-          float r = length(qq.xy);
-          float armness = exp(-pow(armDist(r, atan(qq.y, qq.x)), 2.0) * 7.0);
-          float a = dens * stepLen * 5.4;
-          acc += emission(r, armness) * a * trans;
-          trans *= 1.0 - min(a, 0.96);
-        }
+        float gas, dust; vec3 col;
+        discSample(qq, gas, dust, col);
+        // Bulge: a flattened spheroid of old stars with a long,
+        // Sérsic-like tail, so the core is a gradient and not a dot.
+        float rb = length(vec3(qq.xy, qq.z * 2.2)) / uBulgeRadius;
+        float bulge = exp(-pow(rb, 0.90) * 3.0) * uBulgeGlow * uDensity;
+        acc += (col * gas * 11.0 + bulgeCol * bulge) * stepLen * trans;
+        float a = dust * stepLen * uAbsorb;
+        trans *= exp(-a);
+        tau += a;
         t += stepLen;
       }
-      frag = vec4(acc, 1.0);
+      frag = vec4(acc, tau);
     }`);
 
   /* ── Star particles ── */
@@ -590,6 +706,8 @@
     layout(location = 2) in vec4 aTint;   // rgb + size
     layout(location = 3) in float aLum;
     layout(location = 4) in vec3 aName;  // xy = NDC home in the word, z = 1 if a fill star
+    layout(location = 5) in float aKind; // 0 star, 1 nebula, 2 giant
+    layout(location = 6) in vec3 aOff;   // field only: offset from home, from simulateField
     uniform mat3 uRot;
     uniform float uCamDist;
     uniform float uScale;
@@ -599,12 +717,36 @@
     uniform float uZoom;      // 0..1, camera closes in
     uniform float uZoomPush;  // world units the camera travels at uZoom=1
     uniform float uBurst;     // 0..1, the disc flies apart
+    uniform float uRelease;   // 0..1, the written name lets go into the sky
+    uniform float uNameShift; // NDC y: the name scrolls up with the page (profile below it)
+    uniform float uHalf;      // -1 behind the disc plane, +1 in front, 0 all
+    uniform float uMigrate;   // 1: live star, joins the burst; 0: field star, dissolves
+    uniform float uPattern;   // rigid rotation, applied here for the field only
     out vec3  vColor;
     out float vAlpha;
     out float vBright;
     out float vSettled;
+    flat out float vKind;
     void main() {
       vec3 world = aPos;
+      vKind = aKind;
+      /* The field is placed once in the disc frame and turned here;
+         the live stars arrive already rotated by the simulation. */
+      if (uMigrate < 0.5) {
+        float cp = cos(uPattern), sp = sin(uPattern);
+        world.xy = vec2(aPos.x * cp - aPos.y * sp, aPos.x * sp + aPos.y * cp);
+        world += aOff;   // the wake and the spring, exactly as the live stars carry them
+      }
+
+      /* The dust lanes have to be able to darken what lies behind
+         them, so the field is drawn in two halves around the disc
+         plane with the dust composited in between. A culled point
+         is parked outside the clip volume. */
+      if (uHalf != 0.0 && (aPos.z >= 0.0) != (uHalf > 0.0)) {
+        gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+        gl_PointSize = 0.0;
+        return;
+      }
 
       /* ── The migration ──
          There is no explosion. The galaxy does not collapse, detonate
@@ -658,7 +800,8 @@
       float span  = fill ? 0.94 : 0.80;
       float t = clamp((uBurst - delay) / max(0.0001, span - delay), 0.0, 1.0);
       // Ease in and out: leaves gently, arrives gently, no hard stop.
-      float m = t * t * (3.0 - 2.0 * t);
+      // The field does not travel: it fades where it stands (below).
+      float m = uMigrate > 0.5 ? t * t * (3.0 - 2.0 * t) : 0.0;
       float scatter = m;   // 0..1, how far this star has joined the sky
 
       // ── Where the galaxy puts this star this frame ──
@@ -695,7 +838,15 @@
          could not be built (tiny viewport, tainted canvas): aName.z is
          0 there and every star simply goes to the sky, which is the
          previous behaviour rather than a broken screen. */
-      vec2 dest = fill ? aName.xy : sNdc;
+      /* The release: a fill star's home moves from its letter to the
+         sky spot it would otherwise have had. Staggered per star so
+         the word frays outward rather than sliding off as a sheet.
+         fillW is "how much of a fill star this still is" and drives
+         every fill-specific value below. */
+      float rel = smoothstep(h3 * 0.5, 0.5 + h3 * 0.5, uRelease);
+      float fillW = fill ? 1.0 - rel : 0.0;
+      vec2 home = aName.xy + vec2(0.0, uNameShift);
+      vec2 dest = fill ? mix(home, sNdc, rel) : sNdc;
 
       /* The path. Straight in screen space — a star crossing the frame
          has no reason to curve, and every curve in the old version was
@@ -711,7 +862,7 @@
          the way in is fine for the open sky, but the word has to end
          up crisp, and a star still swinging as it arrives blurs the
          edge of the letter it is supposed to define. */
-      float bow = sin(m * 3.14159) * (h3 - 0.5) * (fill ? 0.02 : 0.10);
+      float bow = sin(m * 3.14159) * (h3 - 0.5) * mix(0.10, 0.02, fillW);
       vec2 ndc = mix(gNdc, dest, m) + perp * bow;
 
       gl_Position = vec4(ndc, 0.0, 1.0);
@@ -744,14 +895,15 @@
          than flat, but the floor is far higher than the sky's. */
       float skyFloor = 0.30 + fract(aAttr.y * 7.31) * 0.42;
       float fillFloor = 1.05 + fract(aAttr.y * 3.17) * 0.55;
-      vAlpha *= mix(1.0, fill ? fillFloor : skyFloor, scatter);
+      vAlpha *= mix(1.0, mix(skyFloor, fillFloor, fillW), scatter);
+      if (uMigrate < 0.5) vAlpha *= 1.0 - smoothstep(0.0, 0.55, uBurst);
       /* Diffraction spikes retire on the way. A sky star is a ~1.6 px
          point and far too small to carry them; keeping them made the
          arrivals look nearer than the field around them. */
       /* Sky arrivals lose their spikes; fill stars keep a little, so
          the word carries some sparkle instead of reading as a flat
          stencil of dots. */
-      vBright *= fill ? (1.0 - scatter * 0.45) : (1.0 - scatter);
+      vBright *= 1.0 - scatter * mix(1.0, 0.45, fillW);
 
       /* ── Size: galaxy star -> sky star ──
          The single most important line in the migration.
@@ -783,8 +935,11 @@
          at a glance, but still a point — big enough to blur the
          glyph edge and the outline stops looking sharp. */
       float fillSize = uPointScale * (1.25 + h2 * 0.35);
-      gl_PointSize = mix(galaxySize, fill ? fillSize : skySize, scatter);
-      vSettled = scatter;
+      gl_PointSize = mix(galaxySize, mix(skySize, fillSize, fillW), scatter);
+      /* Field stars are small, so they take the flattened core that
+         the settled sky uses for the same reason: a tight core on a
+         ~1.5px point falls between the pixels and renders dark. */
+      vSettled = uMigrate > 0.5 ? scatter : 0.7;
     }
   `, `
     precision highp float;
@@ -792,11 +947,19 @@
     in float vAlpha;
     in float vBright;
     in float vSettled;
+    flat in float vKind;
     out vec4 frag;
     void main() {
       vec2 d = gl_PointCoord - 0.5;
       float r2 = dot(d, d);
       if (r2 > 0.25) discard;
+      if (vKind > 0.5 && vKind < 1.5) {
+        // HII nebula: a wide soft blob. No core, no spikes — this is
+        // light from gas, and it should never read as a point.
+        float g = exp(-r2 * 14.0) - exp(-0.25 * 14.0);
+        frag = vec4(vColor * vAlpha * g * 0.55, 1.0);
+        return;
+      }
       float disc = smoothstep(0.25, 0.0, r2);
       /* The core exponent relaxes as the star settles into the sky.
 
@@ -811,18 +974,32 @@
       float core = pow(disc, mix(3.2, 1.3, vSettled));
       float halo = pow(disc, 0.55);
 
-      float spikes = 0.0;
+      float spikes = 0.0, ring = 0.0;
       if (vBright > 0.02) {
-        vec2 ad = abs(d);
-        float cr = max(smoothstep(0.030, 0.0, ad.x) * smoothstep(0.5, 0.0, ad.y),
-                       smoothstep(0.030, 0.0, ad.y) * smoothstep(0.5, 0.0, ad.x));
-        spikes = cr * vBright * 0.55;
+        if (vKind > 1.5) {
+          // Giant: three lines at 60 deg — a six-point diffraction
+          // pattern — plus a faint blue ring, the way a lens flares.
+          const float c60 = 0.5, s60 = 0.8660254;
+          vec2 d1 = vec2(d.x * c60 - d.y * s60, d.x * s60 + d.y * c60);
+          vec2 d2 = vec2(d.x * c60 + d.y * s60, -d.x * s60 + d.y * c60);
+          float line = smoothstep(0.030, 0.0, abs(d.y))  * smoothstep(0.5, 0.0, abs(d.x));
+          line = max(line, smoothstep(0.030, 0.0, abs(d1.y)) * smoothstep(0.5, 0.0, abs(d1.x)));
+          line = max(line, smoothstep(0.030, 0.0, abs(d2.y)) * smoothstep(0.5, 0.0, abs(d2.x)));
+          spikes = line * vBright * 0.65;
+          ring = smoothstep(0.09, 0.14, r2) * smoothstep(0.22, 0.16, r2) * vBright;
+        } else {
+          vec2 ad = abs(d);
+          float cr = max(smoothstep(0.030, 0.0, ad.x) * smoothstep(0.5, 0.0, ad.y),
+                         smoothstep(0.030, 0.0, ad.y) * smoothstep(0.5, 0.0, ad.x));
+          spikes = cr * vBright * 0.55;
+        }
       }
 
       // Hot cores desaturate toward white, as an overexposed star does.
       vec3 col = mix(vColor, vec3(1.0), core * vBright * 0.42);
+      col = mix(col, vec3(0.60, 0.74, 1.00), ring * 0.7);
       float e = vAlpha * (halo * (0.18 + vBright * 0.26)
-                        + disc * 0.30 + core * 0.95 + spikes);
+                        + disc * 0.30 + core * 0.95 + spikes + ring * 0.12);
       frag = vec4(col * e, 1.0);
     }`);
 
@@ -896,6 +1073,19 @@
     uniform sampler2D uSrc;
     void main() { frag = vec4(texture(uSrc, vUv).rgb, 1.0); }`);
 
+  // Multiplies the scene by the dust's transmittance. Blended with
+  // (ZERO, SRC_COLOR), so the output IS the per-channel factor.
+  const dustAbsorbProg = program(QUAD_VS, `
+    precision highp float;
+    in vec2 vUv;
+    out vec4 frag;
+    uniform sampler2D uSrc;
+    uniform vec3 uExt;
+    void main() {
+      float tau = texture(uSrc, vUv).a;
+      frag = vec4(exp(-tau * uExt), 1.0);
+    }`);
+
   const compositeProg = program(QUAD_VS, `
     precision highp float;
     in vec2 vUv;
@@ -942,7 +1132,7 @@
     }`);
 
   if (!skyProg || !dustProg || !starProg || !meteorProg || !upsampleProg ||
-      !brightProg || !blurProg || !compositeProg) return;
+      !dustAbsorbProg || !brightProg || !blurProg || !compositeProg) return;
 
   /* ============================================================
      STAR CLASSES
@@ -1008,6 +1198,7 @@
   const posArr  = new Float32Array(N * 3);
   const attrArr = new Float32Array(N * 3);
   const tintArr = new Float32Array(N * 4);
+  const kindArr = new Float32Array(N);     // 0 star, 1 nebula, 2 giant
   let tintDirty = true, lumDirty = true;
 
   const gauss = () =>
@@ -1018,20 +1209,28 @@
   function armRidge(r, arm) {
     const x = r > config.ARM_FLOOR ? r : config.ARM_FLOOR;
     return (arm / config.ARMS) * Math.PI * 2 +
-           Math.log(x / config.ARM_START + 0.30) * config.ARM_TIGHTNESS;
+           Math.log(x / config.ARM_START + 0.30) * config.ARM_TIGHTNESS +
+           0.09 * Math.sin(x * 11.3) + 0.05 * Math.sin(x * 23.7 + 1.7);
   }
 
-  function spawnStar(i, freshLife) {
+  /* Where a new star goes. Shared by the live population and the
+     field, so both are drawn from the same galaxy. `ang` is absolute,
+     ridge included; the caller decides how to store it. */
+  function sampleDisc(freshLife, field) {
     const roll = Math.random();
-    const NU = config.NUCLEUS_FRACTION, B = config.BULGE_FRACTION;
+    // The field leans on the smooth populations — bulge and interarm —
+    // because that is where the unresolved light in a photograph is.
+    const NU = field ? 0.04 : config.NUCLEUS_FRACTION;
+    const B  = field ? 0.30 : config.BULGE_FRACTION;
+    const IA = field ? 0.30 : config.INTERARM;
     let pop;
     if (roll < NU) pop = 4;
     else if (roll < NU + B) pop = 0;
-    else if (roll < NU + B + config.INTERARM) pop = 3;
-    else if (roll < NU + B + config.INTERARM + config.SPUR_FRACTION) pop = 2;
+    else if (roll < NU + B + IA) pop = 3;
+    else if (roll < NU + B + IA + config.SPUR_FRACTION) pop = 2;
     else pop = 1;
 
-    let r, ang, thickness, hii = 0;
+    let r, ang, thickness, hii = 0, secondary = false;
 
     if (pop === 4) {
       // Cube-root fills a sphere evenly rather than crowding the centre.
@@ -1039,9 +1238,13 @@
       ang = Math.random() * Math.PI * 2;
       thickness = 4.2;
     } else if (pop === 0) {
-      r = Math.pow(Math.random(), 3.1) * config.BULGE_RADIUS + 0.010;
+      // The field's bulge is broader and shallower: a Sérsic-like tail
+      // of faint points is what makes the core a gradient, not a dot.
+      r = field
+        ? Math.pow(Math.random(), 1.9) * config.BULGE_RADIUS * 1.35 + 0.010
+        : Math.pow(Math.random(), 3.1) * config.BULGE_RADIUS + 0.010;
       ang = Math.random() * Math.PI * 2;
-      thickness = 2.8;
+      thickness = field ? 3.6 : 2.8;
     } else {
       if (freshLife) {
         // Recycled stars re-enter AT THE RIM. Re-sampling the whole
@@ -1055,7 +1258,10 @@
       if (r > config.DISC_RADIUS) r = config.DISC_RADIUS;
       if (r < config.ARM_START) r = config.ARM_START * (0.55 + Math.random() * 0.75);
 
-      const arm = Math.floor(Math.random() * config.ARMS);
+      // A half-integer arm index puts the ridge midway between the
+      // primaries: that is the whole of how a secondary arm is made.
+      secondary = pop === 1 && Math.random() < config.SECONDARY_FRACTION;
+      const arm = Math.floor(Math.random() * config.ARMS) + (secondary ? 0.5 : 0);
       const ridge = armRidge(r, arm);
 
       if (pop === 3) {
@@ -1080,7 +1286,7 @@
           ang = ridge + gauss() * (Math.PI * 2 / config.ARMS) * 0.42;
           thickness = 1.0;
         } else {
-          const w = config.ARM_SPREAD * (0.55 + r * 0.75);
+          const w = config.ARM_SPREAD * (0.55 + r * 0.75) * (secondary ? 0.55 : 1);
           let off = gauss() * w + config.ARM_BIAS * w;
           // Dust lane on the concave edge: the dark dividing line.
           const lane = -config.ARM_BIAS * w - config.DUST_OFFSET * w;
@@ -1091,7 +1297,8 @@
           ang = armRidge(r, arm) + off;
           thickness = 0.55;
 
-          if (Math.random() < config.HII_RATE) {
+          // Star formation lives on the primaries.
+          if (!secondary && Math.random() < config.HII_RATE) {
             hii = 1;
             // Radius FIRST: the ridge angle depends on it.
             const knot = Math.floor(Math.random() * config.HII_KNOTS);
@@ -1105,6 +1312,36 @@
         }
       }
     }
+    return { r, ang, pop, thickness, hii, secondary };
+  }
+
+  /* Colour, sprite size, luminosity and SHAPE for a star of this
+     population. kind 0 is an ordinary point; 1 an HII nebula — a wide
+     soft pink blob with no core and no spikes, light from gas rather
+     than from a star; 2 a giant, with six-point diffraction and a
+     chromatic halo, which is what a long exposure does to the
+     brightest few. */
+  function styleStar(r, pop, ang, hii, secondary) {
+    const vary = 0.88 + Math.random() * 0.24;
+    if (hii) {
+      return { c: [1.00, 0.40, 0.62], s: 3.2 * vary,
+               l: 1.6 * (0.85 + Math.random() * 0.3), kind: 1 };
+    }
+    if (pop === 4) {
+      // The little sun: white-hot centre warming to gold at the limb.
+      const edge = r / config.NUCLEUS_RADIUS;
+      return { c: [1.00, 0.99 - edge * 0.20, 0.96 - edge * 0.44],
+               s: (1.05 - edge * 0.26) * vary,
+               l: (4.6 - edge * 1.6) + Math.random() * 1.3, kind: 0 };
+    }
+    const type = pickType(r, pop === 0, pop === 1 && !secondary, ang);
+    const kind = (type.l >= 2.5 && Math.random() < 0.55) ? 2 : 0;
+    return { c: type.c, s: type.s * vary,
+             l: type.l * (0.82 + Math.random() * 0.36), kind };
+  }
+
+  function spawnStar(i, freshLife) {
+    const { r, ang, pop, thickness, hii, secondary } = sampleDisc(freshLife, false);
 
     radius[i] = r;
     popArr[i] = pop;
@@ -1115,29 +1352,12 @@
     height[i] = gauss() * config.THICKNESS * thickness * (1.0 - r * 0.45);
     seed[i] = Math.random();
 
-    const vary = 0.88 + Math.random() * 0.24;
+    const st = styleStar(r, pop, ang, hii, secondary);
     const t4 = i * 4;
-    if (hii) {
-      // HII regions glow pink: hot young stars lighting hydrogen gas.
-      tintArr[t4] = 1.00; tintArr[t4 + 1] = 0.40; tintArr[t4 + 2] = 0.62;
-      tintArr[t4 + 3] = 1.30 * vary;
-      lum[i] = 2.8 * (0.85 + Math.random() * 0.3);
-    } else if (pop === 4) {
-      // The little sun: white-hot centre warming to gold at the limb.
-      const edge = r / config.NUCLEUS_RADIUS;
-      tintArr[t4] = 1.00;
-      tintArr[t4 + 1] = 0.99 - edge * 0.20;
-      tintArr[t4 + 2] = 0.96 - edge * 0.44;
-      tintArr[t4 + 3] = (1.05 - edge * 0.26) * vary;
-      lum[i] = (4.6 - edge * 1.6) + Math.random() * 1.3;
-    } else {
-      const type = pickType(r, pop === 0, pop === 1, ang);
-      tintArr[t4] = type.c[0];
-      tintArr[t4 + 1] = type.c[1];
-      tintArr[t4 + 2] = type.c[2];
-      tintArr[t4 + 3] = type.s * vary;
-      lum[i] = type.l * (0.82 + Math.random() * 0.36);
-    }
+    tintArr[t4] = st.c[0]; tintArr[t4 + 1] = st.c[1]; tintArr[t4 + 2] = st.c[2];
+    tintArr[t4 + 3] = st.s;
+    lum[i] = st.l;
+    kindArr[i] = st.kind;
     tintDirty = lumDirty = true;
 
     life[i] = freshLife ? 0 : Math.random();
@@ -1170,7 +1390,170 @@
   const nameBuf = gl.createBuffer();
   const nameArr = new Float32Array(N * 3);
   setupAttr(nameBuf, 4, 3, nameArr, gl.DYNAMIC_DRAW);
+  const kindBuf = gl.createBuffer();
+  setupAttr(kindBuf, 5, 1, kindArr, gl.DYNAMIC_DRAW);
   gl.bindVertexArray(null);
+
+  /* ── The field ──
+     Placed once, uploaded once. Its home positions never change; its
+     rotation is applied in the vertex shader from uPattern, so it
+     turns with the live stars and freezes with them during the burst.
+     What DOES change is its offset from home: the cursor wake and the
+     return spring run for the field exactly as simulate() runs them
+     for the live stars, but as a transform-feedback pass on the GPU
+     (simulateField), ping-ponging an offset/velocity pair. Every star
+     in the galaxy obeys one rule, and the field costs the CPU nothing. */
+  const F = config.FIELD_COUNT;
+  let fieldVAO, tfVAO, tfObj, fieldCur = 0;
+  const fieldOff = [], fieldVel = [];
+
+  const tfProg = program(`
+    layout(location = 0) in vec3 aBase;   // home, in the disc frame
+    layout(location = 1) in vec3 aOff;
+    layout(location = 2) in vec3 aVel;
+    layout(location = 3) in float aSeed;
+    uniform float uPattern;
+    uniform float uDt;
+    uniform vec2  uWakeA, uWakeB, uWakeDir;
+    uniform float uWakeEnergy, uRadius, uStrength, uSwirl;
+    uniform float uSpring, uDamp, uMaxOff;
+    out vec3 tOff;
+    out vec3 tVel;
+    /* A line-for-line port of the wake and spring in simulate(). Keep
+       the two in step: a field that answers the cursor differently
+       from the live stars reads as two galaxies. */
+    void main() {
+      float cp = cos(uPattern), sp = sin(uPattern);
+      vec2 h = vec2(aBase.x * cp - aBase.y * sp, aBase.x * sp + aBase.y * cp);
+      vec3 off = aOff, vel = aVel;
+      if (uWakeEnergy > 0.0) {
+        vec2 s = h + off.xy;
+        vec2 ab = uWakeB - uWakeA;
+        float l2 = dot(ab, ab);
+        float t = l2 > 1e-9 ? clamp(dot(s - uWakeA, ab) / l2, 0.0, 1.0) : 0.0;
+        vec2 d = s - (uWakeA + ab * t);
+        float d2 = dot(d, d);
+        if (d2 < uRadius * uRadius) {
+          float dd = max(sqrt(d2), 1e-6);
+          float q = 1.0 - dd / uRadius;
+          float imp = uStrength * (q * q * (3.0 - 2.0 * q)) * uWakeEnergy * uDt * 60.0;
+          vel.xy += ((d / dd) * (1.0 - uSwirl) + uWakeDir * uSwirl) * imp;
+          vel.z += (aSeed - 0.5) * imp * 0.35;
+        }
+      }
+      // Over-damped spring: ~4s home, no overshoot.
+      vel += (-uSpring * off - uDamp * vel) * uDt;
+      off += vel * uDt;
+      float om2 = dot(off.xy, off.xy);
+      if (om2 > uMaxOff * uMaxOff) {
+        float k = uMaxOff / sqrt(om2);
+        off.xy *= k; vel.xy *= 0.5;
+      }
+      tOff = off;
+      tVel = vel;
+      gl_Position = vec4(0.0, 0.0, 0.0, 1.0);
+    }`, `
+    precision highp float;
+    out vec4 frag;
+    void main() { frag = vec4(0.0); }`, ['tOff', 'tVel']);
+
+  {
+    const fPos = new Float32Array(F * 3), fAttr = new Float32Array(F * 3);
+    const fTint = new Float32Array(F * 4), fLum = new Float32Array(F);
+    const fKind = new Float32Array(F);
+    for (let i = 0; i < F; i++) {
+      const { r, ang, pop, thickness, hii, secondary } = sampleDisc(false, true);
+      const st = styleStar(r, pop, ang, hii, secondary);
+      const o = i * 3, t4 = i * 4;
+      fPos[o] = Math.cos(ang) * r;
+      fPos[o + 1] = Math.sin(ang) * r;
+      fPos[o + 2] = gauss() * config.THICKNESS * thickness * (1.0 - r * 0.45);
+      fAttr[o] = r; fAttr[o + 1] = Math.random(); fAttr[o + 2] = 1;
+      fTint[t4] = st.c[0]; fTint[t4 + 1] = st.c[1]; fTint[t4 + 2] = st.c[2];
+      // Nebulae keep their size; everything else is a fainter, smaller
+      // point than its live counterpart — the unresolved background.
+      fTint[t4 + 3] = st.s * (hii ? 1 : config.FIELD_SIZE);
+      fLum[i] = st.l * config.FIELD_LUM;
+      fKind[i] = st.kind;
+    }
+    const fPosBuf = gl.createBuffer(), fAttrBuf = gl.createBuffer();
+    fieldVAO = gl.createVertexArray();
+    gl.bindVertexArray(fieldVAO);
+    setupAttr(fPosBuf, 0, 3, fPos, gl.STATIC_DRAW);
+    setupAttr(fAttrBuf, 1, 3, fAttr, gl.STATIC_DRAW);
+    setupAttr(gl.createBuffer(), 2, 4, fTint, gl.STATIC_DRAW);
+    setupAttr(gl.createBuffer(), 3, 1, fLum, gl.STATIC_DRAW);
+    setupAttr(gl.createBuffer(), 5, 1, fKind, gl.STATIC_DRAW);
+    // No name target: a field star is never a fill star. The generic
+    // attribute value stands in for the missing array. Location 6
+    // (aOff) is pointed at the current state set by draw().
+    gl.disableVertexAttribArray(4);
+    gl.vertexAttrib3f(4, 0, 0, 0);
+    gl.bindVertexArray(null);
+    // The live stars carry their offsets inside posArr already.
+    gl.vertexAttrib3f(6, 0, 0, 0);
+
+    // Offset/velocity state, two sets for the ping-pong.
+    const zeros = new Float32Array(F * 3);
+    for (let i = 0; i < 2; i++) {
+      fieldOff[i] = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, fieldOff[i]);
+      gl.bufferData(gl.ARRAY_BUFFER, zeros, gl.DYNAMIC_COPY);
+      fieldVel[i] = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, fieldVel[i]);
+      gl.bufferData(gl.ARRAY_BUFFER, zeros, gl.DYNAMIC_COPY);
+    }
+    const point = (buf, loc, size, stride, offset) => {
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+      gl.enableVertexAttribArray(loc);
+      gl.vertexAttribPointer(loc, size, gl.FLOAT, false, stride, offset);
+    };
+    tfVAO = [gl.createVertexArray(), gl.createVertexArray()];
+    tfObj = [gl.createTransformFeedback(), gl.createTransformFeedback()];
+    for (let i = 0; i < 2; i++) {
+      gl.bindVertexArray(tfVAO[i]);
+      point(fPosBuf, 0, 3, 0, 0);
+      point(fieldOff[i], 1, 3, 0, 0);
+      point(fieldVel[i], 2, 3, 0, 0);
+      point(fAttrBuf, 3, 1, 12, 4);              // the seed, from (r, seed, alpha)
+      gl.bindVertexArray(null);
+      // Reading set i writes set 1 - i.
+      gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, tfObj[i]);
+      gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, fieldOff[1 - i]);
+      gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 1, fieldVel[1 - i]);
+    }
+    gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null);
+    gl.bindBuffer(gl.TRANSFORM_FEEDBACK_BUFFER, null);
+  }
+
+  /* The field's simulate(): one GPU pass over the offset/velocity
+     state. Frozen on the same condition as the live stars. */
+  function simulateField(dt) {
+    if (!tfProg || dt <= 0 || burst >= config.BURST_FREEZE) return;
+    gl.useProgram(tfProg.p);
+    gl.uniform1f(tfProg.u.uPattern, patternAngle);
+    gl.uniform1f(tfProg.u.uDt, dt);
+    gl.uniform2f(tfProg.u.uWakeA, wakeAx, wakeAy);
+    gl.uniform2f(tfProg.u.uWakeB, wakeBx, wakeBy);
+    gl.uniform2f(tfProg.u.uWakeDir, wakeDirX, wakeDirY);
+    gl.uniform1f(tfProg.u.uWakeEnergy, wakeEnergy);
+    gl.uniform1f(tfProg.u.uRadius, config.PUSH_RADIUS);
+    gl.uniform1f(tfProg.u.uStrength, config.PUSH_STRENGTH);
+    gl.uniform1f(tfProg.u.uSwirl, config.SWIRL);
+    gl.uniform1f(tfProg.u.uSpring, config.RETURN_SPRING);
+    gl.uniform1f(tfProg.u.uDamp, config.RETURN_DAMPING);
+    gl.uniform1f(tfProg.u.uMaxOff, config.MAX_OFFSET);
+    gl.bindVertexArray(tfVAO[fieldCur]);
+    gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, tfObj[fieldCur]);
+    gl.enable(gl.RASTERIZER_DISCARD);
+    gl.beginTransformFeedback(gl.POINTS);
+    gl.drawArrays(gl.POINTS, 0, F);
+    gl.endTransformFeedback();
+    gl.disable(gl.RASTERIZER_DISCARD);
+    gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null);
+    gl.bindVertexArray(null);
+    fieldCur = 1 - fieldCur;                     // the set just written
+  }
 
   /* Interleave the sampler's two arrays into the attribute buffer. */
   function uploadNameTargets() {
@@ -1259,8 +1642,11 @@
      glyphs, so a speckled fill just reads as a smudge; the word needs
      enough density to hold its own edges. The string also nearly
      doubled in length (KOAIK -> ALI KOAIK), so the same share would
-     have spread thinner over more glyph area. */
-  const NAME_FILL_SHARE = 0.46;
+     have spread thinner over more glyph area.
+
+     0.46 -> 0.50 when STAR_COUNT dropped 26k -> 15.5k: the larger
+     points nearly cover the loss, the extra share closes the rest. */
+  const NAME_FILL_SHARE = 0.50;
 
   /* Mirrors .gname-full in galaxy.css. If these drift apart the
      stars fill a word that is not where the CSS box is measured, so
@@ -1436,7 +1822,6 @@
     scale = Math.min(FILL * CAM_DIST / (config.DISC_RADIUS * vertical),
                      FILL * CAM_DIST * aspect / config.DISC_RADIUS);
     pointScale = config.POINT_SIZE * dpr * Math.min(1.5, Math.max(0.7, h / 900));
-    lastPublishedDrift = NaN;            // the projection moved
 
     if (w === vw && h === vh) return false;
     vw = w; vh = h;
@@ -1456,7 +1841,11 @@
   let pointerX = 0, pointerY = 0, prevPointerX = 0, prevPointerY = 0;
 
   function setPointer(cx, cy) {
-    const r = hero.getBoundingClientRect();
+    /* The CANVAS's rect, not the hero section's. The canvas is fixed
+       and fills the viewport; the section scrolls away underneath it,
+       so measuring against the section sent the wake to the wrong
+       part of the disc as soon as the approach had begun. */
+    const r = canvas.getBoundingClientRect();
     const nx = ((cx - r.left) / r.width) * 2 - 1;
     const ny = -(((cy - r.top) / r.height) * 2 - 1);
     if (!pointerActive) { pointerX = prevPointerX = nx; pointerY = prevPointerY = ny; }
@@ -1481,13 +1870,73 @@
   // Stage progress, all 0..1. See readScroll().
   let zoomT = 0;
   // The burst runs on its own clock once fired, not on scroll.
-  let burstFired = false, burstClock = 0;
+  let burstFired = false, burstClock = 0, rewindTarget = 0;
+  let releaseT = 0, release = 0;
+  // Set by the launch button. Until then the trip does not exist: the
+  // planet is collapsed and the page ends on the
+  // released name with the button over it.
+  let launched = false;
+  /* THE SEAL — the trip is one-way from the button. Until it is
+     pressed the reader may scroll back up from the name to the galaxy
+     (the burst rewinds, scroll-driven). On the press the sky is
+     frozen at its finished state and the approach and burst sections
+     are collapsed (.is-sealed, galaxy.css), so the page is exactly
+     one screen tall and there is nothing above to scroll back to.
+     readScroll() stops reading; the browser's own scroll bound does
+     the rest, the same way the gate below works. */
+  // Reduced motion: no burst, the name is simply there — and so is
+  // the profile below it.
+  if (reduceMotion) document.documentElement.classList.add('is-written');
+  let sealed = false;
+  function seal() {
+    if (sealed) return;
+    sealed = true;
+    zoomT = 1; rewindTarget = 1; burstFired = true;
+    document.documentElement.classList.add('is-sealed');
+    window.scrollTo(0, 0);
+  }
+  /* The take-off: releaseClock runs from the press (see the launch
+     handler at the end), and onLiftOff is called once by the frame
+     loop when the letters have all let go. */
+  let releaseClock = null, onLiftOff = null;
+  /* The name SCROLLS: once written, the page continues below it into
+     the profile (who Ali is, the numbers, the button). The star name
+     is drawn on the fixed canvas, so it is moved by uNameShift, and
+     the HTML around it (hello, quote, links) by --name-scroll, both
+     from nameShiftPx = how far the page is past the name screen.
+     On the press the profile fades (--leave) and the name glides back
+     to the centre (LEAVE_MS) before its letters let go. */
+  const LEAVE_MS = 800, LEAVE_FADE_MS = 420, RELEASE_AFTER = 0.7;
+  let nameShiftPx = 0, nameScreenY = 0, leaving = null, lastShift = -1, lastLeave = -1;
+  const burstSection = document.getElementById('burst');
+  function measureNameScreen() {
+    // The scroll at which the name screen is exactly in view: the end
+    // of #burst at the bottom of the viewport.
+    if (burstSection && !sealed) nameScreenY = burstSection.offsetTop + burstSection.offsetHeight - window.innerHeight;
+  }
+  measureNameScreen();
+  window.addEventListener('resize', measureNameScreen, { passive: true });
+  function stepNameShift(now) {
+    if (leaving) {
+      const u = Math.min(1, (now - leaving.t0) / LEAVE_MS);
+      const e = 1 - Math.pow(1 - u, 3);
+      nameShiftPx = leaving.from * (1 - e);
+      const lv = Math.min(1, (now - leaving.t0) / LEAVE_FADE_MS);
+      if (lv !== lastLeave) { lastLeave = lv; document.documentElement.style.setProperty('--leave', lv.toFixed(3)); }
+    } else nameShiftPx = sealed ? 0 : Math.max(0, window.scrollY - nameScreenY);
+    const q = Math.round(nameShiftPx * 2) / 2;
+    if (q !== lastShift) {
+      lastShift = q;
+      const r = document.documentElement.style;
+      r.setProperty('--name-scroll', q + 'px');
+      r.setProperty('--name-scroll-n', (q / Math.max(1, window.innerHeight)).toFixed(4));
+    }
+  }
   // Smoothed values the renderer actually uses, so a flick of the wheel
   // glides instead of snapping.
   let zoom = 0, burst = 0;
-  let lastPublishedDrift = NaN, lastPublishedGlow = NaN;
-  let lastPublishedZoom = NaN;
   let lastPublishedBurst = NaN, lastPublishedName = NaN;
+  let lastPublishedRelease = NaN;
   let lastPublishedKoaik = NaN;
   let swallowFeed = 0, coreGlow = 0;
   let leanX = 0, leanY = 0;
@@ -1542,6 +1991,7 @@
      Each stage's progress is derived here so the renderer only reads
      smooth 0..1 values and never has to know about pixels. */
   function readScroll() {
+    if (sealed) return;                 // frozen at the finished sky
     const h = window.innerHeight || 1;
     const y = window.scrollY;
     scrollProgress = Math.min(1, Math.max(0, y / h));
@@ -1567,20 +2017,21 @@
     // clock — scrubbing an explosion back and forth with the wheel
     // robs it of any impact, and it should not need continued
     // scrolling to finish.
-    const pastTrigger = y / h >= config.BURST_TRIGGER;
-
-    if (!burstFired && pastTrigger) {
+    const pos = y / h;
+    if (!burstFired && pos >= config.BURST_TRIGGER) {
       burstFired = true;
-      burstClock = 0;
-    } else if (burstFired && y / h < config.BURST_TRIGGER - config.BURST_HYSTERESIS) {
-      // Scrolling back above the trigger reassembles the galaxy, so the
-      // sequence can be watched again. The hysteresis band matters: a
-      // bare threshold would re-fire every frame while the user hovers
-      // exactly on it, strobing the explosion.
+      /* Resume from wherever the reverse left it rather than from 0.
+         Resetting the clock mid-way snapped burst to ~0 on the next
+         frame and teleported every star back into the disc. */
+      burstClock = burst * config.BURST_DURATION;
+    } else if (burstFired && pos < config.BURST_TRIGGER - config.BURST_HYSTERESIS) {
       burstFired = false;
-      burstClock = 0;
     }
-
+    // Where the reverse wants `burst` for this scroll position: 1 at
+    // the trigger, 0 a REWIND_SPAN above it. The frame loop only ever
+    // moves burst DOWN toward this — going up is the burst's own job.
+    rewindTarget = Math.min(1, Math.max(0,
+      (pos - (config.BURST_TRIGGER - config.BURST_REWIND_SPAN)) / config.BURST_REWIND_SPAN));
     targetDrift = (1 - Math.pow(1 - scrollProgress, 2)) * config.SCROLL_DRIFT;
   }
   window.addEventListener('scroll', readScroll, { passive: true });
@@ -1591,6 +2042,7 @@
   let wakeAx = 0, wakeAy = 0, wakeBx = 0, wakeBy = 0;
   let wakeDirX = 0, wakeDirY = 0, wakeEnergy = 0;
   const _a = [0, 0], _b = [0, 0];
+
 
   /* Screen point -> disc plane. This has to mirror the vertex shader's
      projection exactly, including the camera push and the live tilt —
@@ -1649,10 +2101,25 @@
        frame, so there is nothing to recompute — we simply leave the
        buffers alone.
 
-       Reversal is handled for free: scrolling back up drives burst
+       Reversal then costs nothing: scrolling back up drives burst
        below the threshold and the simulation picks up exactly where it
-       was parked, with no discontinuity. */
+       was parked — provided nothing the positions depend on moved in
+       the meantime, which is why patternAngle advances below this
+       line and nowhere else. */
     if (burst >= config.BURST_FREEZE) return;
+
+    /* The pattern rotation is simulation state and advances ONLY when
+       the simulation does. It used to tick in the frame loop
+       unconditionally, so it kept turning for the whole time the
+       field was parked as the name — and every star's position is
+       cos/sin(angle + patternAngle), rebuilt from scratch each step,
+       not integrated. On the way back, the frame the sim thawed it
+       rebuilt the disc with all that accumulated rotation at once:
+       0.070 rad/s over a 10s read is a 60 deg snap of the whole
+       galaxy, right as the last stars settled. Advancing it here
+       makes the thaw exactly continuous, and keeps the dust (which
+       reads uPattern) aligned with the stars as it fades back in. */
+    patternAngle += config.PATTERN_SPEED * dt;
 
     swallowFeed = 0;
     const pr2 = config.PUSH_RADIUS * config.PUSH_RADIUS;
@@ -1816,11 +2283,13 @@
     // ── Dust at half resolution, into its own buffer ──
     // Skipped once the burst has dissolved it: this is the most
     // expensive pass in the frame and adds nothing after that point.
-    const dustVisible = burst * config.DUST_FADE < 1.0;
+    const dustVisible = config.DUST && burst * config.DUST_FADE < 1.0;
     gl.disable(gl.BLEND);
-    bindTarget(dustRT);
-    gl.clear(gl.COLOR_BUFFER_BIT);
     if (dustVisible) {
+    bindTarget(dustRT);
+    gl.clearColor(0, 0, 0, 0);            // alpha is optical depth: none
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.clearColor(0, 0, 0, 1);
     gl.useProgram(dustProg.p);
     gl.uniform2f(dustProg.u.uRes, dustRT.w, dustRT.h);
     gl.uniform1f(dustProg.u.uTime, time);
@@ -1837,6 +2306,13 @@
     gl.uniform1f(dustProg.u.uDensity,
                  config.DUST_DENSITY * Math.max(0, 1 - burst * config.DUST_FADE));
     gl.uniform1i(dustProg.u.uSteps, config.DUST_STEPS);
+    gl.uniform1f(dustProg.u.uArmSpread, config.ARM_SPREAD);
+    gl.uniform1f(dustProg.u.uArmBias, config.ARM_BIAS);
+    gl.uniform1f(dustProg.u.uDustOffset, config.DUST_OFFSET);
+    gl.uniform1f(dustProg.u.uDustWidth, config.DUST_WIDTH);
+    gl.uniform1f(dustProg.u.uBulgeRadius, config.BULGE_RADIUS);
+    gl.uniform1f(dustProg.u.uBulgeGlow, config.BULGE_GLOW);
+    gl.uniform1f(dustProg.u.uAbsorb, config.DUST_ABSORB);
     gl.uniform1f(dustProg.u.uArms, config.ARMS);
     gl.uniform1f(dustProg.u.uTightness, config.ARM_TIGHTNESS);
     gl.uniform1f(dustProg.u.uArmStart, config.ARM_START);
@@ -1845,32 +2321,14 @@
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     }
 
-    // Composite the dust up into the scene, then continue additively.
+    /* Back to the scene, additively. The order from here is what
+       lets the lanes read as lanes: the half of the field BEHIND the
+       disc plane goes down first, then the dust darkens everything so
+       far (sky included) and adds its own glow, then the near half of
+       the field goes on top, unabsorbed. */
     bindTarget(sceneRT);
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.ONE, gl.ONE);
-    gl.useProgram(upsampleProg.p);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, dustRT.tex);
-    gl.uniform1i(upsampleProg.u.uSrc, 0);
-    gl.bindVertexArray(quadVAO);
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
-
-    gl.useProgram(meteorProg.p);
-    gl.bindVertexArray(meteorVAO);
-    gl.uniform1f(meteorProg.u.uAspect, aspect);
-    for (const m of meteors) {
-      if (!m.active) continue;
-      const prog = m.t / m.dur;
-      const travel = prog * m.speed;
-      gl.uniform2f(meteorProg.u.uStart, m.x + m.dx * travel, m.y + m.dy * travel);
-      gl.uniform2f(meteorProg.u.uDir, m.dx, m.dy);
-      gl.uniform1f(meteorProg.u.uLen, m.len);
-      gl.uniform1f(meteorProg.u.uWidth, m.w);
-      gl.uniform1f(meteorProg.u.uFade, Math.sin(Math.min(1, prog) * Math.PI) * 2.4);
-      gl.uniform3fv(meteorProg.u.uColor, m.col);
-      gl.drawArrays(gl.TRIANGLES, 0, 6);
-    }
 
     gl.useProgram(starProg.p);
     gl.bindVertexArray(starVAO);
@@ -1881,6 +2339,8 @@
     if (tintDirty) {
       gl.bindBuffer(gl.ARRAY_BUFFER, tintBuf);
       gl.bufferSubData(gl.ARRAY_BUFFER, 0, tintArr);
+      gl.bindBuffer(gl.ARRAY_BUFFER, kindBuf);   // set alongside the tint
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, kindArr);
       tintDirty = false;
     }
     if (nameDirty) uploadNameTargets();
@@ -1898,7 +2358,64 @@
     gl.uniform1f(starProg.u.uZoom, effectiveZoom());
     gl.uniform1f(starProg.u.uZoomPush, config.ZOOM_PUSH);
     gl.uniform1f(starProg.u.uBurst, burst);
-    gl.drawArrays(gl.POINTS, 0, N);
+    gl.uniform1f(starProg.u.uRelease, release);
+    if (starProg.u.uNameShift) gl.uniform1f(starProg.u.uNameShift, 2 * nameShiftPx / Math.max(1, window.innerHeight));
+    gl.uniform1f(starProg.u.uPattern, patternAngle);
+
+    const drawStars = half => {
+      gl.useProgram(starProg.p);
+      gl.uniform1f(starProg.u.uHalf, half);
+      // The field has fully dissolved by burst 0.55; skip it after.
+      if (burst < 0.55) {
+        gl.bindVertexArray(fieldVAO);
+        // The offsets simulateField wrote this frame.
+        gl.bindBuffer(gl.ARRAY_BUFFER, fieldOff[fieldCur]);
+        gl.enableVertexAttribArray(6);
+        gl.vertexAttribPointer(6, 3, gl.FLOAT, false, 0, 0);
+        gl.uniform1f(starProg.u.uMigrate, 0);
+        gl.drawArrays(gl.POINTS, 0, F);
+      }
+      gl.bindVertexArray(starVAO);
+      gl.uniform1f(starProg.u.uMigrate, 1);
+      gl.drawArrays(gl.POINTS, 0, N);
+    };
+    const dustPass = prog => {
+      gl.useProgram(prog.p);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, dustRT.tex);
+      gl.uniform1i(prog.u.uSrc, 0);
+      gl.bindVertexArray(quadVAO);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    };
+
+    if (dustVisible) {
+      drawStars(-1);
+      gl.blendFunc(gl.ZERO, gl.SRC_COLOR);
+      gl.useProgram(dustAbsorbProg.p);
+      gl.uniform3fv(dustAbsorbProg.u.uExt, config.DUST_TINT);
+      dustPass(dustAbsorbProg);
+      gl.blendFunc(gl.ONE, gl.ONE);
+      dustPass(upsampleProg);
+      drawStars(1);
+    } else {
+      drawStars(0);
+    }
+
+    gl.useProgram(meteorProg.p);
+    gl.bindVertexArray(meteorVAO);
+    gl.uniform1f(meteorProg.u.uAspect, aspect);
+    for (const m of meteors) {
+      if (!m.active) continue;
+      const prog = m.t / m.dur;
+      const travel = prog * m.speed;
+      gl.uniform2f(meteorProg.u.uStart, m.x + m.dx * travel, m.y + m.dy * travel);
+      gl.uniform2f(meteorProg.u.uDir, m.dx, m.dy);
+      gl.uniform1f(meteorProg.u.uLen, m.len);
+      gl.uniform1f(meteorProg.u.uWidth, m.w);
+      gl.uniform1f(meteorProg.u.uFade, Math.sin(Math.min(1, prog) * Math.PI) * 2.4);
+      gl.uniform3fv(meteorProg.u.uColor, m.col);
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+    }
 
     /* 2. bright pass */
     gl.disable(gl.BLEND);
@@ -1959,36 +2476,6 @@
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.bindVertexArray(null);
 
-    /* publish nucleus position + feeding glow for the CSS corona */
-    if (driftX !== lastPublishedDrift) {
-      lastPublishedDrift = driftX;
-      const ndcX = (driftX * scale / CAM_DIST) / aspect;
-      document.documentElement.style.setProperty(
-        '--nucleus-x', (ndcX * 50).toFixed(3) + 'vw');
-    }
-    /* The corona is a CSS circle of fixed size, but the rendered
-       nucleus grows with the approach — without this the glow detached
-       and sat as a small blob inside a much larger core. Quantised so
-       it only writes on real change. */
-    // effectiveZoom(), not zoom: the corona tracks the rendered
-    // nucleus, so it has to shrink with the camera when the burst
-    // pulls back. Publishing raw `zoom` left a large glow hanging
-    // over a galaxy that had already receded.
-    const zq = Math.round(effectiveZoom() * 50) / 50;
-    if (zq !== lastPublishedZoom) {
-      lastPublishedZoom = zq;
-      document.documentElement.style.setProperty('--zoom', zq.toFixed(2));
-    }
-
-    const gq = Math.round(coreGlow * 50) / 50;
-    if (gq !== lastPublishedGlow) {
-      lastPublishedGlow = gq;
-      document.documentElement.style.setProperty('--core-glow', gq.toFixed(2));
-    }
-
-    /* The corona has to go out with the galaxy. It is a CSS glow with
-       no knowledge of the burst, so without this it stays lit over an
-       empty sky — a bright halo around nothing. */
     /* ── The name arrives in two beats ──
        Both words are now written by the stars as one string, so the
        two tokens no longer mean "Ali" and "Koaik". They mean:
@@ -2005,23 +2492,35 @@
        here and read in galaxy.css, and renaming them buys nothing but
        a chance to miss one. */
     const aliT = smooth01(Math.max(0, (burst - 0.62) / 0.26));
-    const aq = Math.round(aliT * 50) / 50;
+    const aq = Math.round(aliT * 500) / 500;
     if (aq !== lastPublishedName) {
       lastPublishedName = aq;
-      document.documentElement.style.setProperty('--name-ali', aq.toFixed(2));
+      document.documentElement.style.setProperty('--name-ali', aq.toFixed(3));
     }
 
     const koaikT = smooth01(Math.max(0, (burst - 0.86) / 0.14));
-    const kq = Math.round(koaikT * 50) / 50;
+    const kq = Math.round(koaikT * 500) / 500;
     if (kq !== lastPublishedKoaik) {
       lastPublishedKoaik = kq;
-      document.documentElement.style.setProperty('--name-koaik', kq.toFixed(2));
+      document.documentElement.style.setProperty('--name-koaik', kq.toFixed(3));
+      // .is-written: the name is complete; the launch layer becomes
+      // visible (its opacity rides --name-koaik, this gates the box).
+      document.documentElement.classList.toggle('is-written', kq >= 0.999 || reduceMotion);
     }
 
-    const bq = Math.round(burst * 50) / 50;
+    const bq = Math.round(burst * 500) / 500;
     if (bq !== lastPublishedBurst) {
       lastPublishedBurst = bq;
-      document.documentElement.style.setProperty('--burst', bq.toFixed(2));
+      document.documentElement.style.setProperty('--burst', bq.toFixed(3));
+    }
+
+    /* --release fades the name block out as the stars leave it, and
+       .is-released lets whatever follows take the pointer. */
+    const rq = Math.round(release * 500) / 500;
+    if (rq !== lastPublishedRelease) {
+      lastPublishedRelease = rq;
+      document.documentElement.style.setProperty('--release', rq.toFixed(3));
+      document.documentElement.classList.toggle('is-released', rq > 0.5);
     }
   }
 
@@ -2041,26 +2540,37 @@
     resize();
 
     if (reduceMotion) {
+      stepNameShift(performance.now());
       draw(0);
       requestAnimationFrame(frame);
       return;
     }
 
-    patternAngle += config.PATTERN_SPEED * dt;
     driftX += (targetDrift - driftX) * Math.min(1, dt * 4.5);
     // Ease the scroll-driven stages so a flick of the wheel glides.
     zoom   += (zoomT   - zoom)   * Math.min(1, dt * 4.0);
-    // The burst plays on its own timeline once fired, and rewinds when
-    // it is un-fired — faster on the way back, since a reversed
-    // explosion is a transition rather than the main event.
+    // The burst plays on its own timeline once fired. Un-fired, it
+    // tracks the scroll-derived target back down (never up), eased
+    // just enough that wheel steps do not show as jumps.
     if (burstFired) {
       if (burst < 1) {
         burstClock += dt;
         burst = Math.min(1, burstClock / config.BURST_DURATION);
       }
-    } else if (burst > 0) {
-      burst = Math.max(0, burst - dt / config.BURST_REWIND);
+    } else if (burst > rewindTarget) {
+      burst += (rewindTarget - burst) * Math.min(1, dt * config.BURST_REWIND_EASE);
+      if (burst - rewindTarget < 0.001) burst = rewindTarget;
     }
+    // The release is the take-off, timed from the press.
+    stepNameShift(performance.now());
+    if (releaseClock !== null) {
+      releaseClock += dt;
+      releaseT = smooth01(Math.max(0, releaseClock) / config.RELEASE_TIME);
+    }
+    const releaseGoal = releaseT * smooth01((burst - 0.90) / 0.10);
+    release += (releaseGoal - release) * Math.min(1, dt * 6.0);
+    // The letters have let go: hand over to the warp, once.
+    if (onLiftOff && release >= 0.985) { const f = onLiftOff; onLiftOff = null; f(); }
     leanX += (pointerX - leanX) * Math.min(1, dt * 2.5);
     leanY += (pointerY - leanY) * Math.min(1, dt * 2.5);
 
@@ -2075,6 +2585,7 @@
 
     updateWake(dt);
     simulate(dt);
+    simulateField(dt);
 
     // The core flares as it feeds: rises fast, settles slower.
     const feed = Math.min(1, Math.max(0,
@@ -2168,56 +2679,59 @@
   /* ============================================================
      LAUNCH — "press here to start the trip"
      ============================================================
-     The CTA flies the page to just past BURST_TRIGGER, which is what
-     detonates the galaxy. Native smooth scrolling is not used: its
-     duration is fixed by the browser and is far too brisk over the
-     ~2.6 viewport heights involved, so the approach flicks past
-     instead of reading as a journey. This eases it by hand over a
-     duration proportional to the distance left.
+     The button is the only way into the trip. Once the stars have
+     written the name, the page continues below it into the profile
+     (galaxy.html #profile: who Ali is, the numbers, the schools), and
+     the button is at the end of that. The system is display:none
+     until it is pressed; until then the reader may also scroll back
+     up to the galaxy. Pressing it
 
-     It also cooperates with a reader who takes over: any wheel,
-     touch or key input cancels the flight mid-way rather than
-     fighting the user for the scroll position. */
+       1. locks the page (.is-leaving) and fades the profile (--leave)
+          while the name glides back down to the centre (LEAVE_MS);
+       2. seals the page once the profile is invisible, and lets the
+          letters go (the release, RELEASE_TIME, RELEASE_AFTER in);
+       3. once they have gone, marks the document .is-launched (the
+          system exists, the hero and profile collapse) and hands over
+          to warp.js, whose sequence streaks the stars past at light
+          speed and lands on Koaik.
+
+     Under reduced motion there is no glide, release or warp: straight
+     to the system. Without warp.js the page simply arrives. */
   const launchBtn = document.getElementById('launchBtn');
   if (launchBtn) {
-    let flying = false;
-
-    const cancelFlight = () => { flying = false; };
-
     launchBtn.addEventListener('click', () => {
-      if (flying) return;
-      const h = window.innerHeight || 1;
-      // A little past the trigger, so the burst is certain to fire.
-      const target = (config.BURST_TRIGGER + 0.06) * h;
-      const from = window.scrollY;
-      const dist = target - from;
-      if (dist <= 0) return;
-
-      /* ~950ms per viewport height travelled, clamped so a short hop
-         is not sluggish and a long one does not overstay. */
-      const dur = Math.max(1200, Math.min(3200, (dist / h) * 950));
-      const t0 = performance.now();
-      flying = true;
-
-      /* easeInOutCubic: the ship accelerates away from rest and
-         settles at the far end, which is the shape of a launch. */
-      const ease = t => t < 0.5
-        ? 4 * t * t * t
-        : 1 - Math.pow(-2 * t + 2, 3) / 2;
-
-      const step = now => {
-        if (!flying) return;
-        const p = Math.min(1, (now - t0) / dur);
-        window.scrollTo(0, from + dist * ease(p));
-        if (p < 1) requestAnimationFrame(step);
-        else flying = false;
+      if (launched) return;
+      launched = true;
+      const root = document.documentElement;
+      root.classList.add('is-leaving');          // scroll locked; the profile fades on --leave
+      /* .is-launched makes the planet exist AND collapses the hero and
+         the profile (galaxy.css), so the planet's top is the top of
+         the page. Shrinking the document makes the browser clamp
+         scrollY to the new END, so it is put back to 0 explicitly. */
+      const liftOff = () => {
+        root.classList.add('is-launched');
+        window.scrollTo(0, 0);
+        if (window.warpSequence) window.warpSequence.start();
+        else root.classList.add('is-arrived');   // no warp: the page simply arrives
       };
-      requestAnimationFrame(step);
+      if (reduceMotion) {
+        // No glide, no release and no warp under reduced motion:
+        // straight to the system.
+        seal();
+        root.classList.add('is-launched', 'is-arrived');
+        window.scrollTo(0, 0);
+        return;
+      }
+      /* The leave: the profile fades (LEAVE_FADE_MS) while the name
+         glides back down to the centre (LEAVE_MS); the page is sealed
+         once the profile is invisible, so its scroll jump is unseen;
+         the letters let go RELEASE_AFTER seconds in, and the frame
+         loop calls liftOff once the release has played. */
+      leaving = { t0: performance.now(), from: nameShiftPx };
+      setTimeout(seal, LEAVE_FADE_MS + 20);
+      releaseClock = -RELEASE_AFTER;
+      onLiftOff = liftOff;
     });
-
-    /* passive: these only ever cancel; they never block the gesture. */
-    ['wheel', 'touchstart', 'keydown'].forEach(evt =>
-      window.addEventListener(evt, cancelFlight, { passive: true }));
   }
 
   paintOnce();

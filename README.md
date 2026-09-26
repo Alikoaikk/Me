@@ -31,8 +31,10 @@ to view the site locally.
 ├── Makefile
 ├── README.md
 ├── docs/
-│   └── ARCHITECTURE.md # how the pages, data and renderers fit together
+│   ├── ARCHITECTURE.md # how the pages, data and renderers fit together
+│   └── USER-STORY.md   # the experience scene by scene: what moves, who drives
 ├── assets/             # non-served source material (currently empty)
+├── tools/render/       # headless render + A/B harness (dev only, see its README)
 └── src/                # everything the site serves
     ├── index.html      # main page — sections injected by js/main.js
     ├── projects.html   # standalone projects page, own inline script
@@ -43,6 +45,12 @@ to view the site locally.
     └── js/
         ├── data.js     # single source of truth for all content
         ├── main.js     # renders index.html
+        ├── warp.js     # launch sequence: 3D ship, light-speed streaks, landing
+        ├── profile.js  # the name screen's links and the profile below it (who Ali is, the numbers)
+        ├── hud.js      # the system's text: caption, pilot chip, hint, the panel, the fallback
+        ├── system.js   # the Koaik system: three.js scene, Koaik's generated world, camera rig, controls, picking (ES module)
+        ├── emblems.js  # each project as a living 3D model of itself: push_swap sorting, cub3D raycasting… (ES module)
+        ├── vendor/three/ # three.js r186 (MIT): core, module, OrbitControls — see its README
         ├── galaxy/
         │   ├── galaxy.js        # WebGL2 HDR galaxy
         │   └── galaxy.legacy.js # WebGL1 fallback, loaded at runtime

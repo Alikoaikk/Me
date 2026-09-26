@@ -5,11 +5,25 @@ const portfolioData = {
     email: "alikoaik004@gmail.com",
     status: "Open to opportunities",
     degree: "B.Sc. Computer Science",
+    /* The pilot's portrait on the orbital dashboard (galaxy.html).
+       Drop the photo at src/assets/portrait.jpg; until it exists the
+       dashboard shows the initials instead. */
+    photo: "assets/portrait.jpg",
+    /* One line for the dashboard; the full story is `bio` below. */
+    brief: "Computer Science student in Lebanon, at USAL and 42 Beirut. Low-level programming, systems design, and building things from scratch.",
     bio: [
       "Computer Science student based in Lebanon, studying at both the University of Science and Arts in Lebanon and 42 Beirut — a project-based, peer-to-peer coding school known for its intensive curriculum.",
       "Passionate about low-level programming, systems design, and building things from scratch. Deep interest in memory management in C, multithreading, and shell pipelines. Also explores Python applications and web development.",
       "Believes great software is built with curiosity, persistence, and clean code. Always looking for new challenges that push growth."
     ]
+  },
+
+  /* The world the trip arrives at — the star of the system (system.js
+     draws it; galaxy.html captions it). Generated, not a real place. */
+  planet: {
+    name: "Koaik",
+    caption: "Ali's own world",
+    hint: ""     /* nothing follows the dashboard yet; a hint here shows a chevron under it */
   },
 
   socials: {
