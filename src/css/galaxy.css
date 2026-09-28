@@ -778,6 +778,22 @@
   color: var(--j-text);
   font-family: 'Space Grotesk', system-ui, sans-serif;
 }
+/* The system IS the window: pinned to the viewport edge to edge, so
+   the browser's borders are the only frame. The :not()s beat
+   style.css's `section:not(#hero):not(#contact)` (2,0,1), which
+   capped this section at 1200px, centred and padded — on a wider
+   window the system was clipped at that box. Fixed, not 100vh: on
+   phones 100vh is taller than the visible area (the toolbar). The
+   page behind is one screen after the launch, so nothing scrolls. */
+:root.is-launched #planet:not(#hero):not(#contact):not(.planet--css) {
+  position: fixed;
+  inset: 0;
+  width: auto;
+  height: auto;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
 .planet canvas#planetCanvas {
   position: absolute;
   inset: 0;

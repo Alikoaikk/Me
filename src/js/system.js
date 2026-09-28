@@ -664,7 +664,11 @@ import { makeEmblem } from './emblems.js';
         const d = Math.max(28, markR * 2 + 18);
         reticle.style.display = '';
         reticle.style.width = reticle.style.height = d.toFixed(0) + 'px';
-        reticle.style.transform = `translate(${markX.toFixed(1)}px, ${markY.toFixed(1)}px) translate(-50%, -50%)`;
+        // Placed by left/top, NOT transform: the CSS `rotate` that turns it
+        // composes on top of `transform`, so a translate there would be
+        // rotated too and swing the ring round the layer's corner.
+        reticle.style.left = (markX - d / 2).toFixed(1) + 'px';
+        reticle.style.top = (markY - d / 2).toFixed(1) + 'px';
         reticle.classList.toggle('is-locked', focus !== null);
       } else reticle.style.display = 'none';
     }
@@ -1008,14 +1012,20 @@ import { makeEmblem } from './emblems.js';
   const keys = new Set();
   const vel = new THREE.Vector3();
   let boost = false;
+  /* By PHYSICAL key (e.code), so WASD/QE sit in the same place on any
+     layout: e.key is 'ي' for D on Arabic, 'q' for A on AZERTY… */
+  const FLY_CODES = { KeyW: 'w', KeyA: 'a', KeyS: 's', KeyD: 'd', KeyQ: 'q', KeyE: 'e',
+    ArrowUp: 'arrowup', ArrowDown: 'arrowdown', ArrowLeft: 'arrowleft', ArrowRight: 'arrowright' };
+  const flyKey = e => FLY_CODES[e.code] || null;
   window.addEventListener('keydown', e => {
     if (!ready || (e.target && e.target.closest && e.target.closest('input, textarea, [contenteditable]'))) return;
     if (e.key === 'Escape') { if (focus !== null) overview(); return; }
     if (e.key === 'Shift') { boost = true; return; }
-    const k = e.key.toLowerCase();
-    if (['w', 'a', 's', 'd', 'q', 'e', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) { keys.add(k); e.preventDefault(); lastTouch = performance.now(); controls.autoRotate = false; }
+    if (e.metaKey || e.ctrlKey || e.altKey) return;   // browser shortcuts; macOS also drops the keyup of a key released under Cmd
+    const k = flyKey(e);
+    if (k) { keys.add(k); e.preventDefault(); lastTouch = performance.now(); controls.autoRotate = false; }
   });
-  window.addEventListener('keyup', e => { if (e.key === 'Shift') boost = false; keys.delete(e.key.toLowerCase()); });
+  window.addEventListener('keyup', e => { if (e.key === 'Shift') boost = false; const k = flyKey(e); if (k) keys.delete(k); });
   window.addEventListener('blur', () => { keys.clear(); boost = false; });
   const _f = new THREE.Vector3(), _r = new THREE.Vector3(), _u = new THREE.Vector3(0, 1, 0), _acc = new THREE.Vector3();
   function stepKeys(dt) {
