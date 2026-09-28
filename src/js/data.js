@@ -22,7 +22,7 @@ const portfolioData = {
      draws it; galaxy.html captions it). Generated, not a real place. */
   planet: {
     name: "Koaik",
-    caption: "Ali's own world",
+    caption: "A mini black hole at the heart of it all",
     hint: ""     /* nothing follows the dashboard yet; a hint here shows a chevron under it */
   },
 

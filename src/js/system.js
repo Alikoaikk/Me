@@ -1,25 +1,24 @@
 /* ============================================================
    THE KOAIK SYSTEM — the destination, and the portfolio as space
    ------------------------------------------------------------
-   The warp lands the reader above Koaik (Ali's own world). The camera
-   then pulls back and Koaik turns out to be the star of a system:
-   every finished project is a planet on its own orbit around it. The
-   reader can move through the system — drag to orbit, scroll or pinch
-   to zoom, arrow keys / WASD to fly — hover a planet for its name, and
-   click or tap one to fly to it and open its panel (hud.js). Clicking
-   Koaik opens the pilot's card.
+   The warp lands the reader beside Koaik: a MINI black hole, its
+   shadow ringed by a hot accretion disk and the far side of that disk
+   lensed over and under it. The camera pulls back and Koaik turns out
+   to be the heart of a system: every finished project is a living
+   model of itself (emblems.js) on its own orbit around it. The reader
+   can move through the system — drag to orbit, scroll or pinch to
+   zoom, arrow keys / WASD to fly — hover a project for its name, and
+   click or tap one to fly to it and open its panel (hud.js).
+   Clicking Koaik COLLAPSES the system: every project spirals in and is
+   swallowed, the hole implodes and flashes, and a beat later the
+   system is born again out of it. The pilot's card opens from the
+   chip in the corner (select('pilot')).
 
    three.js (vendored, js/vendor/three) does the scene, the camera,
-   the controls and the picking. Every world is GENERATED: no image
-   files. Two bake passes per body write an equirectangular surface
-   (colour + altitude) and an aux map (slopes, clouds, lights) from 3D
-   simplex noise, parameterised by a LOOK — sea level, palette, caps,
-   clouds, glow, gas banding — so nine projects give nine different
-   planets from one shader. Per frame each body is a textured sphere
-   with relief, drifting clouds and their shadows, a glint on liquid,
-   lights (or lava) on the night side, an atmosphere rim; Koaik also
-   wears a corona. The galaxy canvas stays fixed underneath as the
-   sky: this canvas is transparent.
+   the controls and the picking. Nothing is an image file: the hole
+   and its disk are shaders (simplex noise), the projects are built
+   geometry and canvases. The galaxy canvas stays fixed underneath as
+   the sky: this canvas is transparent, except for the hole's shadow.
 
    Entry points for the launch sequence (warp.js):
      window.koaik.arm()     hold Koaik at scale 0, unseen; bake
@@ -51,22 +50,16 @@ import { makeEmblem } from './emblems.js';
   const projects = Array.isArray(data.projects) ? data.projects : [];
 
   const config = {
-    /* Koaik. Three numbers pick everything about it. */
-    SEED:       [3.7, 11.2, 5.9],
-    SUN_R:      1.0,                    // world units; everything is scaled to this
-    BAKE_W:     2048,                   // Koaik's map width (POT); height is half
-    BUMP:       0.075,                  // relief strength
-    CLOUD_DRIFT: 0.18,                  // cloud layer's extra spin, fraction of the spin
-    TILT:       21 * Math.PI / 180,
-    SPIN:       0.07,                   // rad/s, Koaik
-    HALO:       1.45,                   // corona quad radius, in radii
-    HALO_COLOR: [0.85, 0.78, 0.62],     // warm: this world is the star of the system
-    HALO_STRENGTH: 0.9,
+    /* Koaik: a MINI black hole, smaller than the projects around it. */
+    BH_R:       0.20,                   // the shadow's radius, world units
+    BH_DISK_IN: 1.45,                   // accretion disk, in shadow radii
+    BH_DISK_OUT: 4.3,
+    MIN_NEAR:   0.35,                   // closest the camera may get to anything, world units
 
     /* The camera. */
     FOV:        45,                     // degrees
-    FILL:       0.72,                   // arrival: Koaik's diameter / limiting viewport dimension
-    RAISE:      0.05,                   // arrival: Koaik above the middle, in view heights
+    FILL:       0.72,                   // arrival: the disk's diameter / limiting viewport dimension
+    ARRIVE_EL:  13 * Math.PI / 180,     // arrival: just above the disk, so it reads as a disk
     REVEAL_MS:  2000,
     PULLBACK_DELAY_MS: 450,             // after the reveal: a beat on the world alone
     PULLBACK_MS: 3400,                  // the swoop out to the overview
@@ -86,7 +79,7 @@ import { makeEmblem } from './emblems.js';
     RIG_CARD_AT: 0.75,                  // open the card at this fraction of the way
     FRAME_SHIFT: 0.34,                  // smooth time of the re-framing when the card opens / closes
     FOCUS_DIST: 5.0,                    // planet view: distance in planet radii
-    FOCUS_DIST_SUN: 3.1,
+    FOCUS_DIST_SUN: 7.5,                // in Koaik's `radius` (the lensed arc), so the whole disk fits
     FOCUS_FILL_PORTRAIT: 0.62,          // planet view on a tall screen: body diameter / screen width, at most
     SUNWARD:    0.55,                   // planet view: how far toward the lit side the camera swings
     LET_GO:     14,                     // zooming out past this many radii releases a focused planet
@@ -107,19 +100,20 @@ import { makeEmblem } from './emblems.js';
     DETAIL_PX:  26,                     // below this on-screen radius, skip canvas redraws
     PERIOD_0:   48,                     // seconds for the innermost; Kepler (r^1.5) beyond
 
-    SEGMENTS:   96,
-    RINGS:      64,
-  };
 
-  /* ── Koaik's look ──  (the projects are emblems: see emblems.js)
-     Colours are sRGB 0..1 (the bake writes them; the globe shader
-     linearises). sea: below this noise height is liquid; base: where
-     land altitude starts (so a dry world can have no sea but normal
-     hills); cap: polar caps; cloud: 1 = Koaik's cover; glow: night
-     lights (or lava) colour and strength; rim: atmosphere colour;
-     band: 1 = gas giant (bands instead of terrain). */
-  const LOOKS = {
-    terra:  { sea: 0.035, base: 0.035, shelf: [.16,.47,.62], deep: [.035,.12,.34], sand: [.80,.72,.50], grass: [.24,.42,.17], forest: [.12,.30,.12], dry: [.62,.50,.30], rock: [.42,.38,.33], snow: [.93,.95,.97], cap: [.90,.94,.98], capAmt: 1, cloud: 1, glow: [1,.80,.50], glowAmt: 2.4, rim: [.30,.56,1.0], spec: 1 },
+    /* The collapse (click Koaik): every project spirals in, is
+       stretched and swallowed, inner first; the hole implodes, flashes,
+       and a beat later the system is born again from it, inner first.
+       Seconds. */
+    FALL_START: 0.15,                   // first project starts falling
+    FALL_STAGGER: 0.11,                 // next one this much later
+    FALL_DUR:   1.5,                    // one project's fall (+0.07 per orbit out)
+    IMPLODE:    0.55,                   // after the last is in: the hole shrinks to a point, then the flash
+    DARK:       0.7,                    // flash to rebirth
+    REBORN:     1.0,                    // the hole grows back
+    RISE_DELAY: 0.3,                    // then the projects spiral out
+    RISE_DUR:   1.7,
+    SWIRL_MAX:  14,                     // rad/s cap on the extra spin of a falling project
   };
 
   /* ── Shaders ── */
@@ -173,227 +167,104 @@ import { makeEmblem } from './emblems.js';
       return 42.0 * dot(m * m, vec4(dot(p0, x0), dot(p1, x1), dot(p2, x2), dot(p3, x3)));
     }`;
 
-  const QUAD_VS = `
-    varying vec2 vUv;
-    void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
-
-  /* Shared by both bake passes: the map's uv -> a unit direction, and
-     the terrain. The uv convention MUST match the sphere's (see
-     makeSphere below and the tangents in the globe shader). */
-  const BAKE_COMMON = NOISE + `
-    uniform vec3 uSeed;
-    uniform float uSea, uBase, uBand;
-    const float PI = 3.14159265;
-    vec3 dirFromUv(vec2 uv) {
-      float th = (1.0 - uv.x) * 2.0 * PI;
-      float lat = (0.5 - uv.y) * PI;
-      float cl = cos(lat);
-      return vec3(cl * cos(th), sin(lat), cl * sin(th));
-    }
-    float fbm(vec3 q, int oct) {
-      float h = 0.0, a = 0.5, f = 1.0;
-      for (int i = 0; i < 8; i++) {
-        if (i >= oct) break;
-        h += a * snoise(q * f);
-        f *= 2.03; a *= 0.5;
-      }
-      return h;
-    }
-    /* Signed height: < uSea is liquid. Broad continents from low
-       octaves, ridged mountain chains added only on land. */
-    float terrain(vec3 p) {
-      vec3 q = p * 1.45 + uSeed;
-      float h = fbm(q, 7);
-      float land = smoothstep(uSea - 0.02, uSea + 0.22, h);
-      float r = 1.0 - abs(snoise(q * 2.6 + 7.7));
-      r = r * r * (0.6 + 0.4 * snoise(q * 5.1 - 2.2));
-      return h + 0.34 * r * land;
-    }
-    /* Gas giants: latitude bands, warped, no relief. */
-    float bands(vec3 p) {
-      float w = 0.35 * fbm(p * 1.6 + uSeed, 4);
-      return 0.5 + 0.5 * sin((p.y + w) * 9.0 + 0.6 * snoise(p * 3.0 + uSeed.yzx));
-    }`;
-
-  /* Pass 1 → surface: rgb colour, a = altitude (0 liquid, else land
-     0.08..1). Colour comes from height, latitude, and a moisture
-     field that puts dry lowlands on some continents. */
-  const BAKE_SURF_FS = `
-    precision highp float;
-    varying vec2 vUv;
-    ${BAKE_COMMON}
-    uniform vec3 uShelf, uDeep, uSand, uGrass, uForest, uDry, uRock, uSnow, uCap;
-    uniform vec3 uBandA, uBandB, uBandC;
-    uniform float uCapAmt;
+  /* ── Koaik, the black hole ──
+     Four parts, all in units of the shadow's radius (the group is
+     scaled to BH_R): the SHADOW, an opaque black disc facing the
+     camera that writes depth through the centre, so the near half of
+     the disk passes in front of it and the far half and anything
+     behind are swallowed; the DISK, a flat ring in the orbital plane,
+     hot and streaked, differential rotation, brighter on the side
+     coming toward the reader; the GLOW, a camera-facing quad with the
+     photon ring, the far side of the disk lensed over and under the
+     shadow (along the screen direction of the disk's axis) and a soft
+     halo — plus the collapse flash; and the SHOCK, a ring in the
+     orbital plane the size of the system, for the collapse. */
+  const DISK_VS = `
+    varying vec2 vQ;
+    varying vec3 vVel, vP;
     void main() {
-      vec3 p = dirFromUv(vUv);
-      float lat = abs(p.y);
-      vec3 col; float alt;
-      if (uBand > 0.5) {
-        float b = bands(p);
-        float d = 0.5 + 0.5 * fbm(p * 4.0 + uSeed.zxy, 3);
-        col = mix(uBandA, uBandB, smoothstep(0.2, 0.8, b));
-        col = mix(col, uBandC, smoothstep(0.55, 0.95, d * b));
-        alt = 0.3;
-      } else {
-        float h = terrain(p);
-        float moist = 0.5 + 0.5 * fbm(p * 2.2 + uSeed.zxy, 4);
-        if (h < uSea) {
-          float d = clamp((uSea - h) / 0.30, 0.0, 1.0);
-          col = mix(uShelf, uDeep, smoothstep(0.0, 0.32, d));
-          alt = 0.0;
-        } else {
-          float a = clamp((h - uBase) / 0.62, 0.0, 1.0);
-          vec3 low = mix(uGrass, uForest, smoothstep(0.35, 0.75, moist));
-          low = mix(uDry, low, smoothstep(0.28, 0.5, moist + 0.35 * lat));
-          col = mix(uSand, low, smoothstep(0.0, 0.05, a));
-          col = mix(col, uRock, smoothstep(0.34, 0.60, a));
-          col = mix(col, uSnow, smoothstep(0.74, 0.90, a + 0.35 * pow(lat, 3.0)));
-          alt = 0.08 + 0.92 * a;
-        }
-        // Polar caps, with a ragged noisy edge.
-        float cap = smoothstep(0.80, 0.86, lat + 0.05 * snoise(p * 9.0 + uSeed)) * uCapAmt;
-        col = mix(col, uCap, cap);
-        alt = mix(alt, max(alt, 0.12), cap);
-      }
-      gl_FragColor = vec4(col, alt);
-    }`;
-
-  /* Pass 2 → aux: r,g = slope along u and v (0.5 = flat), b = cloud
-     cover, a = night lights. Slopes come from finite differences of
-     the terrain in the same uv space the globe shader's tangents
-     follow. */
-  const BAKE_AUX_FS = `
-    precision highp float;
-    varying vec2 vUv;
-    ${BAKE_COMMON}
-    uniform float uTexel, uCloudAmt, uLightsAmt;
-    void main() {
-      vec3 p = dirFromUv(vUv);
-      float su = 0.0, sv = 0.0, lights = 0.0, cloud;
-      if (uBand > 0.5) {
-        // Streaky weather along the bands, thinner at the poles.
-        float c = fbm(vec3(p.x, p.y * 5.0, p.z) * 2.1 + uSeed.yzx, 5) * 0.8 + 0.25 * fbm(p * 6.5 - uSeed, 3);
-        float shift = (1.0 - uCloudAmt) * 0.3;
-        cloud = smoothstep(0.03 + shift, 0.42 + shift, c) * (1.0 - 0.5 * pow(abs(p.y), 4.0));
-      } else {
-        float h  = max(terrain(p), uSea);
-        float e = uTexel;
-        float cl = max(cos((0.5 - vUv.y) * PI), 0.05);
-        float hu = max(terrain(dirFromUv(vUv + vec2(e, 0.0))), uSea);
-        float hv = max(terrain(dirFromUv(vUv + vec2(0.0, e))), uSea);
-        su = (hu - h) / (e * 2.0 * PI * cl);   // per radian of arc
-        sv = (hv - h) / (e * PI);
-        // Clouds: two scales of fbm, thresholded, thinner at the poles.
-        float c = fbm(p * 2.1 + uSeed.yzx, 5) * 0.8 + 0.25 * fbm(p * 6.5 - uSeed, 3);
-        float shift = (1.0 - uCloudAmt) * 0.3;
-        cloud = smoothstep(0.03 + shift, 0.42 + shift, c) * (1.0 - 0.5 * pow(abs(p.y), 4.0));
-        // Lights: clusters on low land, mostly near the coasts.
-        float hRaw = terrain(p);
-        float lowland = smoothstep(uSea, uSea + 0.01, hRaw) * (1.0 - smoothstep(uSea + 0.10, uSea + 0.30, hRaw));
-        float cluster = smoothstep(0.45, 0.85, snoise(p * 7.0 + uSeed.zyx));
-        float dots = smoothstep(0.35, 0.9, snoise(p * 48.0 + uSeed) * 0.6 + snoise(p * 120.0) * 0.4);
-        lights = lowland * cluster * dots * (1.0 - smoothstep(0.7, 0.85, abs(p.y))) * uLightsAmt;
-      }
-      gl_FragColor = vec4(0.5 + clamp(su / 24.0, -0.5, 0.5),
-                          0.5 + clamp(sv / 24.0, -0.5, 0.5),
-                          cloud, lights);
-    }`;
-
-  /* The globe. Tangents along +u and +v of the map (matching
-     dirFromUv in the bake) are carried to view space per vertex, so
-     the baked slopes can bend the normal there. */
-  const GLOBE_VS = `
-    varying vec3 vN, vTu, vTv, vP;
-    varying vec2 vUv;
-    void main() {
+      vQ = position.xy;                           // ring geometry lies in xy before the mesh's -90° tilt
+      vec3 tang = normalize(vec3(-position.y, position.x, 0.0));
+      vVel = normalize(normalMatrix * tang);      // orbital velocity, view space
       vec4 p = modelViewMatrix * vec4(position, 1.0);
       vP = p.xyz;
-      vec3 No = normalize(position);
-      vec3 Tu = normalize(vec3(No.z, 0.0, -No.x));
-      vec3 Tv = normalize(cross(Tu, No));
-      vN  = normalMatrix * No;
-      vTu = normalMatrix * Tu;
-      vTv = normalMatrix * Tv;
-      vUv = uv;
       gl_Position = projectionMatrix * p;
     }`;
-
-  const GLOBE_FS = `
+  const DISK_FS = `
     precision highp float;
-    uniform sampler2D uSurf, uAux;
-    uniform vec3 uLight, uGlowColor, uRimColor;
-    uniform float uCloudShift, uGlowAmt, uSpec, uFade, uAmbient;
-    varying vec3 vN, vTu, vTv, vP;
-    varying vec2 vUv;
+    uniform float uTime, uFeed, uIn, uOut, uFade;
+    varying vec2 vQ;
+    varying vec3 vVel, vP;
+    ${NOISE}
+    /* Keplerian shear winds any pattern tighter forever; two copies
+       half a period apart are cross-faded so it never over-winds. */
+    float swirl(float r, float th, float t) {
+      float a = th + t * 2.4 * pow(uIn / r, 1.5);
+      vec2 c = vec2(cos(a), sin(a)) * r;
+      return 0.6 * snoise(vec3(c * 2.2, 1.7)) + 0.4 * snoise(vec3(c * 6.0, 5.3));
+    }
     void main() {
-      vec3 N0 = normalize(vN);
-      vec3 V = normalize(-vP);
-      vec3 L = normalize(uLight);
-
-      vec4 surf = texture2D(uSurf, vUv);
-      vec4 aux  = texture2D(uAux, vUv);
-      float water = 1.0 - smoothstep(0.02, 0.06, surf.a);
-
-      float su = (aux.r - 0.5) * 24.0, sv = (aux.g - 0.5) * 24.0;
-      vec3 N = normalize(N0 - ${config.BUMP.toFixed(4)} * (su * normalize(vTu) + sv * normalize(vTv)));
-
-      float ndl0 = dot(N0, L);
-      float lit  = smoothstep(-0.10, 0.28, ndl0);          // soft terminator
-      float diff = max(dot(N, L), 0.0) * (1.0 - water) + max(ndl0, 0.0) * water;
-
-      vec3 base = pow(surf.rgb, vec3(2.2));
-      vec3 col = base * (uAmbient + 1.15 * diff);
-
-      // Clouds drift over the surface; their shadow trails them.
-      vec2 cuv = vec2(vUv.x + uCloudShift, vUv.y);
-      float cloud = texture2D(uAux, cuv).b;
-      float shade = texture2D(uAux, cuv + vec2(0.006, -0.004)).b;
-      col *= 1.0 - 0.45 * shade * lit;
-
-      // Glint on the liquid, tight and modest.
-      vec3 H = normalize(L + V);
-      float spec = pow(max(dot(N0, H), 0.0), 220.0) * water * 0.16 * lit * (1.0 - cloud) * uSpec;
-      col += vec3(0.80, 0.90, 1.0) * spec;
-
-      // Lights (or lava) where the sun is down and the sky is clear.
-      col += uGlowColor * aux.a * uGlowAmt * (1.0 - lit) * (1.0 - cloud * 0.8);
-
-      // The cloud layer itself, lit like the sphere, over everything.
-      vec3 cloudCol = vec3(0.98, 0.99, 1.0) * (0.03 + 1.05 * max(ndl0, 0.0));
-      col = mix(col, cloudCol, cloud * 0.92);
-
-      // Atmosphere on the disc: a rim, brighter on the day side.
-      float fres = pow(1.0 - max(dot(N0, V), 0.0), 3.0);
-      col += uRimColor * fres * (0.08 + 0.60 * lit);
-
-      col = pow(col, vec3(1.0 / 2.2));
-      gl_FragColor = vec4(col * uFade, uFade);   // premultiplied
+      float r = length(vQ), th = atan(vQ.y, vQ.x);
+      float rn = clamp((r - uIn) / (uOut - uIn), 0.0, 1.0);
+      const float T = 14.0;
+      float t1 = mod(uTime, T), t2 = mod(uTime + T * 0.5, T);
+      float w = abs(1.0 - 2.0 * t1 / T);
+      float n = mix(swirl(r, th, t1), swirl(r, th, t2), 1.0 - w);
+      float I = pow(1.0 - rn, 1.7) * (0.55 + 0.75 * (0.5 + 0.5 * n));
+      I *= smoothstep(0.0, 0.06, rn) * (1.0 - smoothstep(0.75, 1.0, rn));
+      // Beaming: the side moving toward the reader is brighter and whiter.
+      float d = dot(vVel, normalize(-vP));
+      float beam = pow(1.0 + 0.38 * d, 3.0);
+      vec3 hot = vec3(1.0, 0.93, 0.80), warm = vec3(1.0, 0.56, 0.20), cool = vec3(0.55, 0.16, 0.06);
+      vec3 col = mix(hot, warm, smoothstep(0.0, 0.35, rn));
+      col = mix(col, cool, smoothstep(0.45, 1.0, rn));
+      col = mix(col, vec3(0.85, 0.92, 1.0), 0.25 * max(d, 0.0));
+      gl_FragColor = vec4(col * I * beam * uFeed * uFade * 1.25, 0.0);   // additive (premultiplied, a = 0)
     }`;
-
-  /* The corona: a camera-facing quad through the body's centre, drawn
-     after the globe with the depth test on, so the near half of the
-     sphere hides it and it only shows past the limb. */
-  const HALO_VS = `
-    uniform float uHalo;
+  const BILL_VS = `
+    uniform float uSize;
     varying vec2 vQ;
     void main() {
-      vQ = (uv * 2.0 - 1.0) * uHalo;
+      vQ = (uv * 2.0 - 1.0) * uSize;
       gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
     }`;
-  const HALO_FS = `
+  const GLOW_FS = `
     precision highp float;
-    uniform vec2 uLightXY;
-    uniform vec3 uColor;
-    uniform float uHalo, uStrength, uFade;
+    uniform vec2 uAxis;          // the disk's axis on screen (unit), for the lensed arcs
+    uniform float uFace, uTime, uFeed, uFlash, uFade, uSize;
     varying vec2 vQ;
+    ${NOISE}
     void main() {
       float d = length(vQ);
-      float t = clamp((uHalo - d) / (uHalo - 1.0), 0.0, 1.0);
-      float i = t * t * t;
-      float sun = 0.40 + 0.60 * smoothstep(-0.7, 0.7, dot(normalize(vQ), uLightXY));
-      float a = i * sun * uStrength * uFade;
-      gl_FragColor = vec4(uColor * a, a);   // premultiplied
+      vec2 dir = vQ / max(d, 1e-4);
+      // Photon ring: thin, white-gold, hugging the shadow.
+      float ring = exp(-pow((d - 1.04) / 0.035, 2.0)) * 1.3;
+      // The far side of the disk, bent over the top and under the
+      // bottom: along the axis when edge-on, a full ring face-on.
+      float along = pow(abs(dot(dir, uAxis)), 1.4);
+      float wgt = mix(along, 0.55, uFace);
+      float band = smoothstep(1.05, 1.12, d) * (1.0 - smoothstep(1.18, 1.9, d));
+      float n = 0.5 + 0.5 * snoise(vec3(dir * 3.0, uTime * 0.35));
+      float lens = band * wgt * (0.6 + 0.6 * n) * 2.0;
+      vec3 col = vec3(1.0, 0.86, 0.62) * ring + vec3(1.0, 0.62, 0.28) * lens;
+      col += vec3(1.0, 0.55, 0.25) * 0.10 * exp(-(d - 1.0) * 1.3) * step(1.0, d);
+      col *= uFeed;
+      // The collapse flash: a white bloom from the centre.
+      col += vec3(1.0, 0.96, 0.9) * uFlash * (exp(-d * 0.45) * 1.6 + exp(-d * 0.08) * 0.35);
+      col *= 1.0 - smoothstep(0.6, 1.0, d / uSize);     // nothing at the quad's edge
+      gl_FragColor = vec4(col * uFade, 0.0);
+    }`;
+  const SHOCK_FS = `
+    precision highp float;
+    uniform float uR, uA;
+    varying vec2 vQ;             // -1..1 over the system
+    void main() {
+      float d = length(vQ);
+      float w = 0.018 + 0.05 * uR;
+      float ring = exp(-pow((d - uR) / w, 2.0)) + 0.35 * exp(-pow((d - uR * 0.82) / (w * 2.5), 2.0));
+      ring *= 1.0 - smoothstep(0.85, 1.0, d);
+      vec3 col = mix(vec3(1.0, 0.9, 0.75), vec3(0.55, 0.7, 1.0), uR);
+      gl_FragColor = vec4(col * ring * uA, 0.0);
     }`;
 
   /* ── Renderer ── */
@@ -416,138 +287,83 @@ import { makeEmblem } from './emblems.js';
     section.dispatchEvent(new Event('system:fallback'));
   }
 
-  /* ── Geometry: a sphere whose uv is the inverse of dirFromUv ── */
-  function makeSphere(seg, rings) {
-    const pos = [], uv = [], idx = [];
-    for (let i = 0; i <= rings; i++) {
-      const phi = Math.PI * i / rings, sp = Math.sin(phi), cp = Math.cos(phi);
-      for (let j = 0; j <= seg; j++) {
-        const th = 2 * Math.PI * j / seg;
-        pos.push(sp * Math.cos(th), cp, sp * Math.sin(th));
-        /* u = 1 - th / 2pi, v = phi / pi: east on the map is
-           screen-right from the front. */
-        uv.push(1 - j / seg, i / rings);
-      }
-    }
-    for (let i = 0; i < rings; i++) for (let j = 0; j < seg; j++) {
-      const a = i * (seg + 1) + j, b = a + seg + 1;
-      idx.push(a, a + 1, b, a + 1, b + 1, b);   // counter-clockwise from outside
-    }
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-    g.setAttribute('normal', new THREE.Float32BufferAttribute(pos, 3));
-    g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-    g.setIndex(idx);
-    return g;
-  }
-  const sphereGeo = makeSphere(config.SEGMENTS, config.RINGS);
   const quadGeo = new THREE.PlaneGeometry(2, 2);
-
-  /* ── Baking ── */
-  const v3 = a => new THREE.Vector3(a[0], a[1], a[2]);
-  const bakeCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-  const bakeScene = new THREE.Scene();
-  const bakeQuad = new THREE.Mesh(quadGeo, null);
-  bakeScene.add(bakeQuad);
-  const surfMat = new THREE.ShaderMaterial({
-    vertexShader: QUAD_VS, fragmentShader: BAKE_SURF_FS, depthTest: false, depthWrite: false,
-    uniforms: { uSeed: { value: new THREE.Vector3() }, uSea: { value: 0 }, uBase: { value: 0 }, uBand: { value: 0 }, uCapAmt: { value: 1 },
-      uShelf: { value: new THREE.Vector3() }, uDeep: { value: new THREE.Vector3() }, uSand: { value: new THREE.Vector3() }, uGrass: { value: new THREE.Vector3() },
-      uForest: { value: new THREE.Vector3() }, uDry: { value: new THREE.Vector3() }, uRock: { value: new THREE.Vector3() }, uSnow: { value: new THREE.Vector3() }, uCap: { value: new THREE.Vector3() },
-      uBandA: { value: new THREE.Vector3() }, uBandB: { value: new THREE.Vector3() }, uBandC: { value: new THREE.Vector3() } },
-  });
-  const auxMat = new THREE.ShaderMaterial({
-    vertexShader: QUAD_VS, fragmentShader: BAKE_AUX_FS, depthTest: false, depthWrite: false,
-    uniforms: { uSeed: { value: new THREE.Vector3() }, uSea: { value: 0 }, uBase: { value: 0 }, uBand: { value: 0 },
-      uTexel: { value: 1 / 2048 }, uCloudAmt: { value: 1 }, uLightsAmt: { value: 1 } },
-  });
-  function bake(material, w, h) {
-    const rt = new THREE.WebGLRenderTarget(w, h, {
-      format: THREE.RGBAFormat, type: THREE.UnsignedByteType, depthBuffer: false, stencilBuffer: false,
-      generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter,
-      wrapS: THREE.RepeatWrapping, wrapT: THREE.ClampToEdgeWrapping,
-      anisotropy: Math.min(8, renderer.capabilities.getMaxAnisotropy()), colorSpace: THREE.NoColorSpace,
-    });
-    bakeQuad.material = material;
-    renderer.setRenderTarget(rt);
-    renderer.render(bakeScene, bakeCam);
-    renderer.setRenderTarget(null);
-    return rt.texture;
-  }
-  function bakeWorld(look, seed, w) {
-    const u = surfMat.uniforms;
-    u.uSeed.value.set(seed[0], seed[1], seed[2]);
-    u.uSea.value = look.sea; u.uBase.value = look.base; u.uBand.value = look.band ? 1 : 0; u.uCapAmt.value = look.capAmt;
-    for (const k of ['shelf', 'deep', 'sand', 'grass', 'forest', 'dry', 'rock', 'snow', 'cap', 'bandA', 'bandB', 'bandC']) {
-      const key = 'u' + k[0].toUpperCase() + k.slice(1);
-      const c = look[k] || [0, 0, 0];
-      u[key].value.set(c[0], c[1], c[2]);
-    }
-    const a = auxMat.uniforms;
-    a.uSeed.value.copy(u.uSeed.value);
-    a.uSea.value = look.sea; a.uBase.value = look.base; a.uBand.value = look.band ? 1 : 0;
-    a.uTexel.value = 1 / w; a.uCloudAmt.value = look.cloud; a.uLightsAmt.value = look.glowAmt > 0 ? 1 : 0;
-    const surf = bake(surfMat, w, w / 2);
-    const aux = bake(auxMat, w, w / 2);
-    return { surf, aux };
-  }
 
   /* ── Scene ── */
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(config.FOV, 1, 0.05, 400);
   scene.add(camera);
 
-  /* Light for the emblems: Koaik is the sun, so a point light sits in
-     it (no falloff: the outer orbits must not go dark); a soft ambient
-     and a weak fill that rides with the camera keep the night sides
-     readable. Koaik itself is a ShaderMaterial and ignores all three. */
-  scene.add(new THREE.PointLight(0xfff0dc, 3.2, 0, 0));
+  /* Light for the emblems: Koaik's accretion disk is the system's
+     light, so a warm point light sits in it (no falloff: the outer
+     orbits must not go dark); a soft ambient and a weak fill that
+     rides with the camera keep the night sides readable. The black
+     hole itself is ShaderMaterials and ignores all three. */
+  const coreLight = new THREE.PointLight(0xffe2bf, 3.2, 0, 0);
+  scene.add(coreLight);
   scene.add(new THREE.AmbientLight(0x8a9ac0, 0.55));
   const fill = new THREE.DirectionalLight(0xdfe8ff, 0.7);
   fill.position.set(0.3, 0.4, 0); fill.target.position.set(0, 0, -1);
   camera.add(fill, fill.target);
-  const bodies = [];      // every world, Koaik first
   const planets = [];     // the projects
 
-  function makeBody(look, seed, radius, w, opts = {}) {
-    const maps = bakeWorld(look, seed, w);
-    const mat = new THREE.ShaderMaterial({
-      vertexShader: GLOBE_VS, fragmentShader: GLOBE_FS, transparent: true, premultipliedAlpha: true,
-      uniforms: {
-        uSurf: { value: maps.surf }, uAux: { value: maps.aux },
-        uLight: { value: new THREE.Vector3(0, 0, 1) }, uCloudShift: { value: 0 },
-        uGlowColor: { value: v3(look.glow) }, uGlowAmt: { value: look.glowAmt },
-        uRimColor: { value: v3(look.rim) }, uSpec: { value: look.spec }, uFade: { value: 1 },
-        uAmbient: { value: opts.ambient ?? 0.02 },
-      },
-    });
-    const mesh = new THREE.Mesh(sphereGeo, mat);
-    mesh.scale.setScalar(opts.halo ? radius : 0);   // the projects grow in during the pull-back
-    mesh.renderOrder = 1;
-    const group = new THREE.Group();   // position only; the mesh spins inside it
-    group.add(mesh);
-    let halo = null;
-    if (opts.halo) {
-      const hm = new THREE.ShaderMaterial({
-        vertexShader: HALO_VS, fragmentShader: HALO_FS, transparent: true, premultipliedAlpha: true, depthWrite: false,
-        uniforms: { uHalo: { value: config.HALO }, uLightXY: { value: new THREE.Vector2(-0.6, 0.5) },
-          uColor: { value: v3(config.HALO_COLOR) }, uStrength: { value: config.HALO_STRENGTH }, uFade: { value: 1 } },
-      });
-      halo = new THREE.Mesh(quadGeo, hm);
-      halo.scale.setScalar(radius * config.HALO);
-      halo.renderOrder = 2;
-      group.add(halo);
-    }
-    const body = { group, mesh, mat, halo, radius, look, spin: 0, cloud: 0, tilt: opts.tilt ?? config.TILT, spinRate: opts.spinRate ?? config.SPIN };
-    bodies.push(body);
-    scene.add(group);
-    return body;
-  }
-
-  /* Koaik, the star of the system: fully lit from wherever the reader
-     looks (a sun has no night side), warm corona. */
+  /* Koaik, the black hole (shaders above). `mesh` is the scaled core
+     group, so `mesh.scale.x` is the shadow's radius on screen — the
+     picking and the reveal read it as they read a planet's. `radius`
+     is how far the visible thing reaches above its centre (the lensed
+     arc), for the label and the camera's framing. */
   let sun = null;
-  const sunLightView = new THREE.Vector3(-0.22, 0.28, 0.93).normalize();
+  function makeBlackHole() {
+    const core = new THREE.Group();
+    const shadow = new THREE.Mesh(new THREE.CircleGeometry(1, 96), new THREE.MeshBasicMaterial({ color: 0x000000 }));
+    shadow.renderOrder = 1;                                 // first: it writes the depth the disk is tested against
+    const diskMat = new THREE.ShaderMaterial({
+      vertexShader: DISK_VS, fragmentShader: DISK_FS, transparent: true, premultipliedAlpha: true,
+      depthWrite: false, side: THREE.DoubleSide,
+      uniforms: { uTime: { value: 0 }, uFeed: { value: 1 }, uIn: { value: config.BH_DISK_IN }, uOut: { value: config.BH_DISK_OUT }, uFade: { value: 1 } },
+    });
+    const disk = new THREE.Mesh(new THREE.RingGeometry(config.BH_DISK_IN, config.BH_DISK_OUT, 160, 8), diskMat);
+    disk.rotation.x = -Math.PI / 2;                         // into the orbital plane
+    disk.renderOrder = 2;
+    const GLOW = 3.2;
+    const glowMat = new THREE.ShaderMaterial({
+      vertexShader: BILL_VS, fragmentShader: GLOW_FS, transparent: true, premultipliedAlpha: true, depthWrite: false,
+      uniforms: { uSize: { value: GLOW }, uAxis: { value: new THREE.Vector2(0, 1) }, uFace: { value: 0 }, uTime: { value: 0 },
+        uFeed: { value: 1 }, uFlash: { value: 0 }, uFade: { value: 1 } },
+    });
+    const glow = new THREE.Mesh(quadGeo, glowMat);
+    glow.scale.setScalar(GLOW);
+    glow.renderOrder = 3;
+    core.add(shadow, disk, glow);
+    core.scale.setScalar(0);
+    const group = new THREE.Group();
+    group.add(core);
+    scene.add(group);
+    return { group, mesh: core, shadow, disk, glow, radius: config.BH_R * 2.0 };
+  }
+  /* The collapse shockwave: a ring in the orbital plane, the size of
+     the whole system, shown only during the collapse. */
+  const shockMat = new THREE.ShaderMaterial({
+    vertexShader: BILL_VS, fragmentShader: SHOCK_FS, transparent: true, premultipliedAlpha: true, depthWrite: false,
+    uniforms: { uSize: { value: 1 }, uR: { value: 0 }, uA: { value: 0 } },
+  });
+  const shock = new THREE.Mesh(quadGeo, shockMat);
+  shock.rotation.x = -Math.PI / 2;
+  shock.renderOrder = 4;
+  shock.visible = false;
+  scene.add(shock);
+  /* The collapse flash: its own billboard, not the hole's glow (the
+     hole is a point by then). Only the flash term: no feed, no rings. */
+  const FLASH_SIZE = 30;                     // in shadow radii
+  const flashMesh = new THREE.Mesh(quadGeo, new THREE.ShaderMaterial({
+    vertexShader: BILL_VS, fragmentShader: GLOW_FS, transparent: true, premultipliedAlpha: true, depthWrite: false, depthTest: false,
+    uniforms: { uSize: { value: FLASH_SIZE }, uAxis: { value: new THREE.Vector2(0, 1) }, uFace: { value: 0 }, uTime: { value: 0 },
+      uFeed: { value: 0 }, uFlash: { value: 0 }, uFade: { value: 1 } },
+  }));
+  flashMesh.scale.setScalar(FLASH_SIZE * config.BH_R);
+  flashMesh.renderOrder = 5;
+  flashMesh.visible = false;
+  scene.add(flashMesh);
 
   /* Orbits and the projects' planets, made lazily after the sun. */
   const orbitGroup = new THREE.Group();
@@ -567,8 +383,13 @@ import { makeEmblem } from './emblems.js';
     const radius = w.radius || config.EMBLEM_R;
     const em = makeEmblem(pr);
     const group = new THREE.Group();
+    // group > stretchA > stretchB > emblem. A is turned to the radial
+    // direction and scaled, B turns back: a pure stretch toward the
+    // black hole with no net rotation (identity outside the collapse).
+    const stretchA = new THREE.Group(), stretchB = new THREE.Group();
+    stretchA.add(stretchB); group.add(stretchA);
     em.root.scale.setScalar(0);
-    const body = { group, mesh: em.root, radius, emblem: em, spin: i * 1.3, pitch: 0 };
+    const body = { group, stretchA, stretchB, mesh: em.root, radius, emblem: em, spin: i * 1.3, pitch: 0 };
     const orbitR = config.ORBIT_0 + config.ORBIT_STEP * i;
     const period = config.PERIOD_0 * Math.pow(orbitR / config.ORBIT_0, 1.5);
     const incl = (0.03 + 0.10 * ((i * 5) % 4) / 3) * (i % 2 ? 1 : -1);
@@ -587,19 +408,19 @@ import { makeEmblem } from './emblems.js';
     const pts = [];
     for (let k = 0; k <= ORBIT_PTS; k++) { const a = -(k / ORBIT_PTS) * Math.PI * 2 + phase; pts.push(new THREE.Vector3(Math.cos(a) * orbitR, 0, Math.sin(a) * orbitR)); }
     // depthWrite off: an invisible line that still wrote depth cut a
-    // dark chord through Koaik and its corona on arrival.
+    // dark chord through Koaik on arrival.
     const ringMat = new THREE.LineBasicMaterial({ color: 0x9aa3b8, transparent: true, opacity: 0, depthWrite: false });
     const ring = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), ringMat);
     ring.geometry.setDrawRange(0, 0);
     plane.add(ring);
     plane.add(group);
     staging.add(em.root);
-    const planet = { index: i, body, kind: em.kind, orbitR, period, phase, plane, ring, ringMat, orbitPts: ORBIT_PTS, born: 0, rPx: 0 };
+    const planet = { index: i, body, kind: em.kind, orbitR, period, phase, plane, ring, ringMat, orbitPts: ORBIT_PTS, born: 0, rPx: 0, fall: 0, swirl: 0 };
     planets[i] = planet;
     return planet;
   }
   function goLive() {
-    const done = () => { for (const p of planets) if (p) p.body.group.add(p.body.mesh); emblemsLive = true; };
+    const done = () => { for (const p of planets) if (p) p.body.stretchB.add(p.body.mesh); emblemsLive = true; };
     for (const p of planets) if (p) p.body.mesh.scale.setScalar(p.body.radius);     // compile at real size
     (renderer.compileAsync ? renderer.compileAsync(staging, camera, scene) : Promise.resolve(renderer.compile(staging, camera, scene)))
       .catch(e => console.warn('emblems: compile', e)).then(done);
@@ -621,7 +442,7 @@ import { makeEmblem } from './emblems.js';
       b.className = 'sys-label' + (kind === 'pilot' ? ' sys-label--sun' : '');
       b.innerHTML = `<span class="sys-label-dot" aria-hidden="true"></span><span class="sys-label-text"></span>`;
       b.querySelector('.sys-label-text').textContent = text;
-      b.addEventListener('click', e => { e.stopPropagation(); select(kind === 'pilot' ? 'pilot' : index); });
+      b.addEventListener('click', e => { e.stopPropagation(); if (kind === 'pilot') startCollapse(); else select(index); });
       b.addEventListener('pointerenter', () => setHot(kind === 'pilot' ? 'pilot' : index));
       b.addEventListener('pointerleave', () => setHot(null));
       labelsEl.appendChild(b);
@@ -657,10 +478,12 @@ import { makeEmblem } from './emblems.js';
       l.el.style.display = '';
       l.el.style.transform = `translate(${x.toFixed(1)}px, ${(y + (1 - l.in) * 8).toFixed(1)}px) translate(-50%, -100%)`;
       // Far and small: quieter, never hidden (they are the map).
-      l.el.style.opacity = ((0.55 + 0.45 * Math.min(1, rPx / 18)) * l.in).toFixed(2);
+      const gone = collapse ? (l.kind === 'pilot' ? 0 : 1 - smooth01(planets[l.index].fall / 0.25)) : 1;
+      l.el.style.opacity = ((0.55 + 0.45 * Math.min(1, rPx / 18)) * l.in * gone).toFixed(2);
+      l.el.style.visibility = gone < 0.02 ? 'hidden' : '';
     });
     if (reticle) {
-      if (markOn && markR < h) {
+      if (markOn && markR < h && !collapse) {
         const d = Math.max(28, markR * 2 + 18);
         reticle.style.display = '';
         reticle.style.width = reticle.style.height = d.toFixed(0) + 'px';
@@ -700,7 +523,7 @@ import { makeEmblem } from './emblems.js';
   controls.panSpeed = 0.7;
   controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
   controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
-  controls.minDistance = config.SUN_R * config.MIN_DIST;
+  controls.minDistance = config.MIN_NEAR;
   controls.maxDistance = config.MAX_DIST;
   controls.maxPolarAngle = Math.PI * 0.98;
   controls.autoRotateSpeed = config.DRIFT;
@@ -726,17 +549,15 @@ import { makeEmblem } from './emblems.js';
     return true;
   }
 
-  /* Arrival: the camera distance at which Koaik's disc spans FILL of
-     the limiting dimension; the angular radius of a sphere at d is
-     asin(r/d). */
+  /* Arrival: the camera distance at which the disk spans FILL of the
+     limiting dimension, a little above its plane. */
   function arrivalPose() {
     const fov = THREE.MathUtils.degToRad(config.FOV);
     const halfH = Math.tan(fov / 2);
     const limit = aspect < 1 ? Math.atan(halfH * aspect) : fov / 2;
-    const theta = Math.atan(config.FILL * Math.tan(limit));
-    const d = config.SUN_R / Math.sin(theta);
-    const viewH = 2 * d * halfH;
-    return { pos: new THREE.Vector3(0, -config.RAISE * viewH * 0.5, d), target: new THREE.Vector3(0, -config.RAISE * viewH, 0) };
+    const d = config.BH_R * config.BH_DISK_OUT / (config.FILL * Math.tan(limit));
+    const el = config.ARRIVE_EL;
+    return { pos: new THREE.Vector3(0, Math.sin(el) * d, Math.cos(el) * d), target: new THREE.Vector3(0, 0, 0) };
   }
   /* Overview: above the plane, the outer orbit fitting the width. */
   function overviewPose() {
@@ -933,7 +754,7 @@ import { makeEmblem } from './emblems.js';
     dispatch('system:hover', { target: h });
   }
   function select(what) {
-    if (!ready || flight) return;          // only the scripted arrival blocks; a move in progress is re-aimed
+    if (!ready || flight || collapse) return;          // only the scripted arrival blocks; a move in progress is re-aimed
     if (what === focus) return;
     focus = what;
     for (const l of labels) l.el.classList.toggle('is-active', (l.kind === 'pilot' ? 'pilot' : l.index) === what);
@@ -952,11 +773,11 @@ import { makeEmblem } from './emblems.js';
   function letGo(quiet) {
     focus = null;
     for (const l of labels) l.el.classList.remove('is-active');
-    controls.minDistance = config.SUN_R * config.MIN_DIST;
+    controls.minDistance = config.MIN_NEAR;
     if (!quiet) dispatch('system:select', { kind: 'none', index: -1, project: null });
   }
   function overview() {
-    if (!ready || flight) return;
+    if (!ready || flight || collapse) return;
     letGo();
     rigTo(overviewPose(), null, () => { lastTouch = performance.now() - config.IDLE_MS + 3000; });
   }
@@ -975,7 +796,7 @@ import { makeEmblem } from './emblems.js';
     let best = null, bestD = Infinity;
     const test = (body, key) => {
       body.group.getWorldPosition(_pc);
-      const r = body.mesh.scale.x * (body === sun ? 1.0 : 1.1);
+      const r = body.mesh.scale.x * (body === sun ? 3.0 : 1.1);   // the hole: the inner disk counts
       const sph = new THREE.Sphere(_pc, r);
       if (ray.ray.intersectSphere(sph, _hit)) { const d = _hit.distanceTo(ray.ray.origin); if (d < bestD) { bestD = d; best = key; } }
     };
@@ -987,23 +808,24 @@ import { makeEmblem } from './emblems.js';
   canvas.addEventListener('pointerdown', e => { pressX = e.clientX; pressY = e.clientY; pressT = performance.now(); pressed = true; });
   window.addEventListener('pointerup', () => { pressed = false; });
   canvas.addEventListener('pointerup', e => {
-    if (!ready || flight) return;
+    if (!ready || flight || collapse) return;
     const moved = Math.hypot(e.clientX - pressX, e.clientY - pressY);
     if (moved > 6 || performance.now() - pressT > 500) return;
     const r = canvas.getBoundingClientRect();
     const hit = pick(e.clientX - r.left, e.clientY - r.top);
     if (hit === null) return;
-    select(hit);
+    if (hit === 'pilot') startCollapse();     // Koaik is the black hole: a click swallows the system
+    else select(hit);
   });
   canvas.addEventListener('pointermove', e => {
-    if (!ready || flight) return;
+    if (!ready || flight || collapse) return;
     // A real drag during a move hands the camera back to the reader.
-    if (pressed && rig.active && Math.hypot(e.clientX - pressX, e.clientY - pressY) > 6) rigCancel();
+    if (pressed && rig.active && !collapse && Math.hypot(e.clientX - pressX, e.clientY - pressY) > 6) rigCancel();
     if (e.pointerType === 'touch') return;
     const r = canvas.getBoundingClientRect();
     setHot(pick(e.clientX - r.left, e.clientY - r.top));
   });
-  canvas.addEventListener('wheel', () => { if (rig.active) rigCancel(); }, { passive: true });
+  canvas.addEventListener('wheel', () => { if (rig.active && !collapse) rigCancel(); }, { passive: true });
   canvas.addEventListener('pointerleave', () => setHot(null));
 
   /* Keyboard flight: WASD / arrows move the camera and its target
@@ -1019,6 +841,7 @@ import { makeEmblem } from './emblems.js';
   const flyKey = e => FLY_CODES[e.code] || null;
   window.addEventListener('keydown', e => {
     if (!ready || (e.target && e.target.closest && e.target.closest('input, textarea, [contenteditable]'))) return;
+    if (collapse) return;
     if (e.key === 'Escape') { if (focus !== null) overview(); return; }
     if (e.key === 'Shift') { boost = true; return; }
     if (e.metaKey || e.ctrlKey || e.altKey) return;   // browser shortcuts; macOS also drops the keyup of a key released under Cmd
@@ -1029,7 +852,7 @@ import { makeEmblem } from './emblems.js';
   window.addEventListener('blur', () => { keys.clear(); boost = false; });
   const _f = new THREE.Vector3(), _r = new THREE.Vector3(), _u = new THREE.Vector3(0, 1, 0), _acc = new THREE.Vector3();
   function stepKeys(dt) {
-    if (!ready || flight || reduceMotion) return;
+    if (!ready || flight || collapse || reduceMotion) return;
     if (keys.size && rig.active) rigCancel();
     _acc.set(0, 0, 0);
     // W/S along the line of sight (so you fly where you look), A/D
@@ -1063,7 +886,7 @@ import { makeEmblem } from './emblems.js';
     mapCtx.clearRect(0, 0, W, H);
     mapCtx.strokeStyle = 'rgba(255,255,255,0.14)'; mapCtx.lineWidth = 1;
     for (const p of planets) { if (!p) continue; mapCtx.beginPath(); mapCtx.arc(cx, cy, p.orbitR * k, 0, Math.PI * 2); mapCtx.stroke(); }
-    mapCtx.fillStyle = '#F2D28B'; mapCtx.beginPath(); mapCtx.arc(cx, cy, 3.5, 0, Math.PI * 2); mapCtx.fill();
+    mapCtx.fillStyle = '#000'; mapCtx.strokeStyle = '#F2D28B'; mapCtx.beginPath(); mapCtx.arc(cx, cy, 3, 0, Math.PI * 2); mapCtx.fill(); mapCtx.stroke();
     for (const p of planets) {
       if (!p) continue; p.body.group.getWorldPosition(_mp);
       mapCtx.fillStyle = focus === p.index ? '#F2D28B' : (hot === p.index ? '#FFFFFF' : 'rgba(230,233,242,0.85)');
@@ -1074,6 +897,95 @@ import { makeEmblem } from './emblems.js';
     const txp = cx + controls.target.x * k, typ = cy + controls.target.z * k;
     mapCtx.strokeStyle = 'rgba(143,180,255,0.6)'; mapCtx.beginPath(); mapCtx.moveTo(cxp, cyp); mapCtx.lineTo(txp, typ); mapCtx.stroke();
     mapCtx.fillStyle = '#8FB4FF'; mapCtx.beginPath(); mapCtx.arc(Math.max(2, Math.min(W - 2, cxp)), Math.max(2, Math.min(H - 2, cyp)), 2.5, 0, Math.PI * 2); mapCtx.fill();
+  }
+
+  /* ── The collapse ──
+     Clicking Koaik swallows the system. Everything is a function of
+     the seconds since the click (so it cannot drift): each project's
+     `fall` (0 on its orbit, 1 inside the hole) goes up inner-first,
+     then the hole implodes, flashes and sends a shockwave through the
+     empty orbits; after a beat of dark it is reborn and `fall` comes
+     back down, the projects spiralling out inner-first. The camera is
+     taken to the overview for it and the controls are off until the
+     last project is home. */
+  let collapse = null;                 // { t0 } while it plays
+  const easeInCubic = t => t * t * t;
+  function collapseTimes() {
+    const n = Math.max(1, planets.filter(Boolean).length);
+    const endIn = config.FALL_START + config.FALL_STAGGER * (n - 1) + config.FALL_DUR + 0.07 * (n - 1);
+    const flash = endIn + config.IMPLODE, born = flash + config.DARK;
+    const rise = born + config.RISE_DELAY;
+    return { endIn, flash, born, rise, end: rise + config.FALL_STAGGER * (n - 1) + config.RISE_DUR };
+  }
+  function startCollapse() {
+    if (!ready || flight || collapse || !emblemsLive) return;
+    collapse = { t0: performance.now(), T: collapseTimes() };
+    setHot(null);
+    letGo();                                   // closes any card
+    controls.enabled = false;
+    keys.clear(); vel.set(0, 0, 0);
+    rigTo(overviewPose(), null);
+    dispatch('system:collapse', { phase: 'start' });
+  }
+  /* Per frame: sets every project's fall, returns the hole's own state. */
+  const COLL_IDLE = { core: 1, feed: 1, flash: 0, shockR: 0, shockA: 0 };
+  function stepCollapse(now) {
+    if (!collapse) return COLL_IDLE;
+    const ct = (now - collapse.t0) / 1000, T = collapse.T;
+    let sum = 0, n = 0;
+    for (const p of planets) {
+      if (!p) continue;
+      const i = p.index;
+      const outS = T.rise + config.FALL_STAGGER * i;
+      if (ct < outS) {
+        const u = Math.min(1, Math.max(0, (ct - config.FALL_START - config.FALL_STAGGER * i) / (config.FALL_DUR + 0.07 * i)));
+        p.fall = u * u;                                        // accelerating in
+      } else {
+        const u = Math.min(1, (ct - outS) / config.RISE_DUR);
+        p.fall = (1 - u) * (1 - u);                            // decelerating out
+      }
+      sum += p.fall; n++;
+    }
+    const mean = n ? sum / n : 0;
+    let core = 1, feed = 1 + 1.8 * mean;
+    if (ct >= T.endIn && ct < T.flash) { const u = (ct - T.endIn) / config.IMPLODE; core = 1 - 0.97 * easeInCubic(u); feed = 2.8 + 2 * u; }
+    else if (ct >= T.flash && ct < T.born) core = 0;
+    else if (ct >= T.born) core = easeOutBack(Math.min(1, (ct - T.born) / config.REBORN));
+    const tf = ct - T.flash;
+    const flash = tf < 0 ? 0 : Math.exp(-tf * 3.2);
+    const sr = tf < 0 ? 0 : Math.min(1, tf / 2.0);
+    const shockR = 0.8 * easeOutCubic(sr), shockA = tf < 0 || sr >= 1 ? 0 : Math.pow(1 - sr, 2.0) * 1.2;
+    if (ct >= T.end) {
+      collapse = null;
+      for (const p of planets) if (p) p.fall = 0;
+      controls.enabled = ready;
+      lastTouch = now;
+      dispatch('system:collapse', { phase: 'end' });
+      return COLL_IDLE;
+    }
+    return { core, feed, flash: reduceMotion ? 0 : flash, shockR, shockA: reduceMotion ? 0 : shockA };
+  }
+  /* The hole, per frame: billboards face the reader; the lensed arcs
+     follow the disk's axis on screen; the disk turns (in its shader). */
+  const _axis = new THREE.Vector3();
+  function stepBlackHole(cs) {
+    sun.shadow.quaternion.copy(camera.quaternion);
+    sun.glow.quaternion.copy(camera.quaternion);
+    flashMesh.quaternion.copy(camera.quaternion);
+    _axis.set(0, 1, 0).transformDirection(camera.matrixWorldInverse);
+    const g = sun.glow.material.uniforms, dk = sun.disk.material.uniforms;
+    const len = Math.hypot(_axis.x, _axis.y);
+    if (len > 1e-4) g.uAxis.value.set(_axis.x / len, _axis.y / len);
+    g.uFace.value = Math.abs(_axis.z);
+    g.uTime.value = dk.uTime.value = time;
+    g.uFeed.value = dk.uFeed.value = cs.feed;
+    coreLight.intensity = 3.2 * Math.min(1.6, 0.25 + 0.75 * cs.core * cs.feed) + 30 * cs.flash;
+    flashMesh.visible = cs.flash > 0.002;
+    flashMesh.material.uniforms.uFlash.value = cs.flash;
+    shock.visible = cs.shockA > 0.002;
+    shock.scale.setScalar(outerOrbit * 1.6);
+    shockMat.uniforms.uR.value = cs.shockR;
+    shockMat.uniforms.uA.value = cs.shockA;
   }
 
   /* ── The frame ── */
@@ -1094,12 +1006,11 @@ import { makeEmblem } from './emblems.js';
       if (planetsMade === projects.length) { makeLabels(); goLive(); }
     }
 
-    // Koaik: grow in, then hold.
+    // Koaik: grow in, then hold (and shrink to a point in the collapse).
     const rev = reduceMotion ? 1 : !revealAt ? 0 : Math.min(1, (now - revealAt) / config.REVEAL_MS);
     const s = reduceMotion ? 1 : 0.02 + 0.98 * easeOutCubic(rev);
-    sun.mesh.scale.setScalar(config.SUN_R * s);
-    if (sun.halo) sun.halo.scale.setScalar(config.SUN_R * s * config.HALO);
-    if (sun.halo) sun.halo.quaternion.copy(camera.quaternion);
+    const cs = stepCollapse(now);
+    sun.mesh.scale.setScalar(Math.max(1e-4, config.BH_R * s * cs.core));
 
     // The pull-back: a beat after the reveal, out to the overview.
     if (!pullAt && (reduceMotion || (revealAt && now - revealAt >= config.REVEAL_MS + config.PULLBACK_DELAY_MS))) {
@@ -1118,26 +1029,31 @@ import { makeEmblem } from './emblems.js';
       const drawn = Math.round(q * p.orbitPts) + 1;
       p.ring.geometry.setDrawRange(0, Math.max(0, Math.min(p.orbitPts + 1, drawn)));
       p.born = !emblemsLive ? 0 : reduceMotion ? 1 : smooth01((pull - start - 0.10) / 0.28);
-      if (emblemsLive) p.body.mesh.scale.setScalar(Math.max(1e-4, p.body.radius * easeOutBack(p.born)));
-      p.ringMat.opacity = (p.index === focus ? 0.55 : p.index === hot ? 0.45 : 0.20) * Math.min(1, q * 1.5);
+      // In the collapse: stretched toward the hole, then gone into it.
+      const f = p.fall;
+      const gone = 1 - smooth01((f - 0.78) / 0.22);
+      if (emblemsLive) p.body.mesh.scale.setScalar(Math.max(1e-4, p.body.radius * easeOutBack(p.born) * gone));
+      const st = reduceMotion ? 1 : 1 + 2.6 * smooth01((f - 0.35) / 0.55);
+      p.body.stretchA.scale.set(st, 1 / Math.sqrt(st), 1 / Math.sqrt(st));
+      p.ring.scale.setScalar(reduceMotion ? 1 : Math.max(1e-3, 1 - f));
+      p.ringMat.opacity = (p.index === focus ? 0.55 : p.index === hot ? 0.45 : 0.20) * Math.min(1, q * 1.5) * (1 - smooth01(f / 0.7));
     }
-    // Koaik's corona breathes, very slightly.
-    if (sun.halo) sun.halo.material.uniforms.uStrength.value = config.HALO_STRENGTH * (1 + (reduceMotion ? 0 : 0.06 * Math.sin(time * 0.9)));
     // The caption: in with the reveal, out with the pull-back.
     const pin = Math.round(smooth01((rev - 0.55) / 0.45) * (1 - smooth01(pull / 0.4)) * 100) / 100;
     if (pin !== lastIn) { lastIn = pin; root.style.setProperty('--planet-in', pin.toFixed(2)); }
 
-    // Motion.
-    if (!reduceMotion) {
-      sun.spin += sun.spinRate * dt;
-      sun.cloud += sun.spinRate * config.CLOUD_DRIFT * dt / (2 * Math.PI);
-    }
-    sun.mesh.rotation.set(0, sun.spin, -sun.tilt, 'ZYX');
-    sun.mat.uniforms.uCloudShift.value = sun.cloud;
+    // Motion. A falling project speeds up as it closes in (Kepler,
+    // capped); the extra angle it gains is kept, so it comes back out
+    // of the hole wherever the spiral left it, with no jump.
     for (const p of planets) {
       if (!p) continue;
-      const a = p.phase + (reduceMotion ? 0 : time * 2 * Math.PI / p.period);
-      p.body.group.position.set(Math.cos(a) * p.orbitR, 0, Math.sin(a) * p.orbitR);
+      const w = 2 * Math.PI / p.period;
+      const rf = reduceMotion ? 1 : 1 - p.fall;
+      if (!reduceMotion && p.fall > 0) p.swirl += dt * Math.min(config.SWIRL_MAX, w * (Math.pow(1 / Math.max(rf, 0.05), 1.5) - 1));
+      const a = p.phase + (reduceMotion ? 0 : time * w) + p.swirl;
+      p.body.group.position.set(Math.cos(a) * p.orbitR * rf, 0, Math.sin(a) * p.orbitR * rf);
+      p.body.stretchA.rotation.y = -a;       // radial frame for the stretch…
+      p.body.stretchB.rotation.y = a;        // …and back, so the emblem itself does not turn
     }
 
     // Camera: a flight, the reader's flying, or the controls; when a
@@ -1162,7 +1078,7 @@ import { makeEmblem } from './emblems.js';
     stepShift(dt);
     camera.updateMatrixWorld();
     scene.updateMatrixWorld();
-    sun.mat.uniforms.uLight.value.copy(sunLightView);
+    stepBlackHole(cs);
 
     // The emblems: a slow turn, or — when selected and it has a front
     // (a screen, numbers) — turning to face the reader; then their own
@@ -1206,7 +1122,7 @@ import { makeEmblem } from './emblems.js';
   function build() {
     if (sun) return;
     try {
-      sun = makeBody(LOOKS.terra, config.SEED, config.SUN_R, config.BAKE_W, { halo: true, ambient: 0.05 });
+      sun = makeBlackHole();
     } catch (e) { console.error(e); fail(); return; }
     const a = arrivalPose();
     camera.position.copy(a.pos); controls.target.copy(a.target); camera.lookAt(a.target);
@@ -1233,8 +1149,9 @@ import { makeEmblem } from './emblems.js';
   if (reduceMotion) { armed = true; resize(); build(); }
 
   window.system = {
-    select, overview,
-    state: () => ({ ready, focus, hot, planets: planets.filter(Boolean).length, dist: +camera.position.distanceTo(controls.target).toFixed(2), flying: !!flight || rig.active }),
+    select, overview, collapse: startCollapse,
+    state: () => ({ ready, focus, hot, planets: planets.filter(Boolean).length, dist: +camera.position.distanceTo(controls.target).toFixed(2), flying: !!flight || rig.active,
+      collapsing: collapse ? +((performance.now() - collapse.t0) / 1000).toFixed(2) : null }),
     /* For the harness: where the camera is and where a body sits on
        screen (NDC), so motion can be measured frame by frame. */
     pose: (which) => {

@@ -66,7 +66,7 @@ build copies `src/` to the deployed root.
 - **After the name** there is the launch (`warp.js`) and the Koaik
   SYSTEM (`system.js` on three.js, `emblems.js` for the projects,
   `hud.js` for its text, the `.sys-*`/`.probe` blocks of `galaxy.css`):
-  Ali's world as the star, every project a living model of itself
+  Koaik — a mini black hole (item 18) — at the centre, every project a living model of itself
   (not a planet) on its own orbit, free navigation. The
   waypoints trip that used to follow the planet was REMOVED on
   2026-09-25 (item 14); do not resurrect it unasked.
@@ -446,6 +446,28 @@ Done, in order, all in `src/js/galaxy/galaxy.js` unless noted:
     at 270vh so it scrolls with the page. Verified on the real GPU at
     1280×800 and 390×844: name screen, half-scrolled, profile, the
     centred button, leave, release, system; reduced motion; no errors.
+
+18. KOAIK IS A MINI BLACK HOLE (2026-09-28, user: "change the earth to a
+    mini black hole … when I press it, it should collapse the entire
+    system"; chose: the system re-forms after, the pilot card stays on
+    the chip). system.js: the generated globe, its bake passes and
+    corona are GONE (only NOISE is kept); `makeBlackHole()` = shadow
+    (opaque black billboard, writes depth, renderOrder 1) + disk
+    (RingGeometry in the plane, shader with Kepler shear cross-faded
+    every 14 s, beaming) + glow billboard (photon ring, lensed arcs
+    along the disk axis on screen `uAxis`/`uFace`). `BH_R` 0.20.
+    Clicking Koaik (canvas or its label) calls `startCollapse()`; the
+    chip still calls select('pilot'). The collapse is a pure function
+    of seconds since the click (`stepCollapse`, times in `config`
+    FALL_*/IMPLODE/DARK/REBORN/RISE_*): per project `fall` 0→1 inner
+    first (r = orbitR·(1−fall), extra Kepler swirl kept in `p.swirl`,
+    radial stretch via the stretchA/stretchB wrappers, then scale 0),
+    implode, flash (`flashMesh`) + shockwave (`shock`), dark, rebirth,
+    fall 1→0. Controls, picking, keys are off while `collapse` is set.
+    `window.system.collapse()` for the harness. Also this day: the
+    reticle is placed by left/top (CSS `rotate` composes on top of
+    `transform`), flight keys read `e.code`, and `#planet` is fixed to
+    the viewport after launch (style.css capped sections at 1200px).
 
 Open items and ideas, none started:
 

@@ -34,7 +34,8 @@
   }
 
   /* The pilot chip: name and status, top corner, always there once
-     the system is live; clicking it is the same as clicking Koaik. */
+     the system is live; clicking it flies to Koaik and opens the pilot's
+     card (clicking Koaik itself collapses the system). */
   set('chipName', pp.name);
   set('chipStatus', pp.status);
   set('chipInitials', initials);
@@ -55,8 +56,8 @@
   const hint = document.getElementById('sysHint');
   const coarse = window.matchMedia('(pointer: coarse)').matches;
   if (hint) hint.textContent = coarse
-    ? 'Drag to orbit · Pinch to zoom · Tap a planet'
-    : 'Drag to orbit · Scroll to zoom · Right-drag to slide · W A S D to fly, Shift to boost · Click a planet';
+    ? 'Drag to orbit · Pinch to zoom · Tap a project · Tap the black hole to collapse it'
+    : 'Drag to orbit · Scroll to zoom · Right-drag to slide · W A S D to fly, Shift to boost · Click a project · Click the black hole to collapse it';
 
   /* ── The panel ── */
   const panel = document.getElementById('sysPanel');
