@@ -406,7 +406,7 @@ Done, in order, all in `src/js/galaxy/galaxy.js` unless noted:
     `front` is 'yaw' (push_swap) / 'full' (minishell: also pitches up
     to the camera) they turn to face the reader (EMBLEM_FACE); canvas
     redraws only when on-screen radius > DETAIL_PX 26. EMBLEM_R 0.55,
-    ORBIT_STEP 1.0. The locked reticle is now a faint solid ring.
+    ORBIT_STEP 1.3 (was 1.0; MAX_DIST 80 so the portrait overview fits). The locked reticle is now a faint solid ring.
     Verified on the real GPU: 60 fps flat, no long frames, at 1280×800
     and 1512×982 @2×, overview + every close-up + phone.
 
@@ -462,12 +462,36 @@ Done, in order, all in `src/js/galaxy/galaxy.js` unless noted:
     FALL_*/IMPLODE/DARK/REBORN/RISE_*): per project `fall` 0→1 inner
     first (r = orbitR·(1−fall), extra Kepler swirl kept in `p.swirl`,
     radial stretch via the stretchA/stretchB wrappers, then scale 0),
-    implode, flash (`flashMesh`) + shockwave (`shock`), dark, rebirth,
-    fall 1→0. Controls, picking, keys are off while `collapse` is set.
+    then (same day, user: "it should start collapsing the background
+    also … and take me to another page") NO rebirth: the sky falls in
+    — galaxy.js composite pass warps everything toward the hole
+    (`window.galaxySky.swallow(amount, u, v)`, `uHole`/`uSwallow`,
+    system.js feeds the hole's screen uv each frame) — then implode,
+    flash (`flashMesh`) + shockwave (`shock`), `.sys-void` to black,
+    `location.assign(config.NEXT_PAGE)` = `src/beyond.html`, a
+    placeholder the user will design. bfcache back → reload.
+    Controls, picking, keys and the HUD are off while `collapse` is set.
     `window.system.collapse()` for the harness. Also this day: the
     reticle is placed by left/top (CSS `rotate` composes on top of
     `transform`), flight keys read `e.code`, and `#planet` is fixed to
     the viewport after launch (style.css capped sections at 1200px).
+
+19. ORBITS LIT AND LENSED BY THE HOLE (2026-09-28, user: "the orbits
+    of the black hole should be more visible and affect the light
+    around it"). system.js: each orbit is a screen-space RIBBON mesh
+    (`makeOrbitRibbon`, ORBIT_VS/FS; 2 verts per point, drawRange is
+    now in INDICES, 6 per segment), `ORBIT_WIDTH` 5 css px, blended
+    ONE/ONE with alpha = max(rgb) (the canvas is transparent over the
+    galaxy — alpha 0 made them vanish). Lit by the hole: warm + bright
+    near, cool + dim far, faint light packets running the planets' way.
+    LENSED: points behind the hole are pushed out on screen by the
+    point-lens image equation, θE = `LENS_K` 2.6 shadow radii × √(depth
+    behind / uLensDepth 6), with magnification brightening. Shared
+    uniforms `orbitU` are fed in stepBlackHole (θE follows the shadow's
+    scale, so it shrinks in the collapse). Opacity levels 0.50 / hot
+    0.80 / focus 1.0. Verified on the real GPU at 1280×800 (overview,
+    low angle, near): visible, warm inner rings, the far halves bend
+    round the shadow, no errors. Phone not rendered.
 
 Open items and ideas, none started:
 
@@ -480,8 +504,12 @@ Open items and ideas, none started:
   thresholds (cut once), cloud cover (`smoothstep(0.03, 0.42, c)`),
   night-light strength, `FILL` 0.72, `SPIN`. Warp tuning: `T` for
   the timeline, `STAR_COUNT`, the `chroma` fringe.
-- Outer arms a little sparse after the count cut — `FIELD_COUNT` back
-  toward 55k is free (GPU only).
+- Realism pass (2026-09-28): `STAR_TYPES` is now real spectral
+  colours O→M (no mint/teal/violet), faint first in each pool; bulge
+  and interarm warmer, arms bluer; nucleus cream and dimmer. A doubled
+  field (96k, smaller/fainter) was tried and REJECTED by the user:
+  "more realistic galaxy doesn't mean more stars" — do not raise the
+  counts to get realism.
 - `src/assets/portrait.jpg` for the pilot card and chip is missing;
   ask the user for the photo (any square-ish JPG/PNG/WebP; update
   `personal.photo` if the name differs).

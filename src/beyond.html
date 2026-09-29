@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Beyond the Horizon — Ali Koaik</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <!-- Where the black hole leads (system.js NEXT_PAGE). A placeholder
+       to be designed: it opens from black, the way the collapse ended. -->
+  <style>
+    :root {
+      --bg: #000;
+      --text: #E6E9F2;
+      --muted: #9AA3B8;
+      --gold: #F2D28B;
+      --mono: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      display: grid;
+      place-items: center;
+      padding: 16px;
+      text-align: center;
+    }
+    main { opacity: 0; animation: arrive 2.4s cubic-bezier(0.22, 1, 0.36, 1) 0.4s forwards; }
+    .label { margin: 0 0 0.8rem; font-family: var(--mono); font-size: 0.74rem; letter-spacing: 0.22em; text-transform: uppercase; color: var(--gold); }
+    h1 { margin: 0 0 2rem; font-weight: 400; font-size: clamp(1.4rem, 4vw, 2.2rem); letter-spacing: 0.02em; }
+    a { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); text-decoration: none; border-bottom: 1px solid transparent; padding-bottom: 2px; }
+    a:hover, a:focus-visible { color: var(--text); border-color: var(--gold); outline: none; }
+    @keyframes arrive { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    @media (prefers-reduced-motion: reduce) { main { animation: none; opacity: 1; } }
+  </style>
+</head>
+<body>
+  <main>
+    <p class="label">Beyond the horizon</p>
+    <h1>Everything fell in. This is what's on the other side.</h1>
+    <a href="galaxy.html">↺ Start again</a>
+  </main>
+</body>
+</html>

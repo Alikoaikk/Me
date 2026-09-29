@@ -1097,6 +1097,27 @@
     uniform float uExposure;
     uniform float uBloomStrength;
     uniform vec2 uRes;
+    uniform vec2 uHole;       // the black hole on screen (uv), system.js
+    uniform float uSwallow;   // 0..1, the sky falls into it
+
+    /* The swallow: every pixel shows the sky from FURTHER out along its
+       line from the hole, turned by a swirl that tightens near it, so
+       the whole sky contracts and spirals in; inner parts go first.
+       Squeezed light gets brighter (a little), and what would come
+       from beyond the frame is black. At 1 nothing is left. */
+    vec2 swallowUv(vec2 uv, out float gain) {
+      gain = 1.0;
+      if (uSwallow <= 0.0) return uv;
+      float asp = uRes.x / uRes.y;
+      vec2 p = (uv - uHole) * vec2(asp, 1.0);
+      float r = length(p);
+      float k = 1.0 - uSwallow;
+      float kr = pow(k, 1.0 + 1.6 * exp(-r * 2.5));
+      float rs = r / max(kr, 1e-3);
+      float ang = atan(p.y, p.x) + uSwallow * uSwallow * 2.4 / (r + 0.12);
+      gain = mix(1.0, 1.0 / max(kr, 0.15), 0.35);
+      return uHole + vec2(cos(ang), sin(ang)) * rs / vec2(asp, 1.0);
+    }
 
     // ACES filmic curve: keeps bright cores from clipping to flat white.
     vec3 aces(vec3 x) {
@@ -1105,14 +1126,18 @@
     }
 
     void main() {
-      vec3 col = texture(uScene, vUv).rgb;
+      float gain;
+      vec2 uv = swallowUv(vUv, gain);
+      float inside = step(0.0, uv.x) * step(uv.x, 1.0) * step(0.0, uv.y) * step(uv.y, 1.0);
+      vec3 col = texture(uScene, uv).rgb;
       // Three mips: tight, medium and wide halo. Binding the last mip
       // twice (as a 4-sampler version would with 3 targets) double
       // weights it and over-brightens the widest halo.
-      vec3 bloom = texture(uBloom0, vUv).rgb * 1.00
-                 + texture(uBloom1, vUv).rgb * 0.72
-                 + texture(uBloom2, vUv).rgb * 0.46;
+      vec3 bloom = texture(uBloom0, uv).rgb * 1.00
+                 + texture(uBloom1, uv).rgb * 0.72
+                 + texture(uBloom2, uv).rgb * 0.46;
       col += bloom * uBloomStrength;
+      col *= inside * gain * (1.0 - smoothstep(0.85, 1.0, uSwallow));
 
       col *= uExposure;
       col = aces(col);
@@ -1136,45 +1161,49 @@
 
   /* ============================================================
      STAR CLASSES
-     Brightness is deliberately NOT tied to hue. An earlier ordering
-     ran warm-faint to cool-bright, which left amber stars at 60% of
-     the count but 25% of the light and rendered the field white.
+     Brightness is deliberately NOT tied to hue: both pools run faint
+     to bright. An earlier ordering ran warm-faint to cool-bright,
+     which left amber stars at 60% of the count but 25% of the light
+     and rendered the field white.
      ============================================================ */
+  /* Real stellar colours — blackbody hues by spectral class, O blue
+     through M red. There are no green, teal or violet stars; an
+     earlier palette had them and read as confetti, not a galaxy.
+     Within each pool the FIRST entries are the most common (pickType
+     skews toward the front), and they are the faint ones: a real
+     luminosity function is dominated by dim stars, with a handful of
+     giants carrying the eye. */
   const STAR_TYPES = [
-    { k: 'deep red',    w: 0.07, c: [1.00, 0.36, 0.16], s: 0.62, l: 0.30 },
-    { k: 'ember',       w: 0.06, c: [1.00, 0.46, 0.20], s: 0.68, l: 0.58 },
-    { k: 'amber dim',   w: 0.10, c: [1.00, 0.60, 0.26], s: 0.68, l: 0.38 },
-    { k: 'amber',       w: 0.09, c: [1.00, 0.70, 0.42], s: 0.88, l: 1.05 },
-    { k: 'gold',        w: 0.06, c: [1.00, 0.82, 0.46], s: 0.98, l: 1.55 },
-    { k: 'cream',       w: 0.05, c: [1.00, 0.94, 0.82], s: 0.94, l: 0.92 },
-    { k: 'amber giant', w: 0.05, c: [1.00, 0.66, 0.34], s: 1.26, l: 2.70 },
-    { k: 'rose',        w: 0.04, c: [1.00, 0.58, 0.64], s: 0.86, l: 1.15 },
-    { k: 'mint',        w: 0.05, c: [0.64, 0.98, 0.86], s: 0.66, l: 0.50 },
-    { k: 'teal',        w: 0.05, c: [0.52, 0.88, 0.96], s: 0.70, l: 0.48 },
-    { k: 'ice',         w: 0.06, c: [0.58, 0.90, 1.00], s: 0.76, l: 0.80 },
-    { k: 'blue dim',    w: 0.08, c: [0.70, 0.84, 1.00], s: 0.70, l: 0.42 },
-    { k: 'blue-white',  w: 0.07, c: [0.86, 0.94, 1.00], s: 1.00, l: 1.40 },
-    { k: 'hot blue',    w: 0.05, c: [0.60, 0.78, 1.00], s: 1.32, l: 3.00 },
-    { k: 'violet',      w: 0.04, c: [0.72, 0.62, 1.00], s: 1.08, l: 1.70 },
-    { k: 'anchor warm', w: 0.02, c: [1.00, 0.80, 0.50], s: 1.90, l: 5.00 },
-    { k: 'anchor cool', w: 0.01, c: [0.72, 0.88, 1.00], s: 2.00, l: 5.60 },
+    { k: 'K dwarf',     c: [1.00, 0.78, 0.56], s: 0.58, l: 0.30 },
+    { k: 'M dwarf',     c: [1.00, 0.64, 0.42], s: 0.54, l: 0.24 },
+    { k: 'G dwarf',     c: [1.00, 0.91, 0.78], s: 0.62, l: 0.38 },
+    { k: 'K',           c: [1.00, 0.80, 0.60], s: 0.78, l: 0.72 },
+    { k: 'G',           c: [1.00, 0.92, 0.80], s: 0.84, l: 0.95 },
+    { k: 'F',           c: [1.00, 0.97, 0.92], s: 0.90, l: 1.20 },
+    { k: 'K giant',     c: [1.00, 0.74, 0.48], s: 1.22, l: 2.60 },
+    { k: 'anchor warm', c: [1.00, 0.84, 0.62], s: 1.80, l: 4.60 },
+    { k: 'A dim',       c: [0.80, 0.87, 1.00], s: 0.62, l: 0.40 },
+    { k: 'B dim',       c: [0.64, 0.76, 1.00], s: 0.64, l: 0.46 },
+    { k: 'A',           c: [0.82, 0.89, 1.00], s: 0.88, l: 1.10 },
+    { k: 'B',           c: [0.62, 0.74, 1.00], s: 1.00, l: 1.60 },
+    { k: 'O',           c: [0.54, 0.66, 1.00], s: 1.28, l: 2.90 },
+    { k: 'anchor cool', c: [0.70, 0.80, 1.00], s: 1.90, l: 5.20 },
   ];
 
-  const WARM_TYPES = ['deep red', 'amber dim', 'ember', 'cream', 'rose',
-                      'amber', 'gold', 'amber giant', 'anchor warm']
+  const WARM_TYPES = ['K dwarf', 'M dwarf', 'G dwarf', 'K', 'G', 'F',
+                      'K giant', 'anchor warm']
     .map(k => STAR_TYPES.find(t => t.k === k));
-  const COOL_TYPES = ['mint', 'teal', 'blue dim', 'ice', 'violet',
-                      'blue-white', 'hot blue', 'anchor cool']
+  const COOL_TYPES = ['A dim', 'B dim', 'A', 'B', 'O', 'anchor cool']
     .map(k => STAR_TYPES.find(t => t.k === k));
 
   function pickType(r, inBulge, inArm, ang) {
     let coolChance;
-    if (inBulge) coolChance = 0.12;
+    if (inBulge) coolChance = 0.03;          // old stars: yellow-orange
     else if (inArm) {
       // Arms skew blue, banded along their length so colour clumps.
       const band = Math.sin(ang * 2.7 + r * 9.0) * 0.5 + 0.5;
-      coolChance = 0.34 + band * 0.44;
-    } else coolChance = 0.30;
+      coolChance = 0.46 + band * 0.40;
+    } else coolChance = 0.16;
     const pool = Math.random() < coolChance ? COOL_TYPES : WARM_TYPES;
     const u = Math.random();
     return pool[Math.min(pool.length - 1,
@@ -1330,9 +1359,11 @@
     if (pop === 4) {
       // The little sun: white-hot centre warming to gold at the limb.
       const edge = r / config.NUCLEUS_RADIUS;
-      return { c: [1.00, 0.99 - edge * 0.20, 0.96 - edge * 0.44],
+      // Old stars: even the hottest point of a real bulge is cream,
+      // not blue-white, and it must not clip to a flat disc.
+      return { c: [1.00, 0.92 - edge * 0.14, 0.74 - edge * 0.26],
                s: (1.05 - edge * 0.26) * vary,
-               l: (4.6 - edge * 1.6) + Math.random() * 1.3, kind: 0 };
+               l: (3.2 - edge * 1.2) + Math.random() * 0.9, kind: 0 };
     }
     const type = pickType(r, pop === 0, pop === 1 && !secondary, ang);
     const kind = (type.l >= 2.5 && Math.random() < 0.55) ? 2 : 0;
@@ -1942,6 +1973,13 @@
   let leanX = 0, leanY = 0;
   let lastTime = performance.now();
   let running = false, visible = true;
+  /* The black hole swallowing the sky (system.js drives it at the end
+     of the collapse): where it is on screen, in uv, and how far. */
+  let swallowAmt = 0;
+  const swallowHole = [0.5, 0.5];
+  window.galaxySky = {
+    swallow(amount, u, v) { swallowAmt = Math.min(1, Math.max(0, amount)); swallowHole[0] = u; swallowHole[1] = v; },
+  };
 
   function wake() {
     if (running || document.hidden || !visible) return;
@@ -2472,6 +2510,8 @@
     gl.uniform1f(compositeProg.u.uExposure, config.EXPOSURE);
     gl.uniform1f(compositeProg.u.uBloomStrength, config.BLOOM_STRENGTH);
     gl.uniform2f(compositeProg.u.uRes, vw, vh);
+    gl.uniform2f(compositeProg.u.uHole, swallowHole[0], swallowHole[1]);
+    gl.uniform1f(compositeProg.u.uSwallow, swallowAmt);
     gl.bindVertexArray(quadVAO);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.bindVertexArray(null);

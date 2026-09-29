@@ -10,8 +10,8 @@
    zoom, arrow keys / WASD to fly — hover a project for its name, and
    click or tap one to fly to it and open its panel (hud.js).
    Clicking Koaik COLLAPSES the system: every project spirals in and is
-   swallowed, the hole implodes and flashes, and a beat later the
-   system is born again out of it. The pilot's card opens from the
+   swallowed, then the whole sky falls in after them, the hole implodes
+   and flashes, and the reader is taken to the next page (beyond.html). The pilot's card opens from the
    chip in the corner (select('pilot')).
 
    three.js (vendored, js/vendor/three) does the scene, the camera,
@@ -54,6 +54,8 @@ import { makeEmblem } from './emblems.js';
     BH_R:       0.20,                   // the shadow's radius, world units
     BH_DISK_IN: 1.45,                   // accretion disk, in shadow radii
     BH_DISK_OUT: 4.3,
+    LENS_K:     2.6,                    // the orbits' Einstein radius, in shadow radii
+    ORBIT_WIDTH: 5.0,                   // the orbit ribbon's glow, CSS px across
     MIN_NEAR:   0.35,                   // closest the camera may get to anything, world units
 
     /* The camera. */
@@ -84,7 +86,7 @@ import { makeEmblem } from './emblems.js';
     SUNWARD:    0.55,                   // planet view: how far toward the lit side the camera swings
     LET_GO:     14,                     // zooming out past this many radii releases a focused planet
     MIN_DIST:   1.6,                    // zoom limits, in the focused body's radii
-    MAX_DIST:   60,
+    MAX_DIST:   80,                     // must clear the portrait overview (~68 at ORBIT_STEP 1.3)
     FLY_SPEED:  0.9,                    // keyboard flight, in (distance to target) per second
     FLY_BOOST:  3.0,                    // with Shift
     FLY_DAMP:   5.0,
@@ -93,7 +95,7 @@ import { makeEmblem } from './emblems.js';
 
     /* The orbits. */
     ORBIT_0:    2.5,                    // innermost radius
-    ORBIT_STEP: 1.0,
+    ORBIT_STEP: 1.3,                    // gap between neighbouring orbits
     EMBLEM_R:   0.55,                   // a project's size (radius of its solid parts), world units
     EMBLEM_SPIN: 0.14,                  // rad/s, its slow turn when not selected
     EMBLEM_FACE: 3.0,                   // how briskly a selected project turns to face the reader
@@ -101,19 +103,20 @@ import { makeEmblem } from './emblems.js';
     PERIOD_0:   48,                     // seconds for the innermost; Kepler (r^1.5) beyond
 
 
-    /* The collapse (click Koaik): every project spirals in, is
-       stretched and swallowed, inner first; the hole implodes, flashes,
-       and a beat later the system is born again from it, inner first.
-       Seconds. */
+    /* The collapse (click Koaik), one way: every project spirals in,
+       is stretched and swallowed, inner first; then the whole sky
+       (galaxy.js) falls in; the hole implodes and flashes, the screen
+       goes black, and the reader is taken to NEXT_PAGE. Seconds. */
     FALL_START: 0.15,                   // first project starts falling
     FALL_STAGGER: 0.11,                 // next one this much later
     FALL_DUR:   1.5,                    // one project's fall (+0.07 per orbit out)
-    IMPLODE:    0.55,                   // after the last is in: the hole shrinks to a point, then the flash
-    DARK:       0.7,                    // flash to rebirth
-    REBORN:     1.0,                    // the hole grows back
-    RISE_DELAY: 0.3,                    // then the projects spiral out
-    RISE_DUR:   1.7,
+    SKY_DELAY:  0.1,                    // after the last project is in, the sky starts to go
+    SKY_DUR:    2.8,                    // the whole sky falls in
+    IMPLODE:    0.55,                   // the hole shrinks to a point (ends as the sky is gone), then the flash
+    TO_BLACK:   0.6,                    // flash → black
+    LEAVE_HOLD: 0.25,                   // a beat of black, then the new page
     SWIRL_MAX:  14,                     // rad/s cap on the extra spin of a falling project
+    NEXT_PAGE:  'beyond.html',
   };
 
   /* ── Shaders ── */
@@ -377,6 +380,124 @@ import { makeEmblem } from './emblems.js';
      their orbits once compiled — so no shader compiles mid-animation. */
   const staging = new THREE.Scene();
   let emblemsLive = false;
+
+  /* ── The orbits, lit and bent by the hole ──
+     Each orbit is a screen-space RIBBON (two vertices per point,
+     extruded across the line in pixels), not a 1px GL line: a soft
+     glow with a bright core. It is LIT by the hole — warm and bright
+     near the disk, cool and dim far out — with faint packets of light
+     running along it the way the planets go. And it is LENSED: the
+     part of an orbit that passes behind Koaik is pushed out from the
+     hole on screen by the point-lens image equation
+       θ = (β + √(β² + 4θE²)) / 2
+     with θE growing as √ of how far behind the hole the point is, so
+     orbits bend into arcs round the shadow and brighten there
+     (magnification). Nothing is lensed in front of the hole, and the
+     deflection is zero at the hole's own depth, so there is no kink.
+     All orbits share `orbitU` (the hole, its lens size, the time). */
+  const ORBIT_VS = `
+    attribute vec3 aNext;
+    attribute float aSide;
+    attribute float aU;
+    uniform vec2 uRes;
+    uniform float uWidth;
+    uniform vec3 uHole;
+    uniform float uLens;           // Einstein radius in px for a source far behind
+    uniform float uLensDepth;      // how far behind (view units) θE reaches full size
+    uniform float uNear;
+    varying float vSide;
+    varying float vU;
+    varying float vLight;
+    varying float vMag;
+    vec2 toPx(vec4 c) { return c.xy / c.w * 0.5 * uRes; }
+    vec2 lens(vec2 s, vec2 h, float dz, out float mag) {
+      float te = uLens * sqrt(clamp(dz / uLensDepth, 0.0, 1.0));
+      vec2 d = s - h;
+      float b = max(length(d), 1e-3);
+      mag = 1.0;
+      if (te < 1e-3) return s;
+      float r = 0.5 * (b + sqrt(b * b + 4.0 * te * te));
+      float u = b / te;
+      mag = (u * u + 2.0) / (u * sqrt(u * u + 4.0));
+      return h + d / b * r;
+    }
+    void main() {
+      vec4 w0 = modelMatrix * vec4(position, 1.0);
+      vec4 w1 = modelMatrix * vec4(aNext, 1.0);
+      vec4 v0 = viewMatrix * w0, v1 = viewMatrix * w1;
+      vSide = aSide; vU = aU;
+      // Light from the disk: inverse-ish square, softened at the core.
+      float dh = length(w0.xyz - uHole);
+      vLight = 1.0 / (1.0 + pow(dh / 3.2, 2.2));
+      if (v0.z > -uNear) { gl_Position = vec4(0.0, 0.0, 2.0, 1.0); vMag = 1.0; return; }
+      // Keep the direction usable when the next point is behind the camera.
+      if (v1.z > -uNear) v1 = v0 + (v1 - v0) * ((-uNear - v0.z) / (v1.z - v0.z) * 0.99);
+      vec4 vh = viewMatrix * vec4(uHole, 1.0);
+      vec4 c0 = projectionMatrix * v0, c1 = projectionMatrix * v1, ch = projectionMatrix * vh;
+      vec2 h = toPx(ch);
+      float m0, m1;
+      vec2 s0 = lens(toPx(c0), h, vh.z - v0.z, m0);
+      vec2 s1 = lens(toPx(c1), h, vh.z - v1.z, m1);
+      vMag = m0;
+      vec2 dir = s1 - s0;
+      float dl = length(dir);
+      dir = dl > 1e-4 ? dir / dl : vec2(1.0, 0.0);
+      vec2 s = s0 + vec2(-dir.y, dir.x) * aSide * uWidth * 0.5;
+      gl_Position = vec4(s / (0.5 * uRes) * c0.w, c0.z, c0.w);
+    }`;
+  const ORBIT_FS = `
+    uniform float uOpacity;
+    uniform float uTime;
+    uniform float uSeed;
+    varying float vSide;
+    varying float vU;
+    varying float vLight;
+    varying float vMag;
+    void main() {
+      // A bright core and a soft glow across the ribbon.
+      float x = abs(vSide);
+      float prof = exp(-x * x * 18.0) + 0.28 * exp(-x * x * 3.0);
+      // Packets of light running the planets' way (decreasing u).
+      float f = fract((vU + uTime * 0.022 + uSeed) * 6.0);
+      float pk = pow(max(0.0, 1.0 - abs(f - 0.5) * 2.0), 10.0);
+      vec3 cool = vec3(0.56, 0.64, 0.86);
+      vec3 warm = vec3(1.00, 0.74, 0.46);
+      float L = clamp(vLight, 0.0, 1.0);
+      vec3 col = mix(cool, warm, smoothstep(0.0, 0.55, L));
+      float mag = min(vMag, 4.0);
+      float I = uOpacity * (0.42 + 1.5 * L + 0.55 * pk) * mag;
+      vec3 c = col * I * prof;
+      // Added onto a transparent canvas composited over the galaxy:
+      // alpha must grow with the light or the page would not see it.
+      gl_FragColor = vec4(c, clamp(max(c.r, max(c.g, c.b)), 0.0, 1.0));
+    }`;
+  const orbitU = {
+    uRes: { value: new THREE.Vector2(1, 1) }, uWidth: { value: 4 }, uHole: { value: new THREE.Vector3() },
+    uLens: { value: 0 }, uLensDepth: { value: 6 }, uNear: { value: 0.05 }, uTime: { value: 0 },
+  };
+  function makeOrbitRibbon(pts) {
+    const n = pts.length;                                   // first point repeated at the end
+    const pos = new Float32Array(n * 2 * 3), nxt = new Float32Array(n * 2 * 3);
+    const side = new Float32Array(n * 2), u = new Float32Array(n * 2);
+    for (let k = 0; k < n; k++) {
+      const a = pts[k], b = pts[k + 1 < n ? k + 1 : 1];
+      for (let s = 0; s < 2; s++) {
+        const j = k * 2 + s;
+        pos.set([a.x, a.y, a.z], j * 3); nxt.set([b.x, b.y, b.z], j * 3);
+        side[j] = s ? 1 : -1; u[j] = k / (n - 1);
+      }
+    }
+    const idx = [];
+    for (let k = 0; k < n - 1; k++) { const a = k * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    g.setAttribute('aNext', new THREE.BufferAttribute(nxt, 3));
+    g.setAttribute('aSide', new THREE.BufferAttribute(side, 1));
+    g.setAttribute('aU', new THREE.BufferAttribute(u, 1));
+    g.setIndex(idx);
+    return g;
+  }
+
   function makePlanet(i) {
     const pr = projects[i];
     const w = pr.world || {};
@@ -409,8 +530,14 @@ import { makeEmblem } from './emblems.js';
     for (let k = 0; k <= ORBIT_PTS; k++) { const a = -(k / ORBIT_PTS) * Math.PI * 2 + phase; pts.push(new THREE.Vector3(Math.cos(a) * orbitR, 0, Math.sin(a) * orbitR)); }
     // depthWrite off: an invisible line that still wrote depth cut a
     // dark chord through Koaik on arrival.
-    const ringMat = new THREE.LineBasicMaterial({ color: 0x9aa3b8, transparent: true, opacity: 0, depthWrite: false });
-    const ring = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), ringMat);
+    const ringMat = new THREE.ShaderMaterial({
+      vertexShader: ORBIT_VS, fragmentShader: ORBIT_FS, transparent: true, depthWrite: false,
+      side: THREE.DoubleSide, blending: THREE.CustomBlending, blendEquation: THREE.AddEquation,
+      blendSrc: THREE.OneFactor, blendDst: THREE.OneFactor, blendSrcAlpha: THREE.OneFactor, blendDstAlpha: THREE.OneFactor,
+      uniforms: { ...orbitU, uOpacity: { value: 0 }, uSeed: { value: i * 0.137 } },
+    });
+    const ring = new THREE.Mesh(makeOrbitRibbon(pts), ringMat);
+    ring.frustumCulled = false;                           // the lens moves it off its bounds
     ring.geometry.setDrawRange(0, 0);
     plane.add(ring);
     plane.add(group);
@@ -900,35 +1027,45 @@ import { makeEmblem } from './emblems.js';
   }
 
   /* ── The collapse ──
-     Clicking Koaik swallows the system. Everything is a function of
-     the seconds since the click (so it cannot drift): each project's
-     `fall` (0 on its orbit, 1 inside the hole) goes up inner-first,
-     then the hole implodes, flashes and sends a shockwave through the
-     empty orbits; after a beat of dark it is reborn and `fall` comes
-     back down, the projects spiralling out inner-first. The camera is
-     taken to the overview for it and the controls are off until the
-     last project is home. */
-  let collapse = null;                 // { t0 } while it plays
+     Clicking Koaik swallows everything, and there is no way back:
+     it ends on NEXT_PAGE. All of it is a function of the seconds since
+     the click (so it cannot drift): each project's `fall` (0 on its
+     orbit, 1 inside the hole) goes up inner-first; then the sky itself
+     falls in (galaxy.js, `window.galaxySky.swallow`, aimed at the hole
+     on screen); the hole implodes, flashes, sends a shockwave through
+     the empty orbits; the screen goes black (`.sys-void`) and the page
+     changes. The camera is taken to the overview for it, the controls
+     and the HUD are gone. */
+  let collapse = null;                 // { t0, T, left } while it plays
   const easeInCubic = t => t * t * t;
+  let voidEl = null;
   function collapseTimes() {
     const n = Math.max(1, planets.filter(Boolean).length);
     const endIn = config.FALL_START + config.FALL_STAGGER * (n - 1) + config.FALL_DUR + 0.07 * (n - 1);
-    const flash = endIn + config.IMPLODE, born = flash + config.DARK;
-    const rise = born + config.RISE_DELAY;
-    return { endIn, flash, born, rise, end: rise + config.FALL_STAGGER * (n - 1) + config.RISE_DUR };
+    const sky0 = endIn + config.SKY_DELAY, sky1 = sky0 + config.SKY_DUR;
+    const flash = sky1, implode = flash - config.IMPLODE;
+    const black = flash + config.TO_BLACK;
+    return { endIn, sky0, sky1, implode, flash, black, leave: black + config.LEAVE_HOLD };
   }
   function startCollapse() {
     if (!ready || flight || collapse || !emblemsLive) return;
-    collapse = { t0: performance.now(), T: collapseTimes() };
+    collapse = { t0: performance.now(), T: collapseTimes(), left: false };
     setHot(null);
     letGo();                                   // closes any card
     controls.enabled = false;
     keys.clear(); vel.set(0, 0, 0);
     rigTo(overviewPose(), null);
+    section.classList.add('is-collapsing');
+    if (!voidEl) { voidEl = document.createElement('div'); voidEl.className = 'sys-void'; voidEl.setAttribute('aria-hidden', 'true'); document.body.appendChild(voidEl); }
     dispatch('system:collapse', { phase: 'start' });
   }
-  /* Per frame: sets every project's fall, returns the hole's own state. */
+  /* Coming BACK to this page from the next one (bfcache) would restore
+     the swallowed, black screen: start the page over instead. */
+  window.addEventListener('pageshow', e => { if (e.persisted && collapse) location.reload(); });
+  /* Per frame: sets every project's fall, drives the sky, returns the
+     hole's own state. */
   const COLL_IDLE = { core: 1, feed: 1, flash: 0, shockR: 0, shockA: 0 };
+  const _hole = new THREE.Vector3();
   function stepCollapse(now) {
     if (!collapse) return COLL_IDLE;
     const ct = (now - collapse.t0) / 1000, T = collapse.T;
@@ -936,32 +1073,32 @@ import { makeEmblem } from './emblems.js';
     for (const p of planets) {
       if (!p) continue;
       const i = p.index;
-      const outS = T.rise + config.FALL_STAGGER * i;
-      if (ct < outS) {
-        const u = Math.min(1, Math.max(0, (ct - config.FALL_START - config.FALL_STAGGER * i) / (config.FALL_DUR + 0.07 * i)));
-        p.fall = u * u;                                        // accelerating in
-      } else {
-        const u = Math.min(1, (ct - outS) / config.RISE_DUR);
-        p.fall = (1 - u) * (1 - u);                            // decelerating out
-      }
+      const u = Math.min(1, Math.max(0, (ct - config.FALL_START - config.FALL_STAGGER * i) / (config.FALL_DUR + 0.07 * i)));
+      p.fall = u * u;                                          // accelerating in
       sum += p.fall; n++;
     }
     const mean = n ? sum / n : 0;
-    let core = 1, feed = 1 + 1.8 * mean;
-    if (ct >= T.endIn && ct < T.flash) { const u = (ct - T.endIn) / config.IMPLODE; core = 1 - 0.97 * easeInCubic(u); feed = 2.8 + 2 * u; }
-    else if (ct >= T.flash && ct < T.born) core = 0;
-    else if (ct >= T.born) core = easeOutBack(Math.min(1, (ct - T.born) / config.REBORN));
+    // The sky: eased in, so it starts as a creep and ends as a rush.
+    const sky = Math.min(1, Math.max(0, (ct - T.sky0) / config.SKY_DUR));
+    const skyAmt = reduceMotion ? 0 : sky * sky * (3 - 2 * sky) * 0.6 + easeInCubic(sky) * 0.4;
+    if (window.galaxySky) {
+      sun.group.getWorldPosition(_hole).project(camera);
+      window.galaxySky.swallow(skyAmt, _hole.x * 0.5 + 0.5, _hole.y * 0.5 + 0.5);
+    }
+    let core = 1, feed = 1 + 1.8 * mean + 1.6 * skyAmt;
+    if (ct >= T.implode && ct < T.flash) { const u = (ct - T.implode) / config.IMPLODE; core = 1 - 0.97 * easeInCubic(u); feed += 2 * u; }
+    else if (ct >= T.flash) core = 0;
     const tf = ct - T.flash;
     const flash = tf < 0 ? 0 : Math.exp(-tf * 3.2);
     const sr = tf < 0 ? 0 : Math.min(1, tf / 2.0);
     const shockR = 0.8 * easeOutCubic(sr), shockA = tf < 0 || sr >= 1 ? 0 : Math.pow(1 - sr, 2.0) * 1.2;
-    if (ct >= T.end) {
-      collapse = null;
-      for (const p of planets) if (p) p.fall = 0;
-      controls.enabled = ready;
-      lastTouch = now;
+    // Black: over the flash's tail (reduced motion: a plain fade from the start of the sky).
+    const b = reduceMotion ? smooth01((ct - T.sky0) / 1.2) : smooth01((ct - T.flash) / config.TO_BLACK);
+    if (voidEl) voidEl.style.opacity = b.toFixed(3);
+    if (ct >= (reduceMotion ? T.sky0 + 1.4 : T.leave) && !collapse.left) {
+      collapse.left = true;
       dispatch('system:collapse', { phase: 'end' });
-      return COLL_IDLE;
+      location.assign(config.NEXT_PAGE);
     }
     return { core, feed, flash: reduceMotion ? 0 : flash, shockR, shockA: reduceMotion ? 0 : shockA };
   }
@@ -977,7 +1114,14 @@ import { makeEmblem } from './emblems.js';
     const len = Math.hypot(_axis.x, _axis.y);
     if (len > 1e-4) g.uAxis.value.set(_axis.x / len, _axis.y / len);
     g.uFace.value = Math.abs(_axis.z);
-    g.uTime.value = dk.uTime.value = time;
+    g.uTime.value = dk.uTime.value = orbitU.uTime.value = time;
+    // The orbits' lens: the hole's Einstein radius in drawing-buffer px.
+    // Scales with the shadow, so it shrinks with it in the collapse.
+    renderer.getDrawingBufferSize(orbitU.uRes.value);
+    sun.group.getWorldPosition(orbitU.uHole.value);
+    const pxPerUnit = orbitU.uRes.value.y * 0.5 / (Math.tan(THREE.MathUtils.degToRad(config.FOV) / 2) * Math.max(0.1, camera.position.distanceTo(orbitU.uHole.value)));
+    orbitU.uLens.value = config.LENS_K * sun.mesh.scale.x * pxPerUnit;
+    orbitU.uWidth.value = config.ORBIT_WIDTH * renderer.getPixelRatio();
     g.uFeed.value = dk.uFeed.value = cs.feed;
     coreLight.intensity = 3.2 * Math.min(1.6, 0.25 + 0.75 * cs.core * cs.feed) + 30 * cs.flash;
     flashMesh.visible = cs.flash > 0.002;
@@ -1027,7 +1171,7 @@ import { makeEmblem } from './emblems.js';
       const start = 0.22 + 0.06 * p.index;
       const q = reduceMotion ? 1 : smooth01((pull - start) / 0.30);
       const drawn = Math.round(q * p.orbitPts) + 1;
-      p.ring.geometry.setDrawRange(0, Math.max(0, Math.min(p.orbitPts + 1, drawn)));
+      p.ring.geometry.setDrawRange(0, 6 * Math.max(0, Math.min(p.orbitPts, drawn - 1)));   // indices: 6 per segment
       p.born = !emblemsLive ? 0 : reduceMotion ? 1 : smooth01((pull - start - 0.10) / 0.28);
       // In the collapse: stretched toward the hole, then gone into it.
       const f = p.fall;
@@ -1036,7 +1180,7 @@ import { makeEmblem } from './emblems.js';
       const st = reduceMotion ? 1 : 1 + 2.6 * smooth01((f - 0.35) / 0.55);
       p.body.stretchA.scale.set(st, 1 / Math.sqrt(st), 1 / Math.sqrt(st));
       p.ring.scale.setScalar(reduceMotion ? 1 : Math.max(1e-3, 1 - f));
-      p.ringMat.opacity = (p.index === focus ? 0.55 : p.index === hot ? 0.45 : 0.20) * Math.min(1, q * 1.5) * (1 - smooth01(f / 0.7));
+      p.ringMat.uniforms.uOpacity.value = (p.index === focus ? 1.0 : p.index === hot ? 0.80 : 0.50) * Math.min(1, q * 1.5) * (1 - smooth01(f / 0.7));
     }
     // The caption: in with the reveal, out with the pull-back.
     const pin = Math.round(smooth01((rev - 0.55) / 0.45) * (1 - smooth01(pull / 0.4)) * 100) / 100;
