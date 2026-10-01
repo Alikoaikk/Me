@@ -31,11 +31,11 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const shot = async (name) => { await page.screenshot({ path: `${outdir}/${name}.png` }); console.log(name, JSON.stringify(await state())); };
 
   await sleep(4000); await shot('01-hero');
-  await to(1.8); await sleep(4000); await shot('02-approach');
-  await to(2.7); await sleep(24000); await shot('03-name');        // written, button under the quote
-  await to(2.0); await sleep(4000); await shot('03b-scroll-up-rewinds'); // allowed before the press
-  await to(2.7); await sleep(8000);
-  await to(3.35); await sleep(3000); await shot('03c-profile');   // the name scrolled up, who Ali is
+  await to(0.6); await sleep(4000); await shot('02-approach');
+  await to(1.0); await sleep(24000); await shot('03-name');        // written, button under the quote
+  await to(0.5); await sleep(4000); await shot('03b-scroll-up-rewinds'); // allowed before the press
+  await to(1.0); await sleep(8000);
+  await to(1.65); await sleep(3000); await shot('03c-profile');   // the name scrolled up, who Ali is
   await page.evaluate(() => scrollTo(0, document.documentElement.scrollHeight)); await sleep(3000); await shot('03d-button');
   await page.evaluate(() => document.getElementById('launchBtn').click());
   await sleep(1000); await shot('04-release');                     // the letters letting go (timed)

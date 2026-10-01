@@ -59,15 +59,14 @@
 /* The intro is pure scroll length now: the galaxy holds the screen
    here before the burst fires, with no text over it.
 
-   180vh, not 100vh, because this is the approach — the camera spends
-   the whole section closing in, and the zoom needs room to read as a
-   long push rather than a jump. It must stay long enough that
-   BURST_TRIGGER (2.60vh in galaxy.js) falls inside it; shorten it and
-   the galaxy detonates before it has finished growing. */
+   40vh: with #burst it is only the slack that lets the page reach
+   BURST_TRIGGER (0.90vh in galaxy.js) — the camera closes in over
+   the hero's own scroll. It was 180vh, which made the reader scroll
+   two and a half screens before anything happened. */
 #intro {
   position: relative;
   z-index: 1;
-  min-height: 180vh;
+  min-height: 40vh;
   pointer-events: none;
 }
 
@@ -75,8 +74,8 @@
    the page passes BURST_TRIGGER and then plays out on its own clock.
    But the page still has to be TALL enough to reach that trigger.
 
-   This section is only that slack. Hero 100 + intro 180 + burst 90 =
-   370vh, so max scrollY is 2.70 and the trigger at 2.60 is reachable
+   This section is only that slack. Hero 100 + intro 40 + burst 60 =
+   200vh, so max scrollY is 1.00 and the trigger at 0.90 is reachable
    with 0.10 to spare. The planet below is display:none
    until launch, so the document ends here — on the written name with
    the quote and the button under it. Scrolling back UP is allowed
@@ -89,12 +88,12 @@
 
    Recheck the arithmetic whenever a section height or BURST_TRIGGER
    changes: max scrollY = total height − 100vh, in viewport units. At
-   an earlier 40vh the total was 320vh and max scrollY 2.20, BELOW the
-   trigger: the burst could never fire at all. */
+   an earlier burst height the max scrollY fell BELOW the trigger:
+   the burst could never fire at all. */
 #burst {
   position: relative;
   z-index: 1;
-  height: 90vh;
+  height: 60vh;
   pointer-events: none;
 }
 
@@ -299,6 +298,52 @@
 .gname-link:hover, .gname-link:focus-visible { border-color: rgba(242, 210, 139, 0.6); color: #F2D28B; background: rgba(9, 12, 20, 0.75); }
 .gname-link:focus-visible { outline: 2px solid #8FB4FF; outline-offset: 2px; }
 
+/* ── The guides: what to do now ──
+   "Scroll" holds the foot of the screen for the whole approach —
+   until the burst takes over, so there is never a moment without a
+   guide; "Wait" replaces it while the burst is on its own
+   clock (.is-bursting — set only when it plays forward, so it does
+   not show on the scroll-up rewind). Both share the cue's slot and
+   type; the name screen's own cue takes over once it is written. */
+.guide {
+  position: fixed;
+  left: 50%;
+  bottom: 4vh;
+  z-index: 2;
+  margin: 0;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: #9AA3B8;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 0.66rem;
+  letter-spacing: 0.22em;
+  text-indent: 0.22em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+.guide-scroll { opacity: max(0, 1 - var(--burst, 0) * 10); }
+.guide-wait {
+  /* In over the first tenth of the burst, out as the name's framing
+     arrives. No transition: --burst is written every frame. */
+  opacity: calc(min(1, var(--burst, 0) * 10) * (1 - var(--name-koaik, 0)));
+  visibility: hidden;
+}
+:root.is-bursting .guide-wait { visibility: visible; }
+:root.is-written .guide,
+:root.is-sealed .guide,
+:root.is-launched .guide,
+:root[data-no-webgl] .guide-wait { visibility: hidden; }
+.guide-dots i { font-style: normal; animation: guideDot 1.2s ease-in-out infinite; }
+.guide-dots i:nth-child(2) { animation-delay: 0.2s; }
+.guide-dots i:nth-child(3) { animation-delay: 0.4s; }
+@keyframes guideDot {
+  0%, 60%, 100% { opacity: 0.25; }
+  30%           { opacity: 1; }
+}
+
 /* ── The cue: there is more below ── */
 .gname-cue {
   position: fixed;
@@ -382,9 +427,9 @@
 }
 /* No WebGL2: nothing publishes --name-scroll, so the name block is
    placed in the page at the name screen instead of fixed, and simply
-   scrolls away like the rest of the page. 270vh = the end of #burst
-   minus one screen (hero 100 + intro 180 + burst 90 − 100). */
-:root[data-no-webgl] .galaxy-name { position: absolute; top: 270vh; bottom: auto; height: 100vh; }
+   scrolls away like the rest of the page. 100vh = the end of #burst
+   minus one screen (hero 100 + intro 40 + burst 60 − 100). */
+:root[data-no-webgl] .galaxy-name { position: absolute; top: 100vh; bottom: auto; height: 100vh; }
 
 /* ============================================================
    START THE TRIP — the spaceship CTA
@@ -572,7 +617,7 @@
 
    An earlier version multiplied the CTA by max(0, 1 - --drift * 3.2)
    to retire it once the trip was under way. That made it permanently
-   invisible: it only appears after ~2.6 viewport heights of
+   invisible: it only appears after ~0.9 viewport heights of
    scrolling, by which point --drift has long since passed the 0.3125
    where that factor reaches zero. The CTA belongs to the last screen
    before the trip, a resting state the reader sits in — the page
@@ -595,119 +640,592 @@
 }
 
 /* ============================================================
-   THE PROFILE — who Ali is, below the name
+   THE PROFILE — below the name, a normal page
    ============================================================
    In the page flow after #burst: scrolling past the name screen moves
    the name up (galaxy.js) and brings this in. It exists once the name
    is written (.is-written) and goes on launch. --leave (galaxy.js,
    0→1 on the press) fades it; no transition on that, it is JS-driven.
-   The parts lift in as they enter the view (.is-in, profile.js). */
+
+   A top bar, then four sections in a column (profile.js fills them):
+   #about (text + the floating portrait), #stack, #education, #build.
+   The sky stays behind (the canvas is fixed); a scrim under the
+   sections takes it down far enough to read on.
+
+   A section comes in ONCE, as a whole: profile.js adds .is-in when it
+   enters the view and its .pf-rise parts lift in, --d apart. */
 .profile {
   position: relative;
   z-index: 3;
-  padding: 2vh 16px 18vh;
+  padding: 0 clamp(16px, 4vw, 48px);
   color: #E6E9F2;
   font-family: 'Space Grotesk', system-ui, sans-serif;
+  /* The name's own sky is left clear above; the scrim comes in over
+     the first half-screen and stays. */
+  background: linear-gradient(180deg, rgba(4, 6, 12, 0) 0, rgba(4, 6, 12, 0.5) 55vh);
   opacity: calc(1 - var(--leave, 0));
 }
 :root:not(.is-written) .profile,
 :root.is-launched .profile { display: none; }
 :root.is-leaving { overflow: hidden; }
-.profile-inner { max-width: 760px; margin: 0 auto; }
-.profile-inner > * {
-  opacity: 0;
-  transform: translateY(24px);
-  transition: opacity 0.7s cubic-bezier(0.4, 0, 0.2, 1), transform 0.7s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.profile-inner > .is-in { opacity: 1; transform: none; }
-.profile-label {
-  margin: 0 0 1rem;
-  font-family: var(--font-mono, 'JetBrains Mono', monospace);
-  font-size: 0.74rem;
-  letter-spacing: 0.24em;
-  text-transform: uppercase;
-  color: #F2D28B;
-}
-.profile-title {
-  margin: 0 0 1rem;
-  font-size: clamp(1.45rem, 3.1vw, 2.2rem);
-  font-weight: 600;
-  line-height: 1.28;
-  letter-spacing: -0.01em;
-}
-.profile-status {
-  display: flex; align-items: center; gap: 9px;
-  margin: 0 0 2rem;
-  font-family: var(--font-mono, 'JetBrains Mono', monospace);
-  font-size: 0.74rem;
-  letter-spacing: 0.1em;
-  color: #9AA3B8;
-}
-.profile-bio {
-  padding: 1.4rem 1.6rem;
-  margin-bottom: 1.4rem;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 14px;
-  background: rgba(9, 12, 20, 0.58);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-}
-.profile-bio p { margin: 0 0 0.9em; line-height: 1.65; }
-.profile-bio p:last-child { margin-bottom: 0; }
-.profile-stats {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
-  margin: 0 0 1.4rem;
-}
-.profile-stat {
-  padding: 16px 16px 14px;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 12px;
-  background: rgba(9, 12, 20, 0.58);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-}
-.profile-stat dt {
-  margin: 0 0 6px;
-  font-family: var(--font-mono, 'JetBrains Mono', monospace);
-  font-size: 0.64rem;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: #9AA3B8;
-}
-.profile-stat dd {
-  margin: 0;
-  font-size: clamp(1.7rem, 3.4vw, 2.3rem);
-  font-weight: 600;
-  line-height: 1;
-  color: #F2D28B;
-  font-variant-numeric: tabular-nums;
-}
-.profile-schools { display: grid; gap: 10px; }
-.profile-school {
-  display: grid;
-  grid-template-columns: 8.5rem 1fr;
-  grid-template-rows: auto auto;
-  column-gap: 1rem;
-  padding: 12px 16px;
-  border-left: 2px solid rgba(143, 180, 255, 0.5);
-}
-.profile-school-period { grid-row: span 2; font-family: var(--font-mono, 'JetBrains Mono', monospace); font-size: 0.72rem; letter-spacing: 0.08em; color: #9AA3B8; padding-top: 3px; }
-.profile-school-name { font-weight: 600; }
-.profile-school-program { font-size: 0.9rem; color: #9AA3B8; }
-.profile-launch { margin-top: 12vh; text-align: center; }
-.profile-launch-lead { margin: 0; font-size: clamp(1.05rem, 2vw, 1.3rem); color: #C9CFDB; }
 
+.pf-sec {
+  --pf-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: clamp(72px, 13vh, 150px) 0;
+}
+.pf-head { margin-bottom: clamp(32px, 6vh, 60px); }
+/* The tag is written as a code comment — `// about` — in the site's
+   mono face; sentence case, not tracked capitals. */
+.pf-tag {
+  margin: 0 0 0.55rem;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 0.84rem;
+  letter-spacing: 0.04em;
+  color: #F2D28B;
+}
+.pf-title {
+  margin: 0;
+  font-size: clamp(2rem, 4.4vw, 3.2rem);
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+.pf-rise {
+  opacity: 0;
+  translate: 0 22px;
+  transition: opacity 0.7s ease, translate 0.85s var(--pf-ease);
+  transition-delay: calc(var(--d, 0) * 110ms);
+}
+.pf-sec.is-in .pf-rise { opacity: 1; translate: 0 0; }
+.pf-rise:nth-child(2) { --d: 1; }
+.pf-rise:nth-child(3) { --d: 2; }
+.pf-rise:nth-child(4) { --d: 3; }
+.pf-rise:nth-child(5) { --d: 4; }
+.pf-rise:nth-child(6) { --d: 5; }
+
+/* ── The top bar ──
+   Liquid glass: a floating pill that blurs and saturates the sky
+   behind it, lit from above (inset highlight) and from the arms'
+   blue below, with a sheen that follows the pointer (--mx,
+   profile.js). The marker under the current link is a second drop
+   of the same glass, in gold: its left and width ease on different
+   curves, so it stretches toward the next link and then settles.
+   Both are set on a change of section only — not per frame — which
+   is why they may have transitions. */
+.site-nav {
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.03)),
+    rgba(10, 14, 24, 0.44);
+  backdrop-filter: blur(18px) saturate(180%);
+  -webkit-backdrop-filter: blur(18px) saturate(180%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -12px 18px -12px rgba(143, 180, 255, 0.38),
+    0 12px 40px rgba(0, 0, 0, 0.5);
+  transform: translate(-50%, -170%);
+  opacity: 0;
+  visibility: hidden;
+  transition: transform 0.65s cubic-bezier(0.2, 0.9, 0.25, 1.12), opacity 0.4s ease, visibility 0s linear 0.65s;
+}
+:root.nav-on .site-nav {
+  transform: translate(-50%, 0);
+  opacity: 1;
+  visibility: visible;
+  transition-delay: 0s;
+}
+.site-nav::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(130px 46px at var(--mx, 50%) 0%, rgba(255, 255, 255, 0.3), transparent 72%);
+  opacity: 0;
+  transition: opacity 0.35s ease;
+  pointer-events: none;
+}
+.site-nav:hover::before { opacity: 1; }
+.site-nav-brand {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 38px; height: 38px;
+  flex: 0 0 auto;
+  border: 1px solid rgba(242, 210, 139, 0.5);
+  border-radius: 50%;
+  background: rgba(9, 12, 20, 0.5);
+  font-family: 'Orbitron', var(--font-mono, monospace);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #F2D28B;
+  transition: border-color 0.25s ease, background 0.25s ease;
+}
+.site-nav-brand:hover, .site-nav-brand:focus-visible { border-color: #F2D28B; background: rgba(242, 210, 139, 0.12); }
+.site-nav-links { position: relative; display: flex; }
+.site-nav-links a {
+  position: relative;
+  padding: 9px 16px;
+  border-radius: 999px;
+  font-size: 0.88rem;
+  font-weight: 500;
+  line-height: 1.25;
+  white-space: nowrap;
+  color: #B8C0D2;
+  transition: color 0.25s ease;
+}
+.site-nav-links a:hover, .site-nav-links a.is-active { color: #FFFFFF; }
+.site-nav-brand:focus-visible, .site-nav-links a:focus-visible { outline: 2px solid #8FB4FF; outline-offset: 2px; }
+.site-nav-blob {
+  position: absolute;
+  top: 0; bottom: 0;
+  left: var(--bx, 0px);
+  width: var(--bw, 0px);
+  border: 1px solid rgba(242, 210, 139, 0.42);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(242, 210, 139, 0.28), rgba(242, 210, 139, 0.09));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 0 18px rgba(242, 210, 139, 0.18);
+  transition: left 0.55s cubic-bezier(0.3, 1.45, 0.4, 1), width 0.36s cubic-bezier(0.3, 1.2, 0.4, 1);
+}
+
+/* ── #about ──
+   Text on the left, the portrait on the right; a screen tall so the
+   first thing after the name is one composed view. --S is the side
+   of the portrait's figure: everything in it is sized from that, so
+   it scales as one object. */
+.pf-about {
+  --S: min(38vw, 58vh, 460px);
+  min-height: 100vh;
+  min-height: 100svh;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--S);
+  gap: clamp(32px, 6vw, 88px);
+  align-items: center;
+  padding-block: clamp(96px, 13vh, 140px);
+}
+.pf-role { display: flex; flex-wrap: wrap; margin: 1.1rem 0 1.5rem; font-size: 0.95rem; color: #9AA3B8; }
+.pf-role span:first-child { font-weight: 600; color: #E6E9F2; }
+.pf-role span + span::before {
+  content: '';
+  display: inline-block;
+  width: 1px; height: 0.85em;
+  margin: 0 0.7em;
+  background: rgba(255, 255, 255, 0.24);
+  vertical-align: -0.06em;
+}
+.pf-lead {
+  margin: 0 0 1.1em;
+  max-width: 30em;
+  font-size: clamp(1.15rem, 1.9vw, 1.5rem);
+  font-weight: 500;
+  line-height: 1.4;
+}
+.pf-bio p { margin: 0 0 0.85em; max-width: 60ch; font-size: 1rem; line-height: 1.65; color: #C3CAD8; }
+.pf-bio p:last-child { margin-bottom: 0; }
+.pf-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 26px; margin-top: 1.7rem; }
+.pf-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 7px 14px 7px 11px;
+  border: 1px solid rgba(110, 231, 160, 0.28);
+  border-radius: 999px;
+  background: rgba(110, 231, 160, 0.07);
+  font-size: 0.84rem;
+  color: #C8F4DA;
+  white-space: nowrap;
+}
+.pf-links { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 0; }
+.pf-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 0;
+  font-size: 0.9rem;
+  color: #E6E9F2;
+  transition: color 0.2s ease;
+}
+.pf-link svg { width: 16px; height: 16px; flex: 0 0 auto; }
+.pf-link:hover, .pf-link:focus-visible { color: #F2D28B; }
+.pf-link:focus-visible { outline: 2px solid #8FB4FF; outline-offset: 3px; border-radius: 4px; }
+
+/* The portrait. The whole figure floats (one slow bob); inside it
+   the rings draw, the portrait swells in and the bodies land, once,
+   when #about enters the view. */
+.pf-orbit {
+  position: relative;
+  width: var(--S);
+  height: var(--S);
+  justify-self: center;
+  animation: pfFloat 7s ease-in-out infinite;
+}
+@keyframes pfFloat {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-12px); }
+}
+.pf-rings {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  transform: rotate(-90deg);          /* the rings draw from the top */
+}
+/* pathLength is 1 on both circles, so one dash of 1 is the whole
+   ring and the offset draws it. */
+.pf-ring {
+  stroke: rgba(242, 210, 139, 0.32);
+  stroke-width: 1;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  transition: stroke-dashoffset 1.3s cubic-bezier(0.65, 0, 0.35, 1) 0.2s;
+}
+.pf-ring--b { stroke: rgba(143, 180, 255, 0.3); transition-delay: 0.32s; }
+.pf-sec.is-in .pf-ring { stroke-dashoffset: 0; }
+
+/* One small light running each ring. The wrapper is a POINT at the
+   centre that turns, the dot sits one ring radius above it (35% and
+   45% of the side, as RING in profile.js). A point, not a box the
+   size of the figure: a turning square's corners swing out past the
+   figure and made the page scroll sideways. */
+.pf-moon {
+  position: absolute;
+  left: 50%; top: 50%;
+  width: 0; height: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.8s ease 1.4s;
+  animation: pfSpin 70s linear -20s infinite;
+}
+.pf-moon::before {
+  content: '';
+  position: absolute;
+  left: -2.5px;
+  top: calc(var(--S) * -0.35 - 2.5px);
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: #F2D28B;
+  box-shadow: 0 0 8px rgba(242, 210, 139, 0.9);
+}
+.pf-moon--b { animation-duration: 115s; animation-delay: -64s; }
+.pf-moon--b::before { top: calc(var(--S) * -0.45 - 2.5px); background: #8FB4FF; box-shadow: 0 0 8px rgba(143, 180, 255, 0.9); }
+.pf-sec.is-in .pf-moon { opacity: 1; }
+@keyframes pfSpin { to { transform: rotate(360deg); } }
+
+/* Ali, in the circle. The photo (personal.photo) covers it once it
+   has loaded; until then, the initials. */
+.pf-core {
+  position: absolute;
+  left: 50%; top: 50%;
+  width: calc(var(--S) * 0.44);
+  height: calc(var(--S) * 0.44);
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(242, 210, 139, 0.6);
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, rgba(143, 180, 255, 0.26), rgba(9, 12, 20, 0.9) 70%);
+  box-shadow:
+    0 0 0 6px rgba(242, 210, 139, 0.06),
+    0 0 70px rgba(143, 180, 255, 0.2),
+    0 34px 60px -24px rgba(0, 0, 0, 0.8);
+  opacity: 0;
+  scale: 0.82;
+  transition: opacity 0.7s ease 0.1s, scale 1s var(--pf-ease) 0.1s;
+}
+.pf-sec.is-in .pf-core { opacity: 1; scale: 1; }
+.pf-core::before {
+  content: '';
+  position: absolute;
+  inset: calc(var(--S) * -0.026);
+  border-radius: 50%;
+  border: 1px dashed rgba(242, 210, 139, 0.42);
+  animation: pfSpin 40s linear infinite;
+}
+.pf-core img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+.pf-core img:not([hidden]) + .pf-initials { display: none; }
+.pf-initials {
+  font-family: 'Orbitron', var(--font-mono, monospace);
+  font-weight: 800;
+  font-size: calc(var(--S) * 0.11);
+  letter-spacing: 0.06em;
+  text-indent: 0.06em;
+}
+
+/* The bodies: one per number, placed on a ring at --x/--y; each is a
+   link to the section its number is about. The link IS the disc (the
+   ring point is its centre, its whole face the target); the label
+   hangs under it — or over it (--top) where under would run into the
+   portrait. --k scales it, --i orders the landing. */
+.pf-body {
+  position: absolute;
+  left: var(--x); top: var(--y);
+  width: calc(var(--S) * 0.15 * var(--k, 1));
+  height: calc(var(--S) * 0.15 * var(--k, 1));
+  transform: translate(-50%, -50%);
+  color: inherit;
+  opacity: 0;
+  scale: 0.5;
+  transition: opacity 0.45s ease, scale 0.7s cubic-bezier(0.34, 1.4, 0.64, 1);
+  transition-delay: calc(0.7s + var(--i, 0) * 0.11s);
+}
+.pf-sec.is-in .pf-body { opacity: 1; scale: 1; }
+.pf-body-disc {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 28%, rgba(143, 180, 255, 0.2), rgba(9, 12, 20, 0.94) 68%);
+  font-family: 'Orbitron', var(--font-mono, monospace);
+  font-weight: 700;
+  font-size: calc(var(--S) * 0.062 * var(--k, 1));
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease, color 0.25s ease, transform 0.15s ease;
+}
+.pf-suffix { align-self: flex-start; margin: 30% 0 0 0.08em; font-size: 0.6em; color: #9AA3B8; }
+.pf-body-label {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 50%;
+  transform: translateX(-50%);
+  /* Backed: a ring passes behind most of these, and a hairline
+     through the word makes it hard to read. */
+  padding: 1px 8px 2px;
+  border-radius: 999px;
+  background: rgba(5, 7, 13, 0.84);
+  white-space: nowrap;
+  font-size: 0.8rem;
+  color: #9AA3B8;
+  transition: color 0.25s ease;
+}
+.pf-body--top .pf-body-label { top: auto; bottom: calc(100% + 5px); }
+.pf-body:hover .pf-body-disc,
+.pf-body:focus-visible .pf-body-disc {
+  border-color: #F2D28B;
+  color: #F2D28B;
+  box-shadow: 0 0 0 4px rgba(242, 210, 139, 0.09), 0 0 30px rgba(242, 210, 139, 0.3);
+}
+.pf-body:hover .pf-body-label,
+.pf-body:focus-visible .pf-body-label { color: #E6E9F2; }
+.pf-body:active .pf-body-disc { transform: scale(0.95); }
+.pf-body:focus-visible { outline: 2px solid #8FB4FF; outline-offset: 4px; border-radius: 50%; }
+
+/* ── #stack ──
+   Three stages on one line of flight: languages, then the tools they
+   are written in, then the technologies around them. The line runs
+   through the nodes and on past the last one; it draws on entry. */
+.pf-stack {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(24px, 4vw, 56px);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.pf-stack::before {
+  content: '';
+  position: absolute;
+  left: 23px; right: 0;
+  top: 23px;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(242, 210, 139, 0.6), rgba(143, 180, 255, 0.45) 70%, rgba(143, 180, 255, 0));
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 1.3s cubic-bezier(0.65, 0, 0.35, 1) 0.15s;
+}
+.pf-sec.is-in .pf-stack::before { transform: scaleX(1); }
+.pf-stage { --tone: #E6E9F2; --tone-line: rgba(255, 255, 255, 0.14); --tone-fill: rgba(255, 255, 255, 0.04); --tone-text: #C9D0DD; }
+.pf-stage[data-tone="gold"] { --tone: #F2D28B; --tone-line: rgba(242, 210, 139, 0.32); --tone-fill: rgba(242, 210, 139, 0.08); --tone-text: #F6E6BF; }
+.pf-stage[data-tone="blue"] { --tone: #8FB4FF; --tone-line: rgba(143, 180, 255, 0.32); --tone-fill: rgba(143, 180, 255, 0.1); --tone-text: #DCE7FF; }
+.pf-stage-node {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 46px; height: 46px;
+  border: 1px solid var(--tone-line);
+  border-radius: 50%;
+  background: #080B13;                 /* solid: it sits on the line */
+  color: var(--tone);
+}
+.pf-stage-node svg { width: 22px; height: 22px; }
+.pf-stage-title { margin: 1.2rem 0 0.9rem; font-size: 1.2rem; font-weight: 600; letter-spacing: -0.01em; }
+.pf-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.pf-chips li {
+  padding: 7px 13px;
+  border: 1px solid var(--tone-line);
+  border-radius: 9px;
+  background: var(--tone-fill);
+  font-size: 0.92rem;
+  color: var(--tone-text);
+}
+
+/* ── #education ──
+   A card per school. Front and back share one grid cell (the card is
+   as tall as the longer face); the back takes the front's place on
+   hover, on keyboard focus, or when pressed (.is-open, profile.js —
+   the way in on a touch screen). An opacity crossfade, not a 3D
+   flip: backdrop-filter breaks backface-visibility. */
+.pf-edu { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(16px, 2.4vw, 28px); }
+.pf-card-wrap { display: grid; }
+.pf-card {
+  --tone: #F2D28B; --tone-soft: rgba(242, 210, 139, 0.16); --tone-line: rgba(242, 210, 139, 0.45);
+  position: relative;
+  display: grid;
+  min-height: 310px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  background: rgba(9, 12, 20, 0.62);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+.pf-card[data-tone="blue"] { --tone: #8FB4FF; --tone-soft: rgba(143, 180, 255, 0.16); --tone-line: rgba(143, 180, 255, 0.45); }
+.pf-card.has-back { cursor: pointer; }
+.pf-card::before {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; top: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--tone), rgba(255, 255, 255, 0) 72%);
+}
+.pf-card-front, .pf-card-back {
+  grid-area: 1 / 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: clamp(22px, 2.8vw, 36px);
+  transition: opacity 0.35s ease, translate 0.45s var(--pf-ease);
+}
+.pf-card-period {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 1.1rem;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 0.8rem;
+  color: #9AA3B8;
+}
+.pf-card-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--tone); box-shadow: 0 0 10px var(--tone); }
+.pf-card-name { margin: 0 0 0.6rem; font-size: clamp(1.3rem, 2.2vw, 1.7rem); font-weight: 600; line-height: 1.15; letter-spacing: -0.01em; }
+.pf-card-program { margin: 0 0 1.2rem; font-size: 0.95rem; line-height: 1.5; color: #B8C0D2; }
+.pf-card-tags { display: flex; flex-wrap: wrap; gap: 7px; margin: 0 0 1.4rem; padding: 0; list-style: none; }
+.pf-card-tags li {
+  padding: 4px 11px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  font-size: 0.8rem;
+  color: #C3CAD8;
+}
+.pf-card-tags li:first-child { border-color: var(--tone-line); color: var(--tone); }
+.pf-card-hint { margin: auto 0 0; font-size: 0.8rem; color: #7E889C; }
+.pf-hint-tap { display: none; }
+.pf-card-back {
+  justify-content: center;
+  background: linear-gradient(160deg, var(--tone-soft), rgba(255, 255, 255, 0) 65%);
+  opacity: 0;
+  translate: 0 14px;
+  pointer-events: none;
+}
+.pf-card-back-name { margin: 0 0 0.8rem; font-size: 0.84rem; font-weight: 600; color: var(--tone); }
+.pf-card-desc { margin: 0; font-size: 1rem; line-height: 1.7; color: #DCE1EC; }
+.pf-card.has-back:focus-visible,
+.pf-card.has-back.is-open { border-color: var(--tone-line); box-shadow: 0 0 0 1px var(--tone-soft), 0 24px 60px -30px var(--tone); }
+.pf-card.has-back:focus-visible .pf-card-front,
+.pf-card.has-back.is-open .pf-card-front { opacity: 0; translate: 0 -12px; }
+.pf-card.has-back:focus-visible .pf-card-back,
+.pf-card.has-back.is-open .pf-card-back { opacity: 1; translate: 0 0; }
+.pf-card:focus-visible { outline: 2px solid #8FB4FF; outline-offset: 3px; }
+/* Hover only where hovering exists: on a touch screen :hover sticks
+   after a tap and the card could never be turned back. */
+@media (hover: hover) {
+  .pf-card.has-back:hover { border-color: var(--tone-line); box-shadow: 0 0 0 1px var(--tone-soft), 0 24px 60px -30px var(--tone); }
+  .pf-card.has-back:hover .pf-card-front { opacity: 0; translate: 0 -12px; }
+  .pf-card.has-back:hover .pf-card-back { opacity: 1; translate: 0 0; }
+}
+@media (hover: none) {
+  .pf-hint-hover { display: none; }
+  .pf-hint-tap { display: inline; }
+}
+
+/* ── #build ── the way on */
+.pf-build { padding-bottom: clamp(96px, 18vh, 200px); text-align: center; }
+.profile-launch-lead {
+  max-width: 34em;
+  margin: 1.3rem auto 0;
+  font-size: clamp(1.05rem, 1.7vw, 1.25rem);
+  line-height: 1.5;
+  color: #C9CFDB;
+}
+.profile-launch { margin-top: clamp(28px, 5vh, 52px); }
+.profile-launch .gname-launch { margin-top: 0; gap: 0.8rem; }
+.profile-launch .gname-launch-ring { width: 96px; height: 96px; }
+
+/* One column: a narrow or portrait viewport has no room for two. */
+@media (max-width: 860px), (max-aspect-ratio: 1/1) {
+  .pf-about {
+    --S: min(78vw, 44vh, 340px);
+    grid-template-columns: minmax(0, 1fr);
+    gap: 44px;
+    padding-top: 104px;
+  }
+  .pf-orbit { order: -1; }            /* the portrait first */
+  /* The stages stack and the line turns to run down their nodes. */
+  .pf-stack { grid-template-columns: minmax(0, 1fr); gap: 34px; }
+  .pf-stack::before {
+    left: 23px; right: auto;
+    top: 23px; bottom: 0;
+    width: 1px; height: auto;
+    background: linear-gradient(180deg, rgba(242, 210, 139, 0.6), rgba(143, 180, 255, 0.45) 70%, rgba(143, 180, 255, 0));
+    transform: scaleY(0);
+    transform-origin: top;
+  }
+  .pf-sec.is-in .pf-stack::before { transform: scaleY(1); }
+  .pf-stage { position: relative; padding-left: 66px; }
+  .pf-stage-node { position: absolute; left: 0; top: 0; }
+  .pf-stage-title { margin-top: 0.55rem; }
+}
+@media (max-width: 700px) {
+  .pf-edu { grid-template-columns: minmax(0, 1fr); }
+  .pf-card { min-height: 0; }
+}
 @media (max-width: 640px) {
-  .profile-stats { grid-template-columns: repeat(2, 1fr); }
-  .profile-school { grid-template-columns: 1fr; }
-  .profile-school-period { grid-row: auto; padding-top: 0; }
   .gname-link { padding: 7px 12px 7px 10px; font-size: 0.68rem; }
+  .pf-body-label { font-size: 0.74rem; }
+  .profile-launch .gname-launch-ring { width: 84px; height: 84px; }
+}
+@media (max-width: 480px) {
+  .site-nav { top: 10px; padding: 5px; }
+  .site-nav-brand { display: none; }
+  .site-nav-links a { padding: 8px 11px; font-size: 0.8rem; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .profile-inner > * { opacity: 1; transform: none; transition: none; }
+  .pf-rise { opacity: 1; translate: 0 0; transition: none; }
+  .pf-ring { stroke-dashoffset: 0; transition: none; }
+  .pf-orbit, .pf-core::before { animation: none; }
+  .pf-moon { opacity: 1; animation: none; transition: none; }
+  .pf-core, .pf-body { opacity: 1; scale: 1; transition: none; }
+  .pf-stack::before { transform: none; transition: none; }
+  .pf-card-front, .pf-card-back, .site-nav, .site-nav-blob { transition: none; }
   .gname-cue-chevron { animation: none; }
+  .guide-dots i { animation: none; }
 }
 
 /* ============================================================

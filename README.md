@@ -41,12 +41,13 @@ to view the site locally.
     ├── galaxy.html     # WebGL2 galaxy hero
     ├── css/
     │   ├── style.css   # design tokens + all shared styles
-    │   └── galaxy.css  # galaxy hero overrides
+    │   ├── galaxy.css  # galaxy hero overrides
+    │   └── cursor.css  # the site's mouse pointer: native CSS cursors (inline SVG), linked by every page; no JS
     └── js/
         ├── data.js     # single source of truth for all content
         ├── main.js     # renders index.html
         ├── warp.js     # launch sequence: 3D ship, light-speed streaks, landing
-        ├── profile.js  # the name screen's links and the profile below it (who Ali is, the numbers)
+        ├── profile.js  # the name screen's links, and the page below it (top bar, about, stack, education, the launch)
         ├── hud.js      # the system's text: caption, pilot chip, hint, the panel, the fallback
         ├── system.js   # the Koaik system: three.js scene, Koaik's generated world, camera rig, controls, picking (ES module)
         ├── emblems.js  # each project as a living 3D model of itself: push_swap sorting, cub3D raycasting… (ES module)

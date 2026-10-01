@@ -18,8 +18,8 @@ Scripts — all paths are absolute or relative to where you run them:
 - `render.js <url> <out.png> [scrollVh=0] [settleMs=4000]`
   One still. Prints JSON with `--burst`/`--zoom` and console errors
   (the favicon 404 is noise). `W=390 H=844` env vars set the viewport.
-  Useful views of `galaxy.html`: hero `0 4500`, approach `1.8 5000`,
-  post-burst name `2.7 24000`, journey `4.35 24000` / `6.3 24000`.
+  Useful views of `galaxy.html`: hero `0 4500`, approach `0.6 5000`,
+  post-burst name `1.0 24000`, journey `4.35 24000` / `6.3 24000`.
   The burst runs on its own clock and the frame loop clamps `dt`, so
   at SwiftShader speed it needs ~24s of settle to reach `burst 1.000`.
 - `flow.js <outdir> [W H]`

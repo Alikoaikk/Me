@@ -57,8 +57,14 @@ no state store — each page renders once on load.
   on the section; `window.system` for tests.
 - **`src/js/profile.js`** — the text of the name screen and of the
   profile below it: the GitHub / LinkedIn / Email links under the
-  name, and who Ali is (brief, bio, status, the four numbers with a
-  count-up, the schools) ending on the launch button. `galaxy.js`
+  name, and below it a normal page inside `#profile`: a glass top
+  bar (`.site-nav`, on under `:root.nav-on`, a gold marker under the
+  section in view) and four sections — `#about` (brief, bio, status,
+  links, beside the portrait in a floating circle with the four
+  numbers in orbit, each a link to its section), `#stack`,
+  `#education` (a card per school; `education[].description` is its
+  hover side) and `#build`, which ends on the launch button. Sections
+  reveal once (`.is-in`) and the numbers count up. `galaxy.js`
   scrolls the star-written name up with the page (`uNameShift` in the
   star shader, `--name-scroll` for the HTML around it) and, on the
   press, fades the profile (`--leave`) and glides the name back to the
@@ -80,6 +86,8 @@ no state store — each page renders once on load.
 - **`src/css/style.css`** — All shared styles for every page. Uses CSS
   custom properties (design tokens) defined in `:root`.
 - **`src/css/galaxy.css`** — Galaxy hero overrides.
+- **`src/css/cursor.css`** — The site's mouse pointer: native CSS
+  cursors (inline SVG images), linked by every page; no JS.
 - **`src/index.html`** — Page shell with empty placeholders; content
   injected by `main.js`.
 - **`src/projects.html`** — Standalone projects page with its own inline
@@ -181,7 +189,7 @@ Re-crossing the trigger resumes the clock from the current value
 rather than restarting it.
 
 The **release** is the take-off, timed from the button press
-(`RELEASE_TIME` 1.8 s, `releaseClock` in the frame loop): each fill
+(`RELEASE_TIME` 1.2 s, `releaseClock` in the frame loop): each fill
 star's home slides from its letterform to the sky spot it would
 otherwise have had, staggered per star so the word frays outward, and
 every fill-specific value (size, brightness floor, bow) crossfades to
@@ -200,9 +208,9 @@ The click expands both sections and hands over to `warp.js`, whose
 sequence lands the page on the planet (scrolled there in one step
 under the jump flash); without `warp.js`, or under reduced motion, it
 scrolls to the planet's top instead. The
-section heights are load-bearing: hero 100 + intro 180 + burst 90 =
-370vh puts the page end at 2.70vh, just past the burst trigger at
-2.60.
+section heights are load-bearing: hero 100 + intro 40 + burst 60 =
+200vh puts the page end at 1.00vh, just past the burst trigger at
+0.90.
 
 The trip is **one-way from the button**. Until it is pressed the
 reader may scroll back up from the name to the galaxy (the burst

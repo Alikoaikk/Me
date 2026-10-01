@@ -1,0 +1,142 @@
+/* ============================================================
+   THE CURSOR — the site's own pointer
+   ------------------------------------------------------------
+   Shared by every page. CSS only, on purpose: these are NATIVE
+   cursors (`cursor: url(...)`), so the operating system's compositor
+   moves them — the same zero lag as the stock arrow, no element, no
+   script, no frame cost on pages already drawing WebGL at 60 fps.
+   (A first version drew a dot and a trailing ring in the DOM from
+   JS; the user rejected the look and asked for exactly this: "behaves
+   exactly like a normal cursor, just looks like it belongs to the
+   site" — then: "unique, not usual, but it should look like a
+   cursor". Do not bring a JS-moved cursor back unasked.)
+
+   Four images, one family — instrument-white fill, a dark hairline
+   so they read on the galaxy's bright core and on the lighter
+   index/projects theme alike, and the bulge's gold. The one idea
+   they share, and what makes them this site's: THE SLIT. Each shape
+   is cut in two near its back, and the piece behind the cut is the
+   gold one — a wake behind the arrow, a cuff under the hand.
+
+     arrow      an arrow silhouette, narrower than the stock one and
+                leaning forward, no stem; a white head folded down its
+                spine (two whites), a slit, then a gold band repeating
+                the head's swept back edge. Hotspot: the tip.
+     link       the same arrow inverted — gold head, white wake.
+                Anything clickable.
+     grab       an open hand, gold cuff. The Koaik system's canvas.
+     grabbing   the hand closed. While dragging there.
+
+   Text inputs keep the native I-beam (no rule here touches them).
+   Static text gets the arrow, not the I-beam: the I-beam-over-glyphs
+   behaviour only exists for `cursor: auto`, and an image is not
+   `auto`. Selecting text still works.
+
+   The images are inline SVG (32×32 CSS px — Chrome drops larger
+   cursors near the window edge), each twice: a 32px and a 64px
+   rendering of the same drawing, paired with image-set() so Retina
+   gets the sharp one. Only `<`, `>` and `#` are percent-encoded, so
+   the drawings can be edited in place; every list ends in the
+   keyword the image stands in for, which is what shows if an image
+   is refused.
+
+   THE DRAWINGS (viewBox 0 0 32 32):
+     arrow  tip (4,3) · right wing (16.23,15.66) · notch (9.94,16.34)
+            · left wing (5.37,22.55) — edges at 44° and 4° from
+            vertical, the spine at 24°. The wake is the 2.2px band
+            along the two back edges; the slit is the next 1.5px
+            (the dark base showing through); the head is the rest.
+            Outline 1.2px outside (a 2.4px stroke under the fills).
+     hand   four rounded bars + palm + thumb, outlined as one shape
+            (a dark stroked copy underneath), three knuckle lines; the
+            cuff is a gold bar just below the palm, its own outline
+            making the slit. Palm centre ≈ the hotspot (16,15).
+   ============================================================ */
+
+/* Mouse-like pointers only: a phone or tablet has no cursor to
+   restyle. Under forced colours the reader has asked for the
+   system's own rendering — leave its cursor alone too. */
+@media (hover: hover) and (pointer: fine) and (forced-colors: none) {
+
+  :root {
+    /* The images. -1x is 32px, -2x the same drawing at 64px. */
+    --cursor-arrow-1x: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M4 3L16.23 15.66L9.94 16.34L5.37 22.55Z' fill='%2305070D' stroke='%2305070D' stroke-width='2.4' stroke-linejoin='round'/%3E%3Cpath d='M4 3L7.92 12.83L4.97 16.85Z' fill='%23F4F6FB'/%3E%3Cpath d='M4 3L12.97 12.29L7.92 12.83Z' fill='%23D3D9E6'/%3E%3Cpath d='M16.23 15.66L9.94 16.34L5.37 22.55L5.13 19.16L8.74 14.25L14.29 13.66Z' fill='%23F2D28B'/%3E%3C/svg%3E");
+    --cursor-arrow-2x: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 32 32'%3E%3Cpath d='M4 3L16.23 15.66L9.94 16.34L5.37 22.55Z' fill='%2305070D' stroke='%2305070D' stroke-width='2.4' stroke-linejoin='round'/%3E%3Cpath d='M4 3L7.92 12.83L4.97 16.85Z' fill='%23F4F6FB'/%3E%3Cpath d='M4 3L12.97 12.29L7.92 12.83Z' fill='%23D3D9E6'/%3E%3Cpath d='M16.23 15.66L9.94 16.34L5.37 22.55L5.13 19.16L8.74 14.25L14.29 13.66Z' fill='%23F2D28B'/%3E%3C/svg%3E");
+    --cursor-link-1x: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M4 3L16.23 15.66L9.94 16.34L5.37 22.55Z' fill='%2305070D' stroke='%2305070D' stroke-width='2.4' stroke-linejoin='round'/%3E%3Cpath d='M4 3L7.92 12.83L4.97 16.85Z' fill='%23F2D28B'/%3E%3Cpath d='M4 3L12.97 12.29L7.92 12.83Z' fill='%23D7B56C'/%3E%3Cpath d='M16.23 15.66L9.94 16.34L5.37 22.55L5.13 19.16L8.74 14.25L14.29 13.66Z' fill='%23F4F6FB'/%3E%3C/svg%3E");
+    --cursor-link-2x: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 32 32'%3E%3Cpath d='M4 3L16.23 15.66L9.94 16.34L5.37 22.55Z' fill='%2305070D' stroke='%2305070D' stroke-width='2.4' stroke-linejoin='round'/%3E%3Cpath d='M4 3L7.92 12.83L4.97 16.85Z' fill='%23F2D28B'/%3E%3Cpath d='M4 3L12.97 12.29L7.92 12.83Z' fill='%23D7B56C'/%3E%3Cpath d='M16.23 15.66L9.94 16.34L5.37 22.55L5.13 19.16L8.74 14.25L14.29 13.66Z' fill='%23F4F6FB'/%3E%3C/svg%3E");
+    --cursor-grab-1x: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cg fill='%2305070D' stroke='%2305070D' stroke-width='2.4' stroke-linejoin='round'%3E%3Crect x='10.2' y='6.6' width='3.5' height='13' rx='1.75'/%3E%3Crect x='13.8' y='5' width='3.5' height='14' rx='1.75'/%3E%3Crect x='17.4' y='5.8' width='3.5' height='13' rx='1.75'/%3E%3Crect x='21' y='8.4' width='3.3' height='11' rx='1.65'/%3E%3Crect x='10.2' y='14.4' width='14.1' height='11.2' rx='4.6'/%3E%3Crect x='4.9' y='15.6' width='9.4' height='3.7' rx='1.85' transform='rotate(42 9.6 17.4)'/%3E%3C/g%3E%3Cpath d='M13.6 26.8H20.9' stroke='%2305070D' stroke-width='4.5' stroke-linecap='round'/%3E%3Cg fill='%23F4F6FB'%3E%3Crect x='10.2' y='6.6' width='3.5' height='13' rx='1.75'/%3E%3Crect x='13.8' y='5' width='3.5' height='14' rx='1.75'/%3E%3Crect x='17.4' y='5.8' width='3.5' height='13' rx='1.75'/%3E%3Crect x='21' y='8.4' width='3.3' height='11' rx='1.65'/%3E%3Crect x='10.2' y='14.4' width='14.1' height='11.2' rx='4.6'/%3E%3Crect x='4.9' y='15.6' width='9.4' height='3.7' rx='1.85' transform='rotate(42 9.6 17.4)'/%3E%3C/g%3E%3Cpath d='M13.75 10.5V16.6M17.35 10.5V16.6M20.95 10.5V16.6' stroke='%2305070D' stroke-opacity='.7' stroke-width='.9' stroke-linecap='round' fill='none'/%3E%3Cpath d='M13.6 26.8H20.9' stroke='%23F2D28B' stroke-width='2.1' stroke-linecap='round' fill='none'/%3E%3C/svg%3E");
+    --cursor-grab-2x: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 32 32'%3E%3Cg fill='%2305070D' stroke='%2305070D' stroke-width='2.4' stroke-linejoin='round'%3E%3Crect x='10.2' y='6.6' width='3.5' height='13' rx='1.75'/%3E%3Crect x='13.8' y='5' width='3.5' height='14' rx='1.75'/%3E%3Crect x='17.4' y='5.8' width='3.5' height='13' rx='1.75'/%3E%3Crect x='21' y='8.4' width='3.3' height='11' rx='1.65'/%3E%3Crect x='10.2' y='14.4' width='14.1' height='11.2' rx='4.6'/%3E%3Crect x='4.9' y='15.6' width='9.4' height='3.7' rx='1.85' transform='rotate(42 9.6 17.4)'/%3E%3C/g%3E%3Cpath d='M13.6 26.8H20.9' stroke='%2305070D' stroke-width='4.5' stroke-linecap='round'/%3E%3Cg fill='%23F4F6FB'%3E%3Crect x='10.2' y='6.6' width='3.5' height='13' rx='1.75'/%3E%3Crect x='13.8' y='5' width='3.5' height='14' rx='1.75'/%3E%3Crect x='17.4' y='5.8' width='3.5' height='13' rx='1.75'/%3E%3Crect x='21' y='8.4' width='3.3' height='11' rx='1.65'/%3E%3Crect x='10.2' y='14.4' width='14.1' height='11.2' rx='4.6'/%3E%3Crect x='4.9' y='15.6' width='9.4' height='3.7' rx='1.85' transform='rotate(42 9.6 17.4)'/%3E%3C/g%3E%3Cpath d='M13.75 10.5V16.6M17.35 10.5V16.6M20.95 10.5V16.6' stroke='%2305070D' stroke-opacity='.7' stroke-width='.9' stroke-linecap='round' fill='none'/%3E%3Cpath d='M13.6 26.8H20.9' stroke='%23F2D28B' stroke-width='2.1' stroke-linecap='round' fill='none'/%3E%3C/svg%3E");
+    --cursor-grabbing-1x: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cg fill='%2305070D' stroke='%2305070D' stroke-width='2.4' stroke-linejoin='round'%3E%3Crect x='10.2' y='11.2' width='3.5' height='8' rx='1.75'/%3E%3Crect x='13.8' y='10.2' width='3.5' height='8' rx='1.75'/%3E%3Crect x='17.4' y='10.6' width='3.5' height='8' rx='1.75'/%3E%3Crect x='21' y='11.8' width='3.3' height='7' rx='1.65'/%3E%3Crect x='10.2' y='13.4' width='14.1' height='10.6' rx='4.2'/%3E%3Crect x='7.6' y='14.6' width='7.6' height='3.7' rx='1.85' transform='rotate(18 11.4 16.4)'/%3E%3C/g%3E%3Cpath d='M13.6 25.2H20.9' stroke='%2305070D' stroke-width='4.5' stroke-linecap='round'/%3E%3Cg fill='%23F4F6FB'%3E%3Crect x='10.2' y='11.2' width='3.5' height='8' rx='1.75'/%3E%3Crect x='13.8' y='10.2' width='3.5' height='8' rx='1.75'/%3E%3Crect x='17.4' y='10.6' width='3.5' height='8' rx='1.75'/%3E%3Crect x='21' y='11.8' width='3.3' height='7' rx='1.65'/%3E%3Crect x='10.2' y='13.4' width='14.1' height='10.6' rx='4.2'/%3E%3Crect x='7.6' y='14.6' width='7.6' height='3.7' rx='1.85' transform='rotate(18 11.4 16.4)'/%3E%3C/g%3E%3Cpath d='M13.75 13.2V17.2M17.35 13.2V17.2M20.95 13.2V17.2' stroke='%2305070D' stroke-opacity='.7' stroke-width='.9' stroke-linecap='round' fill='none'/%3E%3Cpath d='M13.6 25.2H20.9' stroke='%23F2D28B' stroke-width='2.1' stroke-linecap='round' fill='none'/%3E%3C/svg%3E");
+    --cursor-grabbing-2x: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 32 32'%3E%3Cg fill='%2305070D' stroke='%2305070D' stroke-width='2.4' stroke-linejoin='round'%3E%3Crect x='10.2' y='11.2' width='3.5' height='8' rx='1.75'/%3E%3Crect x='13.8' y='10.2' width='3.5' height='8' rx='1.75'/%3E%3Crect x='17.4' y='10.6' width='3.5' height='8' rx='1.75'/%3E%3Crect x='21' y='11.8' width='3.3' height='7' rx='1.65'/%3E%3Crect x='10.2' y='13.4' width='14.1' height='10.6' rx='4.2'/%3E%3Crect x='7.6' y='14.6' width='7.6' height='3.7' rx='1.85' transform='rotate(18 11.4 16.4)'/%3E%3C/g%3E%3Cpath d='M13.6 25.2H20.9' stroke='%2305070D' stroke-width='4.5' stroke-linecap='round'/%3E%3Cg fill='%23F4F6FB'%3E%3Crect x='10.2' y='11.2' width='3.5' height='8' rx='1.75'/%3E%3Crect x='13.8' y='10.2' width='3.5' height='8' rx='1.75'/%3E%3Crect x='17.4' y='10.6' width='3.5' height='8' rx='1.75'/%3E%3Crect x='21' y='11.8' width='3.3' height='7' rx='1.65'/%3E%3Crect x='10.2' y='13.4' width='14.1' height='10.6' rx='4.2'/%3E%3Crect x='7.6' y='14.6' width='7.6' height='3.7' rx='1.85' transform='rotate(18 11.4 16.4)'/%3E%3C/g%3E%3Cpath d='M13.75 13.2V17.2M17.35 13.2V17.2M20.95 13.2V17.2' stroke='%2305070D' stroke-opacity='.7' stroke-width='.9' stroke-linecap='round' fill='none'/%3E%3Cpath d='M13.6 25.2H20.9' stroke='%23F2D28B' stroke-width='2.1' stroke-linecap='round' fill='none'/%3E%3C/svg%3E");
+
+    /* What the rules below use. The plain url() form first, for
+       engines without image-set() in `cursor`. */
+    --cursor-arrow:    var(--cursor-arrow-1x) 4 3, auto;
+    --cursor-link:     var(--cursor-link-1x) 4 3, pointer;
+    --cursor-grab:     var(--cursor-grab-1x) 16 15, grab;
+    --cursor-grabbing: var(--cursor-grabbing-1x) 16 15, grabbing;
+  }
+  /* The test is spelled out with a literal url(): a var() would make
+     any value "supported" at parse time. */
+  @supports (cursor: image-set(url("x.png") 1x) 0 0, auto) {
+    :root {
+      --cursor-arrow:    image-set(var(--cursor-arrow-1x) 1x, var(--cursor-arrow-2x) 2x) 4 3, auto;
+      --cursor-link:     image-set(var(--cursor-link-1x) 1x, var(--cursor-link-2x) 2x) 4 3, pointer;
+      --cursor-grab:     image-set(var(--cursor-grab-1x) 1x, var(--cursor-grab-2x) 2x) 16 15, grab;
+      --cursor-grabbing: image-set(var(--cursor-grabbing-1x) 1x, var(--cursor-grabbing-2x) 2x) 16 15, grabbing;
+    }
+  }
+
+  /* ── arrow ──
+     `cursor` inherits, so setting it on the root covers everything
+     that does not say otherwise. */
+  :root { cursor: var(--cursor-arrow); }
+
+  /* ...and these say otherwise with `default` (style.css, the
+     browser's own sheet for a disabled button), or with `grab` before
+     it is true: the system's canvas only drags once the controls are
+     live (.is-system) and not while the collapse plays. */
+  .skill-tag,
+  button:disabled,
+  .planet canvas#planetCanvas {
+    cursor: var(--cursor-arrow) !important;
+  }
+
+  /* ── link ──
+     Everything the pages mark `cursor: pointer`. Links and buttons
+     are covered by what they ARE, so a new one needs nothing here;
+     the class names are the clickable things that are neither (a
+     card, a canvas). ADD HERE when a stylesheet gives `cursor:
+     pointer` to something that is not a link, a button or a role.
+     !important because those declarations sit at every specificity
+     from (0,1,0) to (1,1,1) and this file must not care. */
+  a[href],
+  button:not(:disabled),
+  summary,
+  label[for],
+  [role="button"],
+  [role="tab"],
+  [role="link"],
+  .edu-card,
+  .pf-card.has-back,
+  .sys-map {
+    cursor: var(--cursor-link) !important;
+  }
+
+  /* ── the Koaik system's canvas ──
+     grab → grabbing while a button is down (OrbitControls drags the
+     view). The last rule is the body under the pointer: system.js
+     says so with an INLINE `cursor: pointer` on the canvas (setHot),
+     which only an !important rule can outrank and only an attribute
+     selector can see. It comes last so a press on a body stays a
+     click, as it did with the stock cursors. */
+  .planet.is-system:not(.is-collapsing) canvas#planetCanvas {
+    cursor: var(--cursor-grab) !important;
+  }
+  .planet.is-system:not(.is-collapsing) canvas#planetCanvas:active {
+    cursor: var(--cursor-grabbing) !important;
+  }
+  .planet.is-system:not(.is-collapsing) canvas#planetCanvas[style*="cursor: pointer"] {
+    cursor: var(--cursor-link) !important;
+  }
+}

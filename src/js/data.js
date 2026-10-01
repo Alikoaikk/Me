@@ -45,13 +45,16 @@ const portfolioData = {
       program: "Architecture of Digital Technologies Program · 42 Core Curriculum",
       period: "2025 – Present",
       level: "Level 5",
-      badge: "Project-Based & Peer-to-Peer Learning"
+      badge: "Project-Based & Peer-to-Peer Learning",
+      /* Shown when the card is hovered (galaxy.html, profile.js). */
+      description: "A project-based, peer-to-peer coding school with no lectures or teachers. Learning happens through hands-on projects, collaboration, and peer review — pushing students through systems programming, algorithms, and real-world software engineering."
     },
     {
       institution: "University of Science and Arts in Lebanon",
       program: "Bachelor of Science in Computer Science – Computing",
       period: "2022 – Present",
-      badge: "Computer Science – Computing"
+      badge: "Computer Science – Computing",
+      description: "A traditional university offering a structured Computer Science curriculum covering algorithms, data structures, software engineering, databases, operating systems, and networking — building a solid theoretical and practical foundation in computing."
     }
   ],
 

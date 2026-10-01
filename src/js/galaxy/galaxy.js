@@ -117,13 +117,15 @@
        its own clock. It is an event, not a scrubbable animation: the
        collapse and detonation need their own pacing. Scrolling back up
        reverses it, so the galaxy reassembles and can be watched again. */
-    BURST_TRIGGER:   2.60,     // in viewport heights
-    /* Longer than the old detonation's 2.6s. An explosion wants to be
-       over quickly; a migration is the opposite — the stars should be
-       seen travelling, and the per-star stagger (up to 45% of the
-       burst) needs room to read as a ripple across the disc rather
-       than as one sheet sliding over. */
-    BURST_DURATION:  4.2,      // seconds, first star leaves to last arrives
+    /* 0.90, down from 2.60 then 1.40: the first scroll should pay
+       off within one screen, not after two and a half. */
+    BURST_TRIGGER:   0.90,     // in viewport heights
+    /* A migration, not an explosion: the stars should be seen
+       travelling, and the per-star stagger (up to 45% of the burst)
+       needs room to read as a ripple across the disc rather than as
+       one sheet sliding over. 2.8 s keeps that; the earlier 4.2 s was
+       a wait. */
+    BURST_DURATION:  2.8,      // seconds, first star leaves to last arrives
     /* The reverse is SCROLL-driven, unlike the burst itself. Playing
        it on a timer (1.1s, then 2.4s) always felt laggy: nothing
        happened for the first quarter-viewport of scrolling up, then
@@ -132,7 +134,7 @@
        down over BURST_REWIND_SPAN viewport heights above the trigger,
        eased just enough to hide wheel steps, so the galaxy reassembles
        in step with the finger and holds wherever it is left. */
-    BURST_REWIND_SPAN: 0.90,   // viewport heights of scroll to fully reassemble
+    BURST_REWIND_SPAN: 0.60,   // viewport heights of scroll to fully reassemble
     BURST_REWIND_EASE: 9.0,    // per-second tracking rate (~0.11s behind the finger)
     /* Nearly no dead band. Re-firing resumes the clock from the
        current value, so toggling on the threshold is invisible; the
@@ -146,7 +148,7 @@
        scrolled (the page is sealed by then and cannot scroll), and
        the warp starts the moment it has played. Gated on the burst
        having finished: a name cannot dissolve before it is written. */
-    RELEASE_TIME:    1.8,      // seconds, press to letters gone
+    RELEASE_TIME:    1.2,      // seconds, press to letters gone
     /* The simulation freezes here, very early, because every star's
        destination is hashed from its position: if the spiral kept
        turning underneath, a star's sky home would move with it and
@@ -205,6 +207,17 @@
     BLOOM_THRESHOLD: 1.15,
     BLOOM_STRENGTH:  0.46,
     BLOOM_MIPS:      3,
+
+    /* ── Night ──
+       With a project in focus in the Koaik system (system.js, through
+       window.galaxySky.night) the sky steps back: out of focus and
+       darker, so the model in front of it is the subject. NIGHT_BLUR
+       is the defocus radius at full night, in CSS px; NIGHT_DIM is
+       the light left. Both happen in the composite pass, read from
+       the mips of the scene buffer — nothing per star, nothing on the
+       CPU. Not black: the reader should still sense the sky. */
+    NIGHT_BLUR:      5.0,
+    NIGHT_DIM:       0.45,
 
     /* ── Volumetric dust ──
        OFF. The continuous glow layer was the one part of the picture
@@ -1099,6 +1112,31 @@
     uniform vec2 uRes;
     uniform vec2 uHole;       // the black hole on screen (uv), system.js
     uniform float uSwallow;   // 0..1, the sky falls into it
+    uniform float uNight;     // 0..1, a project is in focus (system.js)
+    uniform float uNightBlur; // the defocus radius right now, px (0 = sharp)
+    uniform float uNightDim;  // the light left at full night
+
+    /* The night: the scene read out of focus. Thirteen taps — the
+       centre, a ring of six at half the radius, six more at the full
+       radius turned 30° — taken from the mip whose texel is about half
+       the radius, so the taps overlap and a star becomes one soft disc
+       rather than thirteen copies of itself. At radius 0 it is the
+       plain read, so the night eases in from nothing. */
+    const vec2 HEX_A[6] = vec2[6](vec2(1.0, 0.0), vec2(0.5, 0.8660254), vec2(-0.5, 0.8660254),
+                                  vec2(-1.0, 0.0), vec2(-0.5, -0.8660254), vec2(0.5, -0.8660254));
+    const vec2 HEX_B[6] = vec2[6](vec2(0.8660254, 0.5), vec2(0.0, 1.0), vec2(-0.8660254, 0.5),
+                                  vec2(-0.8660254, -0.5), vec2(0.0, -1.0), vec2(0.8660254, -0.5));
+    vec3 sceneAt(vec2 uv) {
+      if (uNightBlur <= 0.0) return texture(uScene, uv).rgb;
+      float lod = log2(max(uNightBlur * 0.5, 1.0));
+      vec2 px = uNightBlur / uRes;
+      vec3 c = textureLod(uScene, uv, lod).rgb * 0.16;
+      for (int i = 0; i < 6; i++) {
+        c += textureLod(uScene, uv + HEX_A[i] * px * 0.5, lod).rgb * 0.09;
+        c += textureLod(uScene, uv + HEX_B[i] * px, lod).rgb * 0.05;
+      }
+      return c;
+    }
 
     /* The swallow: every pixel shows the sky from FURTHER out along its
        line from the hole, turned by a swirl that tightens near it, so
@@ -1129,7 +1167,7 @@
       float gain;
       vec2 uv = swallowUv(vUv, gain);
       float inside = step(0.0, uv.x) * step(uv.x, 1.0) * step(0.0, uv.y) * step(uv.y, 1.0);
-      vec3 col = texture(uScene, uv).rgb;
+      vec3 col = sceneAt(uv);
       // Three mips: tight, medium and wide halo. Binding the last mip
       // twice (as a 4-sampler version would with 3 targets) double
       // weights it and over-brightens the widest halo.
@@ -1141,6 +1179,7 @@
 
       col *= uExposure;
       col = aces(col);
+      col *= mix(1.0, uNightDim, uNight);                    // the night: what light is left
 
       vec2 q = vUv - 0.5;
       col *= clamp(1.0 - dot(q, q) * 0.85, 0.0, 1.0);        // vignette
@@ -1937,7 +1976,7 @@
      from nameShiftPx = how far the page is past the name screen.
      On the press the profile fades (--leave) and the name glides back
      to the centre (LEAVE_MS) before its letters let go. */
-  const LEAVE_MS = 800, LEAVE_FADE_MS = 420, RELEASE_AFTER = 0.7;
+  const LEAVE_MS = 600, LEAVE_FADE_MS = 420, RELEASE_AFTER = 0.5;
   let nameShiftPx = 0, nameScreenY = 0, leaving = null, lastShift = -1, lastLeave = -1;
   const burstSection = document.getElementById('burst');
   function measureNameScreen() {
@@ -1969,6 +2008,7 @@
   let lastPublishedBurst = NaN, lastPublishedName = NaN;
   let lastPublishedRelease = NaN;
   let lastPublishedKoaik = NaN;
+  let lastBursting = false;
   let swallowFeed = 0, coreGlow = 0;
   let leanX = 0, leanY = 0;
   let lastTime = performance.now();
@@ -1977,8 +2017,13 @@
      of the collapse): where it is on screen, in uv, and how far. */
   let swallowAmt = 0;
   const swallowHole = [0.5, 0.5];
+  /* The night (system.js, while a project is in focus): 0..1, how far
+     the sky has stepped back — see NIGHT_BLUR / NIGHT_DIM. system.js
+     eases it; here it is only read, once a frame, in the composite. */
+  let skyNight = 0;
   window.galaxySky = {
     swallow(amount, u, v) { swallowAmt = Math.min(1, Math.max(0, amount)); swallowHole[0] = u; swallowHole[1] = v; },
+    night(amount) { skyNight = Math.min(1, Math.max(0, amount)); },
   };
 
   function wake() {
@@ -2000,13 +2045,13 @@
      The page tells one continuous story as it scrolls:
 
        0 .. 1 vh      hero: the galaxy holds
-       0.25 .. 2.6 vh the approach: the camera flies straight in along
+       0 .. 0.9 vh    the approach: the camera flies straight in along
                       the view axis while the disc rolls from 19 deg to
                       37 deg, opening from the bottom edge so the
                       galaxy is seen from the side rather than face-on.
                       It ends ~2.07x oversize with the stars reading as
                       discs rather than points.
-       2.6 vh         BURST FIRES — a timed event, not scroll-driven.
+       0.9 vh         BURST FIRES — a timed event, not scroll-driven.
                       The disc collapses to a knot, lets go, and the
                       stars recede into the background sky: each keeps
                       drifting the way it was already going while
@@ -2024,7 +2069,7 @@
      The scroll-driven stages must line up with the section heights in
      galaxy.css, or a stage finishes while its screen is still on view
      and the scene sits frozen for a full screen of scrolling. The
-     approach needs #intro at 180vh for BURST_TRIGGER to land inside it.
+     page needs hero + #intro + #burst ≥ 200vh for BURST_TRIGGER to land inside it.
 
      Each stage's progress is derived here so the renderer only reads
      smooth 0..1 values and never has to know about pixels. */
@@ -2042,13 +2087,15 @@
     // Derived from BURST_TRIGGER rather than a second hardcoded length:
     // when those two drifted apart the zoom finished early and the
     // galaxy hung at a fixed size for the rest of the scroll.
-    const ZOOM_START = 0.25;
+    const ZOOM_START = 0.0;
     zoomT = Math.min(1, Math.max(0,
       (y / h - ZOOM_START) / (config.BURST_TRIGGER - ZOOM_START)));
     // Ease in: linear against scroll made the approach feel like it
     // decelerated, because equal steps cover less apparent distance the
-    // closer the camera gets. Cubing front-loads the slow part.
-    zoomT = zoomT * zoomT * (3 - 2 * zoomT);
+    // closer the camera gets. A pure smoothstep, though, barely moved
+    // for the first tenth of a screen — the very first scroll felt
+    // dead — so it is mixed half with linear: it answers at once.
+    zoomT = 0.5 * zoomT + 0.5 * zoomT * zoomT * (3 - 2 * zoomT);
 
     // Stage 2: the burst is NOT scroll-driven. Scrolling past the
     // trigger point fires it once and it then plays out on its own
@@ -2502,6 +2549,14 @@
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, sceneRT.tex);
     gl.uniform1i(compositeProg.u.uScene, 0);
+    // The night reads the scene out of focus from its mips. They are
+    // made here, for this pass alone, and only while it is night: the
+    // filter goes back below, so the bright pass never samples them.
+    const nightBlur = skyNight * config.NIGHT_BLUR * dpr;
+    if (nightBlur > 0) {
+      gl.generateMipmap(gl.TEXTURE_2D);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    }
     for (let i = 0; i < bloomRT.length; i++) {
       gl.activeTexture(gl.TEXTURE1 + i);
       gl.bindTexture(gl.TEXTURE_2D, bloomRT[i].down.tex);
@@ -2512,9 +2567,16 @@
     gl.uniform2f(compositeProg.u.uRes, vw, vh);
     gl.uniform2f(compositeProg.u.uHole, swallowHole[0], swallowHole[1]);
     gl.uniform1f(compositeProg.u.uSwallow, swallowAmt);
+    gl.uniform1f(compositeProg.u.uNight, skyNight);
+    gl.uniform1f(compositeProg.u.uNightBlur, nightBlur);
+    gl.uniform1f(compositeProg.u.uNightDim, config.NIGHT_DIM);
     gl.bindVertexArray(quadVAO);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.bindVertexArray(null);
+    if (nightBlur > 0) {
+      gl.activeTexture(gl.TEXTURE0);                         // still the scene on unit 0
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    }
 
     /* ── The name arrives in two beats ──
        Both words are now written by the stars as one string, so the
@@ -2553,6 +2615,13 @@
       lastPublishedBurst = bq;
       document.documentElement.style.setProperty('--burst', bq.toFixed(3));
     }
+    // .is-bursting: the burst is playing FORWARD on its own clock (not
+    // the scroll-up rewind) — the "Wait" guide shows only then.
+    const bursting = burstFired && burst > 0 && burst < 1;
+    if (bursting !== lastBursting) {
+      lastBursting = bursting;
+      document.documentElement.classList.toggle('is-bursting', bursting);
+    }
 
     /* --release fades the name block out as the stars leave it, and
        .is-released lets whatever follows take the pointer. */
@@ -2588,7 +2657,9 @@
 
     driftX += (targetDrift - driftX) * Math.min(1, dt * 4.5);
     // Ease the scroll-driven stages so a flick of the wheel glides.
-    zoom   += (zoomT   - zoom)   * Math.min(1, dt * 4.0);
+    // 6.0: the approach is short now, and a slower ease would leave the
+    // camera still closing in when the burst fires.
+    zoom   += (zoomT   - zoom)   * Math.min(1, dt * 6.0);
     // The burst plays on its own timeline once fired. Un-fired, it
     // tracks the scroll-derived target back down (never up), eased
     // just enough that wheel steps do not show as jumps.
@@ -2767,7 +2838,12 @@
          once the profile is invisible, so its scroll jump is unseen;
          the letters let go RELEASE_AFTER seconds in, and the frame
          loop calls liftOff once the release has played. */
-      leaving = { t0: performance.now(), from: nameShiftPx };
+      /* The glide starts from just above the screen, not from where the
+         name really is: the profile is several screens long now, and
+         the name coming back from three screens up in LEAVE_MS was a
+         streak, not a glide. Both places are off-screen, so the cut
+         from one to the other is unseen. */
+      leaving = { t0: performance.now(), from: Math.min(nameShiftPx, window.innerHeight * 0.9) };
       setTimeout(seal, LEAVE_FADE_MS + 20);
       releaseClock = -RELEASE_AFTER;
       onLiftOff = liftOff;

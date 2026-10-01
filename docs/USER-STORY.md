@@ -40,11 +40,11 @@ film.
 
 ## The scenes
 
-Scroll positions are in viewport heights (vh). The page is 370 vh tall
-until the name is written (max scroll 2.70) and one screen after the
+Scroll positions are in viewport heights (vh). The page is 200 vh tall
+until the name is written (max scroll 1.00) and one screen after the
 launch.
 
-### 0 · Arrival — 0 to 1.8 vh
+### 0 · Arrival — at rest
 
 **Sees:** the galaxy alone on black, tilted, its bulge just off centre.
 No headline, no nav, no scroll cue (a deliberate choice; see *Open
@@ -54,16 +54,16 @@ wake in the stars.
 **Control:** the reader's. Nothing happens until they scroll.
 **Ends:** when they do.
 
-### 1 · The approach — 1.8 to 2.6 vh
+### 1 · The approach — 0 to 0.9 vh
 
 **Sees:** the camera pushes into the disc. The galaxy grows until the
 arms leave the frame and the bulge fills the screen.
 **Moves:** the zoom is scroll-driven (`ZOOM_PUSH`), so the reader's hand
 is the throttle. Scrolling back pulls out again.
 **Control:** the reader's.
-**Ends:** at 2.60 vh, `BURST_TRIGGER`.
+**Ends:** at 0.90 vh, `BURST_TRIGGER`.
 
-### 2 · The burst — timed, 4.2 s
+### 2 · The burst — timed, 2.8 s
 
 **Sees:** the galaxy detonates. Its stars leave the disc and fly across
 the screen; the field dissolves behind them; the stars land one by one
@@ -73,8 +73,8 @@ closes, a line from Interstellar resolves beneath it.
 moment the page takes the wheel: the burst runs on its own clock
 (`BURST_DURATION`), not on scroll, so it always plays at full speed.
 **Secondary:** the quote crossfades every 5.2 s with a 0.9 s lift.
-**Control:** the site's, for four seconds. Scrolling up afterwards
-rewinds it over 0.9 vh (`BURST_REWIND_SPAN`) — the stars fly back
+**Control:** the site's, for under three seconds. Scrolling up afterwards
+rewinds it over 0.6 vh (`BURST_REWIND_SPAN`) — the stars fly back
 into the disc.
 **Ends:** when the name is complete (`--burst` = 1).
 
@@ -86,17 +86,24 @@ LinkedIn, Email. At the foot of the screen a small "Who I am" cue with
 a chevron breathing downward.
 **Moves:** the greeting, the quote and the links resolve with the last
 letter, so identity lands first. Scrolling on, the whole block — the
-star name included — slides up with the page, and the profile comes
-in below it: "WHO I AM", the brief as a headline, the status, the bio
-in a glass panel, four numbers that count up the first time they are
-seen (projects, 42 level, languages, universities), the two schools,
-then "9 projects, one system. Come and see them." and the Endurance
-ring with "Press here to start the trip". Each part lifts in as it
-arrives.
+star name included — slides up with the page, and from here it reads
+like a normal site. A glass top bar drops in (AK · About · Stack ·
+Education · Projects, a gold drop under the section in view), and
+four sections follow: `// about` — "Who I am", the brief, the bio,
+status and links beside Ali's portrait in a floating circle with four
+numbers in orbit around it (projects, 42 level, languages,
+universities; they count up once, and each is a link to its section);
+`// stack` — languages, tools & IDEs, technologies on one line of
+flight; `// education` — "Academic path", a card per school that
+turns to its story on hover; `// projects` — "What I build", one
+sentence and the Endurance ring with "Press here to start the trip".
+Each section comes in once, as a whole, when it is reached.
 **Control:** the reader's. The profile only exists once the name is
 written, so nothing can be scrolled past while the stars are still
-writing it. Scrolling back up returns to the name and, further, to the
-galaxy (the burst rewinds). The button is the only way forward.
+writing it. Scrolling back up returns to the name (the top bar leaves)
+and, further, to the galaxy (the burst rewinds). The bar's links and
+the orbiting numbers jump between sections; the button is the only way
+forward.
 **Ends:** on the press.
 
 ### 4 · Take-off — the leave and the release
@@ -105,8 +112,8 @@ galaxy (the burst rewinds). The button is the only way forward.
 down to the centre of the sky; a beat later its letters let go, the
 stars that made them sliding back into the field, until the sky is
 just sky.
-**Moves:** the fade 0.4 s, the glide 0.8 s, the release 1.8 s starting
-0.7 s in — then the warp at once.
+**Moves:** the fade 0.4 s, the glide 0.6 s, the release 1.2 s starting
+0.5 s in — then the warp at once.
 **Control:** the site's. This is the one-way door: the page is locked
 and sealed, and there is no way back to the galaxy from here.
 

@@ -12,6 +12,8 @@
   <link rel="stylesheet" href="css/style.css" />
   <!-- Hero overrides for the galaxy scene; must follow style.css. -->
   <link rel="stylesheet" href="css/galaxy.css" />
+  <!-- The site's own mouse pointer, shared by every page. CSS only. -->
+  <link rel="stylesheet" href="css/cursor.css" />
 </head>
 <body>
 
@@ -49,6 +51,12 @@
       <p class="gname-hello">Hello, I'm</p>
       <nav class="gname-links" id="gnameLinks" aria-label="Contact"></nav>
     </div>
+    <!-- The guides, in the same slot as the cue below: "Scroll" on the
+         approach (until the burst fires), then "Wait" while the
+         burst writes the name (.is-bursting, galaxy.js). Decorative:
+         hidden from assistive tech. -->
+    <p class="guide guide-scroll" aria-hidden="true"><span>Scroll</span><span class="gname-cue-chevron"></span></p>
+    <p class="guide guide-wait" aria-hidden="true"><span>Wait<span class="guide-dots"><i>.</i><i>.</i><i>.</i></span></span></p>
     <!-- The cue at the foot of the name screen: there is more below. -->
     <a class="gname-cue" href="#profile" id="gnameCue"><span>Who I am</span><span class="gname-cue-chevron" aria-hidden="true"></span></a>
   </section>
@@ -64,24 +72,91 @@
        (see #burst in galaxy.css). -->
   <section id="burst" aria-hidden="true"></section>
 
-  <!-- PROFILE — who Ali is, below the name. Exists once the stars have
-       written the name (.is-written); scrolling on moves the name up
-       and brings this in. profile.js fills it from portfolioData and
-       counts the numbers up as they come into view. It ends on the
-       one way on: the launch button. Pressing it fades this away
-       (--leave), glides the name back to the centre, lets the letters
-       go and runs the warp to the projects (galaxy.js, warp.js). A
-       div, not a <section>: style.css pads sections at ID level. -->
-  <div class="profile" id="profile" role="region" aria-labelledby="profileTitle">
-    <div class="profile-inner">
-      <p class="profile-label">Who I am</p>
-      <h2 class="profile-title" id="profileTitle"></h2>
-      <p class="profile-status"><span class="dash-dot" aria-hidden="true"></span><span id="profileStatus"></span></p>
-      <div class="profile-bio" id="profileBio"></div>
-      <dl class="profile-stats" id="profileStats"></dl>
-      <div class="profile-schools" id="profileSchools"></div>
-      <div class="profile-launch">
-        <p class="profile-launch-lead" id="profileLead"></p>
+  <!-- PROFILE — below the name the page reads like a normal site:
+       a top bar, then four sections one after another. It exists once
+       the stars have written the name (.is-written); scrolling on
+       moves the name up and brings this in. profile.js fills it from
+       portfolioData.
+
+         NAV        a floating glass bar; appears once the reader is
+                    into the profile (:root.nav-on) and goes when they
+                    scroll back up to the name. Inside #profile on
+                    purpose: it then inherits the section's gates
+                    (not written yet / launched) and its --leave fade.
+         #about     who Ali is, beside his portrait in a floating
+                    circle with the numbers in orbit around it.
+         #stack     languages → tools & IDEs → technologies.
+         #education the academic path: two cards, the story of each
+                    on hover (focus, or tap).
+         #build     what he builds — the launch button. Pressing it
+                    fades all this away (--leave), glides the name
+                    back to the centre, lets the letters go and runs
+                    the warp to the projects (galaxy.js, warp.js).
+
+       The sections are divs, not <section>: style.css pads sections
+       at ID level. -->
+  <div class="profile" id="profile">
+    <nav class="site-nav" id="siteNav" aria-label="Sections">
+      <a class="site-nav-brand" href="#hero" id="navBrand" aria-label="Back to the name"></a>
+      <div class="site-nav-links" id="navLinks">
+        <span class="site-nav-blob" aria-hidden="true"></span>
+        <a href="#about" data-sec="about">About</a>
+        <a href="#stack" data-sec="stack">Stack</a>
+        <a href="#education" data-sec="education">Education</a>
+        <a href="#build" data-sec="build">Projects</a>
+      </div>
+    </nav>
+
+    <div class="pf-sec pf-about" id="about" role="region" aria-labelledby="aboutTitle">
+      <div class="pf-about-text">
+        <p class="pf-tag pf-rise">// about</p>
+        <h2 class="pf-title pf-rise" id="aboutTitle">Who I am</h2>
+        <p class="pf-role pf-rise" id="profileRole"></p>
+        <p class="pf-lead pf-rise" id="profileBrief"></p>
+        <div class="pf-bio pf-rise" id="profileBio"></div>
+        <div class="pf-meta pf-rise">
+          <p class="pf-status"><span class="dash-dot" aria-hidden="true"></span><span id="profileStatus"></span></p>
+          <p class="pf-links" id="profileLinks"></p>
+        </div>
+      </div>
+      <!-- The portrait: Ali in a circle that floats, the numbers as
+           bodies on two rings around him. The bodies are links to the
+           section each number is about (profile.js adds them). -->
+      <div class="pf-orbit" id="pfOrbit">
+        <svg class="pf-rings" viewBox="0 0 400 400" fill="none" aria-hidden="true">
+          <circle class="pf-ring pf-ring--a" cx="200" cy="200" r="140" pathLength="1"/>
+          <circle class="pf-ring pf-ring--b" cx="200" cy="200" r="180" pathLength="1"/>
+        </svg>
+        <span class="pf-moon pf-moon--a" aria-hidden="true"></span>
+        <span class="pf-moon pf-moon--b" aria-hidden="true"></span>
+        <div class="pf-core">
+          <img id="pfPhoto" alt="" hidden>
+          <span class="pf-initials" id="pfInitials" aria-hidden="true"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="pf-sec" id="stack" role="region" aria-labelledby="stackTitle">
+      <header class="pf-head">
+        <p class="pf-tag pf-rise">// stack</p>
+        <h2 class="pf-title pf-rise" id="stackTitle">Tech stack</h2>
+      </header>
+      <ol class="pf-stack" id="profileStack"></ol>
+    </div>
+
+    <div class="pf-sec" id="education" role="region" aria-labelledby="eduTitle">
+      <header class="pf-head">
+        <p class="pf-tag pf-rise">// education</p>
+        <h2 class="pf-title pf-rise" id="eduTitle">Academic path</h2>
+      </header>
+      <div class="pf-edu" id="profileEdu"></div>
+    </div>
+
+    <div class="pf-sec pf-build" id="build" role="region" aria-labelledby="buildTitle">
+      <p class="pf-tag pf-rise">// projects</p>
+      <h2 class="pf-title pf-rise" id="buildTitle">What I build</h2>
+      <p class="profile-launch-lead pf-rise" id="profileLead"></p>
+      <div class="profile-launch pf-rise">
         <button class="gname-launch" id="launchBtn" type="button">
           <span class="gname-launch-ring" aria-hidden="true">
             <!-- The Endurance: twelve modules in a ring around a hub.
@@ -104,7 +179,7 @@
             </svg>
           </span>
           <span class="gname-launch-label">Press here to start the trip</span>
-    </button>
+        </button>
       </div>
     </div>
   </div>

@@ -93,6 +93,17 @@ import { makeEmblem } from './emblems.js';
     IDLE_MS:    7000,                   // untouched this long at the overview: the view drifts
     DRIFT:      0.22,                   // that drift, in OrbitControls autoRotate units (2 = one turn per 30 s)
 
+    /* The night: with a PROJECT in focus, everything that is not that
+       project steps back — out of focus and darker — so the model and
+       its card are the subject (see "The night" below; the sky's own
+       two numbers are NIGHT_BLUR / NIGHT_DIM in galaxy.js). */
+    NIGHT_TIME: 0.30,                   // smooth time of the amount, in step with the rig (~90 % in 0.6 s)
+    NIGHT_BLUR: 7.0,                    // the rest of the system: defocus radius at full night, CSS px
+    NIGHT_DIM:  0.40,                   // …and the light left in it (1 = untouched, 0 = black)
+    NIGHT_LABELS: 0.30,                 // the other bodies' names: opacity left
+    NIGHT_SPOT: 1.7,                    // re-aimed at another project: the one just left keeps a spot of light, this many radii…
+    NIGHT_SPOT_MS: 450,                 // …for this long
+
     /* The orbits. */
     ORBIT_0:    2.5,                    // innermost radius
     ORBIT_STEP: 1.3,                    // gap between neighbouring orbits
@@ -573,7 +584,7 @@ import { makeEmblem } from './emblems.js';
       b.addEventListener('pointerenter', () => setHot(kind === 'pilot' ? 'pilot' : index));
       b.addEventListener('pointerleave', () => setHot(null));
       labelsEl.appendChild(b);
-      return { el: b, kind, index, in: 0 };
+      return { el: b, kind, index, in: 0, lit: 0 };
     };
     labels.push(mk(data.planet ? data.planet.name : 'Koaik', 'pilot', -1));
     projects.forEach((pr, i) => labels.push(mk(pr.name, 'project', i)));
@@ -606,7 +617,12 @@ import { makeEmblem } from './emblems.js';
       l.el.style.transform = `translate(${x.toFixed(1)}px, ${(y + (1 - l.in) * 8).toFixed(1)}px) translate(-50%, -100%)`;
       // Far and small: quieter, never hidden (they are the map).
       const gone = collapse ? (l.kind === 'pilot' ? 0 : 1 - smooth01(planets[l.index].fall / 0.25)) : 1;
-      l.el.style.opacity = ((0.55 + 0.45 * Math.min(1, rPx / 18)) * l.in * gone).toFixed(2);
+      // At night the other names step back with their bodies; the one
+      // in focus and the one under the cursor keep their light (eased
+      // here: opacity is written every frame, so CSS cannot ease it).
+      l.lit += ((key === focus || key === hot ? 1 : 0) - l.lit) * (reduceMotion ? 1 : 1 - Math.exp(-12 * dt));
+      const hush = 1 - (1 - config.NIGHT_LABELS) * night * (1 - l.lit);
+      l.el.style.opacity = ((0.55 + 0.45 * Math.min(1, rPx / 18)) * l.in * gone * hush).toFixed(2);
       l.el.style.visibility = gone < 0.02 ? 'hidden' : '';
     });
     if (reticle) {
@@ -869,6 +885,148 @@ import { makeEmblem } from './emblems.js';
     }
     if (Math.abs(shift.x) > 0.05 || Math.abs(shift.y) > 0.05) camera.setViewOffset(vw, vh, shift.x, shift.y, vw, vh);
     else if (camera.view && camera.view.enabled) camera.clearViewOffset();
+  }
+
+  /* ── The night: a project in focus ──
+     With a project selected the reader should be looking at it and its
+     card, not at the sky, the hole, eight other projects and every
+     orbit. So `night` (0..1) follows the selection: in with the move
+     toward a project, out when the focus ends — by any route, they all
+     go through `focus` — and 0 for the pilot (there the hole and the
+     orbits it bends ARE the subject) and in the collapse. While it is
+     above 0 the frame is drawn in three steps (drawFrame):
+       1. everything except the project, exactly as always;
+       2. that picture is copied off the canvas and put back out of
+          focus and darker (NIGHT_FS, read from the copy's mips);
+       3. the project alone on top, sharp and fully lit.
+     The copy is of what three.js really drew, so there is no second
+     colour pipeline to keep in step, the change from 0 is seamless,
+     and at 0 none of this runs. The price: the project is always in
+     front, also of an orbit that passes between it and the camera.
+     The sky is not on this canvas: galaxy.js takes the same amount
+     (window.galaxySky.night) and does the same in its composite pass.
+     Re-aiming from one project to another keeps the night and swaps
+     the subject. The one just left would go dark in a single frame,
+     so a soft spot of light stays on it and fades (NIGHT_SPOT_MS). */
+  const NIGHT_VS = `
+    varying vec2 vUv;
+    void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
+  const NIGHT_FS = `
+    precision highp float;
+    uniform sampler2D tMap;        // the canvas as drawn: premultiplied, alpha = what covers the sky
+    uniform vec2 uRes;             // drawing buffer, px
+    uniform float uNight, uBlur, uDim;
+    uniform vec3 uSpot;            // the project just left: centre (px, from the bottom left) and radius
+    uniform float uSpotW;
+    varying vec2 vUv;
+    // Thirteen taps: the centre, six at half the radius, six at the
+    // full radius turned 30°, from the mip whose texel is about half
+    // the radius — so they overlap into one smooth disc.
+    const vec2 HEX_A[6] = vec2[6](vec2(1.0, 0.0), vec2(0.5, 0.8660254), vec2(-0.5, 0.8660254),
+                                  vec2(-1.0, 0.0), vec2(-0.5, -0.8660254), vec2(0.5, -0.8660254));
+    const vec2 HEX_B[6] = vec2[6](vec2(0.8660254, 0.5), vec2(0.0, 1.0), vec2(-0.8660254, 0.5),
+                                  vec2(-0.8660254, -0.5), vec2(0.0, -1.0), vec2(0.8660254, -0.5));
+    void main() {
+      float d = length(gl_FragCoord.xy - uSpot.xy);
+      float k = uNight * (1.0 - uSpotW * (1.0 - smoothstep(uSpot.z * 0.7, uSpot.z, d)));
+      float r = uBlur * k;
+      float lod = log2(max(r * 0.5, 1.0));
+      vec2 px = r / uRes;
+      vec4 c = textureLod(tMap, vUv, lod) * 0.16;
+      for (int i = 0; i < 6; i++) {
+        c += textureLod(tMap, vUv + HEX_A[i] * px * 0.5, lod) * 0.09;
+        c += textureLod(tMap, vUv + HEX_B[i] * px, lod) * 0.05;
+      }
+      // Darker, not thinner: alpha is kept, so a project stays a solid
+      // shape against the sky — unlit, as at night.
+      c.rgb *= mix(1.0, uDim, k);
+      gl_FragColor = c;
+    }`;
+  const nightMat = new THREE.ShaderMaterial({
+    vertexShader: NIGHT_VS, fragmentShader: NIGHT_FS, depthTest: false, depthWrite: false, blending: THREE.NoBlending,
+    uniforms: { tMap: { value: null }, uRes: { value: new THREE.Vector2(1, 1) }, uNight: { value: 0 }, uBlur: { value: 0 },
+      uDim: { value: 1 }, uSpot: { value: new THREE.Vector3() }, uSpotW: { value: 0 } },
+  });
+  const nightQuad = new THREE.Mesh(quadGeo, nightMat);
+  nightQuad.frustumCulled = false;
+  let night = 0, nightBody = null;     // the amount, and the project kept sharp (an index)
+  const nightV = { n: 0 };
+  const spot = { index: null, w: 0 };  // the project just left, and how much of its light is left
+  function stepNight(dt) {
+    const on = typeof focus === 'number' && !collapse;
+    if (on && focus !== nightBody) {
+      if (nightBody !== null && night > 0.02 && !reduceMotion) { spot.index = nightBody; spot.w = 1; }
+      nightBody = focus;
+    }
+    night = reduceMotion ? (on ? 1 : 0) : smoothDamp(night, on ? 1 : 0, nightV, config.NIGHT_TIME, dt, 'n');
+    if (!on && night < 0.003) { night = 0; nightV.n = 0; nightBody = null; }      // fully off, not asymptotically
+    if (spot.index !== null) { spot.w -= dt * 1000 / config.NIGHT_SPOT_MS; if (spot.w <= 0 || night === 0) { spot.w = 0; spot.index = null; } }
+    if (window.galaxySky && window.galaxySky.night) window.galaxySky.night(night);
+  }
+  /* The copy of the canvas, the size of the drawing buffer, with room
+     for its mips. The mips are made through three.js's own state
+     tracker (`renderer.state` / `.properties`, r186) so its texture
+     cache stays right. nightWarm() allocates the copy and DRAWS the
+     quad once ahead of time (build(), under the warp; the copy is
+     still empty, so it draws nothing): compiling is not enough, the
+     driver builds the pipeline on the first draw, and the first
+     selection paid for it mid-move — a 100–220 ms frame. */
+  let nightTex = null;
+  const _buf = new THREE.Vector2(), _sp = new THREE.Vector3();
+  function nightTarget() {
+    renderer.getDrawingBufferSize(_buf);
+    if (!nightTex || nightTex.image.width !== _buf.x || nightTex.image.height !== _buf.y) {
+      if (nightTex) nightTex.dispose();
+      nightTex = new THREE.FramebufferTexture(_buf.x, _buf.y);
+      nightTex.magFilter = THREE.LinearFilter;
+      nightTex.minFilter = THREE.LinearMipmapLinearFilter;
+      renderer.initTexture(nightTex);
+    }
+    return nightTex;
+  }
+  function nightWarm() {
+    nightMat.uniforms.tMap.value = nightTarget();
+    renderer.render(nightQuad, camera);
+  }
+  function nightCopy() {
+    renderer.copyFramebufferToTexture(nightTarget());
+    const gl = renderer.getContext();
+    renderer.state.bindTexture(gl.TEXTURE_2D, renderer.properties.get(nightTex).__webglTexture);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    renderer.state.unbindTexture();
+    return nightTex;
+  }
+  function drawFrame() {
+    const subject = night > 0 && nightBody !== null && planets[nightBody] ? planets[nightBody] : null;
+    if (!subject) { renderer.render(scene, camera); return; }
+    // 1. Everything but the project.
+    subject.body.group.visible = false;
+    renderer.render(scene, camera);
+    // 2. Off the canvas, and back out of focus and darker.
+    const u = nightMat.uniforms, pr = renderer.getPixelRatio();
+    u.tMap.value = nightCopy();
+    u.uRes.value.copy(_buf);
+    u.uNight.value = night;
+    u.uBlur.value = config.NIGHT_BLUR * pr;
+    u.uDim.value = config.NIGHT_DIM;
+    const old = spot.index !== null ? planets[spot.index] : null;
+    u.uSpotW.value = old ? smooth01(spot.w) : 0;
+    if (old) {
+      old.body.group.getWorldPosition(_sp).project(camera);
+      u.uSpot.value.set((_sp.x * 0.5 + 0.5) * _buf.x, (_sp.y * 0.5 + 0.5) * _buf.y, Math.max(24, old.rPx * config.NIGHT_SPOT) * pr);
+    }
+    renderer.autoClear = false;
+    renderer.render(nightQuad, camera);
+    // 3. The project alone, over it: the lights stay, the rest of the
+    //    scene is hidden for this one pass.
+    renderer.clearDepth();
+    const sv = sun.group.visible, kv = shock.visible, fv = flashMesh.visible;
+    sun.group.visible = shock.visible = flashMesh.visible = false;
+    for (const p of planets) if (p) { p.ring.visible = false; p.body.group.visible = p === subject; }
+    renderer.render(scene, camera);
+    for (const p of planets) if (p) { p.ring.visible = true; p.body.group.visible = true; }
+    sun.group.visible = sv; shock.visible = kv; flashMesh.visible = fv;
+    renderer.autoClear = true;
   }
 
   /* ── Selection ── */
@@ -1220,6 +1378,7 @@ import { makeEmblem } from './emblems.js';
     if (ready && !flight && !rig.active && focus === null && !reduceMotion && !keys.size && now - lastTouch > config.IDLE_MS) controls.autoRotate = true;
     if (controls.enabled && !rig.active) controls.update();
     stepShift(dt);
+    stepNight(dt);
     camera.updateMatrixWorld();
     scene.updateMatrixWorld();
     stepBlackHole(cs);
@@ -1248,7 +1407,7 @@ import { makeEmblem } from './emblems.js';
       em.update({ dt: reduceMotion ? 0 : dt, t: time, camera, detail: p.rPx > config.DETAIL_PX });
     }
 
-    renderer.render(scene, camera);
+    drawFrame();
     placeLabels(vw, vh, now, dt);
     drawMap();
   }
@@ -1268,6 +1427,7 @@ import { makeEmblem } from './emblems.js';
     try {
       sun = makeBlackHole();
     } catch (e) { console.error(e); fail(); return; }
+    try { nightWarm(); } catch (e) { console.warn('night: warm-up', e); }
     const a = arrivalPose();
     camera.position.copy(a.pos); controls.target.copy(a.target); camera.lookAt(a.target);
     if (!projects.length) makeLabels();
@@ -1295,6 +1455,7 @@ import { makeEmblem } from './emblems.js';
   window.system = {
     select, overview, collapse: startCollapse,
     state: () => ({ ready, focus, hot, planets: planets.filter(Boolean).length, dist: +camera.position.distanceTo(controls.target).toFixed(2), flying: !!flight || rig.active,
+      night: +night.toFixed(3),
       collapsing: collapse ? +((performance.now() - collapse.t0) / 1000).toFixed(2) : null }),
     /* For the harness: where the camera is and where a body sits on
        screen (NDC), so motion can be measured frame by frame. */
