@@ -38,7 +38,11 @@ to view the site locally.
 └── src/                # everything the site serves
     ├── index.html      # main page — sections injected by js/main.js
     ├── projects.html   # standalone projects page, own inline script
-    ├── galaxy.html     # WebGL2 galaxy hero
+    ├── galaxy.html     # WebGL2 galaxy hero, the name, the profile; ends on TARS
+    ├── system.html     # the warp + the Koaik system (three.js); TARS opens it
+    ├── posts.html      # top-bar page, empty for now
+    ├── activities.html # top-bar page, empty for now
+    ├── beyond.html     # where the black hole's collapse leads (placeholder)
     ├── css/
     │   ├── style.css   # design tokens + all shared styles
     │   ├── galaxy.css  # galaxy hero overrides

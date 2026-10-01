@@ -2,8 +2,9 @@
    THE PROFILE — the name screen's links, and the page below it
    ------------------------------------------------------------
    Fills, from portfolioData:
-     • the contact links under the star-written name (GitHub,
-       LinkedIn, Email), which scroll with it;
+     • the block under the star-written name — what Ali is and
+       works on, place and status, and the text links (to his work,
+       GitHub, LinkedIn, Email) — which scrolls with it;
      • the profile below the name, which reads like a normal site:
          #about      the brief, the bio, status and links, beside the
                      portrait — Ali in a floating circle with the
@@ -14,7 +15,10 @@
          #build      the line above the launch button.
    And runs the top bar: it appears once the reader is into the
    profile (:root.nav-on), marks the section in view, and scrolls to
-   a section when a link is pressed.
+   a section when a link is pressed (Posts and Activities are plain
+   links to their own pages). When TARS comes into view the system
+   page's files are prefetched. And with a section's hash in the URL
+   the page is scrolled straight to it.
 
    Each section comes in once, when it enters the view (.is-in); the
    numbers count up then. The cue at the foot of the name screen
@@ -46,9 +50,24 @@
     so.linkedin && { key: 'linkedin', label: 'LinkedIn', href: so.linkedin, ext: true },
     (so.email || pp.email) && { key: 'email', label: 'Email', href: 'mailto:' + (so.email || pp.email), ext: false },
   ].filter(Boolean);
+  /* The name screen: type only. The headline in data.js is "what he
+     is · what he works on"; the first part is set in small capitals
+     and the rest as one light line under it (a headline without the
+     dot is all light line). Then place and status as plain words,
+     and the outside links as text — no icons, no pills. */
+  const setText = (id, v) => { const el = $(id); if (el) { el.textContent = v || ''; el.hidden = !v; } return el; };
+  const head = String(pp.headline || pp.degree || '').split(/\s+·\s+/);
+  setText('gnameRole', head.length > 1 ? head[0] : '');
+  setText('gnameFocus', head.length > 1 ? head.slice(1).join(' · ') : head[0]);
+  const meta = $('gnameMeta');
+  if (meta) {
+    const bits = [pp.location, pp.status].filter(Boolean);
+    meta.innerHTML = bits.map(b => `<span>${esc(b)}</span>`).join('');
+    meta.hidden = !bits.length;
+  }
   const linksEl = $('gnameLinks');
   if (linksEl) linksEl.innerHTML = links.map(l =>
-    `<a class="gname-link" href="${esc(l.href)}"${l.ext ? ' target="_blank" rel="noopener"' : ''}>${ICONS[l.key]}<span>${esc(l.label)}</span></a>`).join('');
+    `<a class="gname-link" href="${esc(l.href)}"${l.ext ? ' target="_blank" rel="noopener"' : ''}>${esc(l.label)}</a>`).join('');
 
   /* ── Going to a section ──
      One function for the cue, the top bar and the orbit's bodies.
@@ -61,57 +80,41 @@
   }
   const cue = $('gnameCue');
   if (cue) cue.addEventListener('click', e => { if (goTo(profile)) e.preventDefault(); });
+  const work = $('gnameWork');
+  if (work) work.addEventListener('click', e => { if (goTo($('build'))) e.preventDefault(); });
 
-  /* ── About ── */
+  /* ── About ──
+     The copy is the bio, its first paragraph larger; names worth the
+     eye (schools, the degree, C) are set bold, the way the reference
+     page does it. Beside it a 2x2 grid of numbers that count up, and
+     the portrait in a frame (initials until a photo really loads). */
   const set = (id, v) => { const el = $(id); if (el) el.textContent = v || ''; };
   const education = data.education || [], skills = data.skills || {};
-  const role = $('profileRole');
-  if (role) role.innerHTML = [pp.name, pp.degree, pp.location].filter(Boolean).map(v => `<span>${esc(v)}</span>`).join('');
-  // The brief leads; the bio's own first paragraph restates it.
-  const rest = (pp.bio || []).slice(pp.brief ? 1 : 0);
-  set('profileBrief', pp.brief || rest.shift() || '');
+  const KEY = /(42 Beirut|University of Science and Arts in Lebanon|Computer Science|low-level programming|systems design|memory management in C|multithreading|shell pipelines)/g;
   const bio = $('profileBio');
-  if (bio) bio.innerHTML = rest.map(p => `<p>${esc(p)}</p>`).join('');
-  set('profileStatus', pp.status);
+  if (bio) bio.innerHTML = (pp.bio || [pp.brief]).filter(Boolean).map(p => `<p>${esc(p).replace(KEY, '<strong>$1</strong>')}</p>`).join('');
+  set('aboutStatus', [pp.location, pp.status].filter(Boolean).join(' — '));
   const pfLinks = $('profileLinks');
   if (pfLinks) pfLinks.innerHTML = links.map(l =>
-    `<a class="pf-link" href="${esc(l.href)}"${l.ext ? ' target="_blank" rel="noopener"' : ''}>${ICONS[l.key]}<span>${esc(l.label)}</span></a>`).join('');
-
-  /* ── The portrait's orbit ──
-     Ring radii are fractions of the figure's side and match the SVG
-     circles in galaxy.html (r 140 and 180 in a 400 box). Angles are
-     clockwise from the top. `size` scales the body's disc: the count
-     of projects is the largest, because it is where the page ends.
-     `to` is the section the number is about; `top` hangs the label
-     above the disc, where one below would run into the portrait. */
-  const RING = { a: 0.35, b: 0.45 };
-  const BODIES = [
-    { label: 'Projects', value: projects.length || st.projects, to: 'build', ring: 'b', angle: 38, size: 1 },
-    { label: '42 level', value: st.level42, to: 'education', ring: 'a', angle: 138, size: 0.86 },
-    { label: 'Languages', value: st.languages, to: 'stack', ring: 'b', angle: 222, size: 0.84 },
-    { label: 'Universities', value: st.universities, to: 'education', ring: 'a', angle: 302, size: 0.78, top: true },
+    `<a class="gname-link" href="${esc(l.href)}"${l.ext ? ' target="_blank" rel="noopener"' : ''}>${esc(l.label)}</a>`).join('');
+  const STATS = [
+    { label: 'Projects', value: projects.length || st.projects },
+    { label: '42 level', value: st.level42 },
+    { label: 'Languages', value: st.languages },
+    { label: 'Universities', value: st.universities },
   ].filter(b => b.value !== undefined && b.value !== null && b.value !== '');
-  const orbit = $('pfOrbit');
-  if (orbit) {
-    orbit.insertAdjacentHTML('beforeend', BODIES.map((b, i) => {
-      const a = b.angle * Math.PI / 180, r = RING[b.ring];
-      const x = (50 + r * Math.sin(a) * 100).toFixed(2), y = (50 - r * Math.cos(a) * 100).toFixed(2);
-      const m = String(b.value).match(/^(\d+)(.*)$/);
-      return `<a class="pf-body${b.top ? ' pf-body--top' : ''}" href="#${b.to}" style="--x:${x}%;--y:${y}%;--k:${b.size};--i:${i}">
-        <span class="pf-body-disc"><span class="pf-num" data-value="${m ? esc(m[1]) : ''}">${esc(m ? m[1] : b.value)}</span>${m && m[2] ? `<span class="pf-suffix">${esc(m[2])}</span>` : ''}</span>
-        <span class="pf-body-label">${esc(b.label)}</span>
-      </a>`;
-    }).join(''));
-    const initials = (pp.name || '').split(/\s+/).map(w => w[0] || '').join('').slice(0, 2).toUpperCase();
-    set('pfInitials', initials);
-    set('navBrand', initials);
-    // The photo replaces the initials only once it has really loaded.
-    const photo = $('pfPhoto');
-    if (photo && pp.photo) {
-      photo.addEventListener('load', () => { photo.hidden = false; });
-      photo.src = pp.photo;
-    }
+  const statsEl = $('aboutStats');
+  if (statsEl) statsEl.innerHTML = STATS.map(b => {
+    const m = String(b.value).match(/^(\d+)(.*)$/);
+    return `<div class="ab-stat"><div class="ab-num"><span class="pf-num" data-value="${m ? esc(m[1]) : ''}">${esc(m ? m[1] : b.value)}</span>${m && m[2] ? esc(m[2]) : ''}</div><div class="ab-stat-label">${esc(b.label)}</div></div>`;
+  }).join('');
+  set('pfInitials', (pp.name || '').split(/\s+/).map(w => w[0] || '').join('').slice(0, 2).toUpperCase());
+  const photo = $('pfPhoto');
+  if (photo && pp.photo) {
+    photo.addEventListener('load', () => { photo.hidden = false; });
+    photo.src = pp.photo;
   }
+  const orbit = null;
 
   /* ── The stack: three stages, in the order they are reached for ── */
   const STAGES = [
@@ -130,46 +133,19 @@
       <ul class="pf-chips">${g.items.map(x => `<li>${esc(x)}</li>`).join('')}</ul>
     </li>`).join('');
 
-  /* ── Education: a card per school ──
-     The front says where, when and what; the back is the school's
-     story (education[].description) and takes the front's place on
-     hover or keyboard focus. A press toggles it too — the only way to
-     turn a card on a touch screen. Both faces share one grid cell, so
-     the card is as tall as the longer of the two and nothing jumps. */
+  /* ── Career: a timeline ──
+     One row per entry of data.education, newest first as written:
+     the period, then what and where. */
   const edu = $('profileEdu');
-  if (edu) {
-    edu.innerHTML = education.map((e, i) => {
-      // The badge says how the school teaches; skipped when the
-      // program line already says it.
-      const badge = e.badge && !(e.program || '').toLowerCase().includes(e.badge.toLowerCase()) ? e.badge : '';
-      const tags = [e.level, badge].filter(Boolean).map(t => `<li>${esc(t)}</li>`).join('');
-      return `
-      <div class="pf-card-wrap pf-rise" style="--d:${i}">
-      <article class="pf-card${e.description ? ' has-back' : ''}" data-tone="${i % 2 ? 'blue' : 'gold'}"${e.description ? ' tabindex="0"' : ''}>
-        <div class="pf-card-front">
-          <p class="pf-card-period"><span class="pf-card-dot" aria-hidden="true"></span>${esc(e.period || '')}</p>
-          <h3 class="pf-card-name">${esc(e.institution || '')}</h3>
-          <p class="pf-card-program">${esc(e.program || '')}</p>
-          ${tags ? `<ul class="pf-card-tags">${tags}</ul>` : ''}
-          ${e.description ? '<p class="pf-card-hint" aria-hidden="true"><span class="pf-hint-hover">Hover to read about it</span><span class="pf-hint-tap">Tap to read about it</span></p>' : ''}
-        </div>
-        ${e.description ? `<div class="pf-card-back">
-          <p class="pf-card-back-name">${esc(e.institution || '')}</p>
-          <p class="pf-card-desc">${esc(e.description)}</p>
-        </div>` : ''}
-      </article>
-      </div>`;
-    }).join('');
-    edu.querySelectorAll('.pf-card.has-back').forEach(card => {
-      card.addEventListener('click', () => card.classList.toggle('is-open'));
-      card.addEventListener('keydown', e => {
-        if (e.key !== 'Enter' && e.key !== ' ') return;
-        e.preventDefault();
-        card.classList.toggle('is-open');
-      });
-      card.addEventListener('mouseleave', () => card.classList.remove('is-open'));
-    });
-  }
+  if (edu) edu.innerHTML = education.map((e, i) => `
+    <li class="tl-item pf-rise" style="--d:${i + 2}">
+      <span class="tl-dot" aria-hidden="true"></span>
+      <span class="tl-date">${esc(e.period || '')}</span>
+      <div class="tl-body">
+        <h3>${esc(e.institution || '')}</h3>
+        <p>${esc(e.program || '')}${e.level ? ` · ${esc(e.level)}` : ''}</p>
+      </div>
+    </li>`).join('');
 
   /* ── What I build ── */
   set('profileLead', projects.length
@@ -194,6 +170,10 @@
     // stretches toward the new link before it settles.
     blob.style.setProperty('--bx', a.offsetLeft + 'px');
     blob.style.setProperty('--bw', a.offsetWidth + 'px');
+    // On a narrow screen the links scroll sideways inside the bar:
+    // bring the current one to the middle.
+    if (navLinks.scrollWidth > navLinks.clientWidth + 1)
+      navLinks.scrollTo({ left: a.offsetLeft - (navLinks.clientWidth - a.offsetWidth) / 2, behavior: reduce ? 'auto' : 'smooth' });
   }
   function setActive(key) {
     if (key === activeSec) return;
@@ -222,13 +202,6 @@
     secLinks.forEach(l => l.addEventListener('click', e => {
       if (goTo($(l.dataset.sec))) e.preventDefault();
     }));
-    // The brand goes back to the name screen: the top of the profile
-    // less one screen (galaxy.js's nameScreenY).
-    const brand = $('navBrand');
-    if (brand) brand.addEventListener('click', e => {
-      e.preventDefault();
-      window.scrollTo({ top: Math.max(0, profile.offsetTop - window.innerHeight), behavior: reduce ? 'auto' : 'smooth' });
-    });
     // The glass catches the light where the pointer is (a sheen on
     // ::before at --mx). Written on pointermove over the bar only.
     nav.addEventListener('pointermove', e => {
@@ -266,6 +239,23 @@
       requestAnimationFrame(tick);
     });
   }
+  /* The system's page is the heavy one (three.js is 2 MB). Once the
+     reader has reached TARS its files are fetched — only fetched,
+     at the lowest priority, into the HTTP cache — so the page opens
+     at once on the press. Nothing is parsed or run here. */
+  let prefetched = false;
+  function prefetchSystem() {
+    if (prefetched) return; prefetched = true;
+    const conn = navigator.connection;
+    if (conn && (conn.saveData || /2g/.test(conn.effectiveType || ''))) return;
+    ['system.html', 'js/system.js', 'js/emblems.js', 'js/hud.js', 'js/warp.js',
+     'js/vendor/three/three.module.js', 'js/vendor/three/three.core.js',
+     'js/vendor/three/addons/controls/OrbitControls.js'].forEach(href => {
+      const l = document.createElement('link');
+      l.rel = 'prefetch'; l.href = href;
+      document.head.appendChild(l);
+    });
+  }
   if ('IntersectionObserver' in window) {
     if (reduce) secs.forEach(el => el.classList.add('is-in'));
     else {
@@ -274,6 +264,7 @@
           if (!e.isIntersecting) continue;
           e.target.classList.add('is-in');
           if (e.target.id === 'about') countUp();
+          if (e.target.id === 'build') prefetchSystem();
           io.unobserve(e.target);
         }
       }, { threshold: 0.14, rootMargin: '0px 0px -8% 0px' });
@@ -287,4 +278,15 @@
     secs.forEach(el => el.classList.add('is-in'));
   }
   if (!activeSec && secs.length) setActive(secs[0].id);
+
+  /* ── Arriving at a section: galaxy.html#education ──
+     The top bar on the other pages links here by hash. galaxy.js has
+     then opened the page with the name already written (.is-written),
+     so the profile exists; the sections are filled now, so their
+     places are final. An instant jump — style.css makes scrolling
+     smooth by default, and a glide through four screens is not an
+     arrival. */
+  const want = /^#(about|stack|education|build)$/.test(window.location.hash) && $(window.location.hash.slice(1));
+  if (want && root.classList.contains('is-written'))
+    window.scrollTo({ top: want.getBoundingClientRect().top + window.scrollY, behavior: 'instant' });
 })();

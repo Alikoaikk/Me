@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <!-- Orbitron carries the name itself (see NAME_FONT in galaxy.js);
        the other two remain the UI faces. -->
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Orbitron:wght@700;800;900&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Orbitron:wght@700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/style.css" />
   <!-- Hero overrides for the galaxy scene; must follow style.css. -->
   <link rel="stylesheet" href="css/galaxy.css" />
@@ -33,23 +33,32 @@
          from the galaxy are the only thing that draws it. -->
     <div class="galaxy-name" aria-label="Ali Koaik">
       <span class="gname-full">Ali Koaik</span>
-      <!-- Everything below resolves AFTER the stars finish writing the
-           name, on --name-koaik, so the identity lands first and the
-           portfolio framing follows it rather than competing.
-
-           The quote rotates through short lines from Interstellar.
-           aria-live is off, not polite: a line that changes every few
-           seconds would otherwise interrupt a screen reader endlessly.
-           The text is filled by galaxy.js. -->
-      <p class="gname-quote" id="gnameQuote" aria-live="off">
-        <span class="gname-quote-text"></span>
-      </p>
-      <!-- Above the name: the greeting. Below the quote: the ways to
-           reach Ali. Both ride the name's anchor and --name-scroll, so
-           they scroll up with the star-written name; profile.js fills
-           the links from portfolioData.socials. -->
+      <!-- Above the name: the greeting. -->
       <p class="gname-hello">Hello, I'm</p>
-      <nav class="gname-links" id="gnameLinks" aria-label="Contact"></nav>
+      <!-- Below it, one block in normal flow, hung from the name's
+           anchor (see .gname-below in galaxy.css). Type and hairlines
+           only — no pills, no icons, no boxes: a short rule, what Ali
+           is (small capitals), what he works on (one light line),
+           where he is and that he is available, then a row of plain
+           text links (the way to his work, and where to find him),
+           and a quiet line from the film last. It all resolves AFTER the stars finish writing the
+           name (--name-koaik) and scrolls up with it (--name-scroll).
+           profile.js fills it from portfolioData; the quote is
+           galaxy.js's (aria-live off: a line that changes every few
+           seconds would interrupt a screen reader endlessly). -->
+      <div class="gname-below" id="gnameBelow">
+        <span class="gname-rule" aria-hidden="true"></span>
+        <p class="gname-role" id="gnameRole"></p>
+        <p class="gname-focus" id="gnameFocus"></p>
+        <p class="gname-meta" id="gnameMeta"></p>
+        <nav class="gname-actions" aria-label="Links">
+          <a class="gname-go" href="#build" id="gnameWork">View my work<span class="gname-arrow" aria-hidden="true">&darr;</span></a>
+          <span class="gname-links" id="gnameLinks"></span>
+        </nav>
+        <p class="gname-quote" id="gnameQuote" aria-live="off">
+          <span class="gname-quote-text"></span>
+        </p>
+      </div>
     </div>
     <!-- The guides, in the same slot as the cue below: "Scroll" on the
          approach (until the burst fires), then "Wait" while the
@@ -78,7 +87,9 @@
        moves the name up and brings this in. profile.js fills it from
        portfolioData.
 
-         NAV        a floating glass bar; appears once the reader is
+         NAV        a floating glass bar: the four sections, then
+                    Posts and Activities, which are pages of their
+                    own. It appears once the reader is
                     into the profile (:root.nav-on) and goes when they
                     scroll back up to the name. Inside #profile on
                     purpose: it then inherits the section's gates
@@ -88,52 +99,56 @@
          #stack     languages → tools & IDEs → technologies.
          #education the academic path: two cards, the story of each
                     on hover (focus, or tap).
-         #build     what he builds — the launch button. Pressing it
-                    fades all this away (--leave), glides the name
-                    back to the centre, lets the letters go and runs
-                    the warp to the projects (galaxy.js, warp.js).
+         #build     what he builds — the orbit mark. Pressing it plays the
+                    take-off (the mark opens up, all this
+                    fades on --leave, the name glides back to the
+                    centre and its letters let go — galaxy.js) and
+                    then opens system.html, where the warp and the
+                    projects are.
 
        The sections are divs, not <section>: style.css pads sections
        at ID level. -->
   <div class="profile" id="profile">
     <nav class="site-nav" id="siteNav" aria-label="Sections">
-      <a class="site-nav-brand" href="#hero" id="navBrand" aria-label="Back to the name"></a>
       <div class="site-nav-links" id="navLinks">
         <span class="site-nav-blob" aria-hidden="true"></span>
         <a href="#about" data-sec="about">About</a>
+        <a href="#education" data-sec="education">Career</a>
         <a href="#stack" data-sec="stack">Stack</a>
-        <a href="#education" data-sec="education">Education</a>
         <a href="#build" data-sec="build">Projects</a>
+        <!-- Pages of their own (empty for now), not sections of this one. -->
+        <span class="site-nav-sep" aria-hidden="true"></span>
+        <a href="posts.html">Posts</a>
+        <a href="activities.html">Activities</a>
       </div>
     </nav>
 
-    <div class="pf-sec pf-about" id="about" role="region" aria-labelledby="aboutTitle">
-      <div class="pf-about-text">
-        <p class="pf-tag pf-rise">// about</p>
-        <h2 class="pf-title pf-rise" id="aboutTitle">Who I am</h2>
-        <p class="pf-role pf-rise" id="profileRole"></p>
-        <p class="pf-lead pf-rise" id="profileBrief"></p>
-        <div class="pf-bio pf-rise" id="profileBio"></div>
-        <div class="pf-meta pf-rise">
-          <p class="pf-status"><span class="dash-dot" aria-hidden="true"></span><span id="profileStatus"></span></p>
-          <p class="pf-links" id="profileLinks"></p>
+    <!-- ABOUT, then CAREER: the layout of aliitawi.me's two sections
+         (the user's reference) with this site's content and gold. A
+         strip (mark, word, rule, a line), a small numbered label, a
+         very large title; then the copy and a 2x2 grid of numbers
+         beside a portrait frame; then the career as a timeline. -->
+    <div class="pf-sec ab" id="about" role="region" aria-labelledby="aboutTitle">
+      <p class="ab-strip pf-rise"><span class="ab-mark" aria-hidden="true"></span><span class="ab-word">Becoming</span><span class="ab-strip-rule" aria-hidden="true"></span><span class="ab-strip-line" id="aboutStatus"></span></p>
+      <p class="ab-label pf-rise">01 &mdash; About</p>
+      <h2 class="ab-title pf-rise" id="aboutTitle">Who I Am</h2>
+      <div class="ab-split">
+        <div class="ab-left">
+          <div class="ab-copy pf-rise" id="profileBio"></div>
+          <div class="ab-stats pf-rise" id="aboutStats"></div>
+          <p class="pf-links pf-rise" id="profileLinks"></p>
         </div>
-      </div>
-      <!-- The portrait: Ali in a circle that floats, the numbers as
-           bodies on two rings around him. The bodies are links to the
-           section each number is about (profile.js adds them). -->
-      <div class="pf-orbit" id="pfOrbit">
-        <svg class="pf-rings" viewBox="0 0 400 400" fill="none" aria-hidden="true">
-          <circle class="pf-ring pf-ring--a" cx="200" cy="200" r="140" pathLength="1"/>
-          <circle class="pf-ring pf-ring--b" cx="200" cy="200" r="180" pathLength="1"/>
-        </svg>
-        <span class="pf-moon pf-moon--a" aria-hidden="true"></span>
-        <span class="pf-moon pf-moon--b" aria-hidden="true"></span>
-        <div class="pf-core">
+        <div class="ab-frame pf-rise">
           <img id="pfPhoto" alt="" hidden>
-          <span class="pf-initials" id="pfInitials" aria-hidden="true"></span>
+          <span class="ab-initials" id="pfInitials" aria-hidden="true"></span>
         </div>
       </div>
+    </div>
+
+    <div class="pf-sec tl-sec" id="education" role="region" aria-labelledby="eduTitle">
+      <p class="ab-label pf-rise">02 &mdash; Career</p>
+      <h2 class="ab-title pf-rise" id="eduTitle">The Path So Far</h2>
+      <ol class="tl" id="profileEdu"></ol>
     </div>
 
     <div class="pf-sec" id="stack" role="region" aria-labelledby="stackTitle">
@@ -144,105 +159,42 @@
       <ol class="pf-stack" id="profileStack"></ol>
     </div>
 
-    <div class="pf-sec" id="education" role="region" aria-labelledby="eduTitle">
-      <header class="pf-head">
-        <p class="pf-tag pf-rise">// education</p>
-        <h2 class="pf-title pf-rise" id="eduTitle">Academic path</h2>
-      </header>
-      <div class="pf-edu" id="profileEdu"></div>
-    </div>
-
     <div class="pf-sec pf-build" id="build" role="region" aria-labelledby="buildTitle">
       <p class="pf-tag pf-rise">// projects</p>
       <h2 class="pf-title pf-rise" id="buildTitle">What I build</h2>
       <p class="profile-launch-lead pf-rise" id="profileLead"></p>
       <div class="profile-launch pf-rise">
-        <button class="gname-launch" id="launchBtn" type="button">
-          <span class="gname-launch-ring" aria-hidden="true">
-            <!-- The Endurance: twelve modules in a ring around a hub.
-                 The ring rotates — the ship spins to make its own
-                 gravity, which is the single most recognisable thing
-                 about it. Drawn as a dashed circle so each dash reads
-                 as a module without needing twelve separate nodes. -->
-            <svg class="gname-endurance" viewBox="0 0 48 48" fill="none"
-                 stroke="currentColor" stroke-linecap="butt">
-              <!-- modules -->
-              <circle cx="24" cy="24" r="17" stroke-width="5"
-                      stroke-dasharray="4.45 4.45" opacity="0.92"/>
-              <!-- structural rim, inside and out -->
-              <circle cx="24" cy="24" r="20.2" stroke-width="0.9" opacity="0.5"/>
-              <circle cx="24" cy="24" r="13.8" stroke-width="0.9" opacity="0.5"/>
-              <!-- hub + spokes -->
-              <circle cx="24" cy="24" r="3.2" stroke-width="1.4"/>
-              <path stroke-width="1" opacity="0.65"
-                    d="M24 20.8V13.8M24 27.2v6.9M20.8 24h-7M27.2 24h6.9"/>
+        <!-- THE WAY ON. A small orbit diagram — what is on the other
+             side: Koaik at the centre (gold), nine projects on three
+             hairline rings, turning — and under it the words. Type
+             and hairlines, like the name screen. A real link to the
+             system's own page; galaxy.js takes the plain click to
+             play the take-off first (the diagram opens up toward the
+             reader as the profile fades and the letters let go) and
+             then follows the link. -->
+        <a class="orbit-btn" id="launchBtn" href="system.html">
+          <span class="launch-mark" aria-hidden="true">
+            <svg viewBox="0 0 100 100" fill="none">
+              <g class="orbit-ring orbit-ring--0"><circle cx="50" cy="50" r="16" stroke="currentColor" stroke-width="0.5"/><circle cx="66.0" cy="50.0" r="1.3" fill="#DDE2EC"/><circle cx="34.0" cy="50.0" r="1.3" fill="#DDE2EC"/></g>
+              <g class="orbit-ring orbit-ring--1"><circle cx="50" cy="50" r="27" stroke="currentColor" stroke-width="0.5"/><circle cx="70.7" cy="67.4" r="1.5" fill="#DDE2EC"/><circle cx="24.6" cy="59.2" r="1.5" fill="#DDE2EC"/><circle cx="54.7" cy="23.4" r="1.5" fill="#DDE2EC"/></g>
+              <g class="orbit-ring orbit-ring--2"><circle cx="50" cy="50" r="38" stroke="currentColor" stroke-width="0.5"/><circle cx="86.3" cy="61.2" r="1.5" fill="#DDE2EC"/><circle cx="38.8" cy="86.3" r="1.5" fill="#DDE2EC"/><circle cx="13.7" cy="38.8" r="1.5" fill="#DDE2EC"/><circle cx="61.2" cy="13.7" r="1.5" fill="#DDE2EC"/></g>
+              <circle cx="50" cy="50" r="3.2" fill="#F2D28B"/>
+              <circle cx="50" cy="50" r="6.5" stroke="#F2D28B" stroke-width="0.5" opacity="0.5"/>
             </svg>
           </span>
-          <span class="gname-launch-label">Press here to start the trip</span>
-        </button>
+          <span class="orbit-label">Press here to start the trip<span class="gname-arrow" aria-hidden="true">&rarr;</span></span>
+        </a>
       </div>
     </div>
-  </div>
-
-  <!-- ARRIVAL — Koaik, and the system around it. The warp (warp.js)
-       lands the page here: system.js grows Ali's own world in over the
-       sky, then pulls the camera back to show it is the star of a
-       system whose planets are the projects. The reader moves through
-       it (drag, scroll, keys, touch) and selects bodies; hud.js writes
-       the caption, the chip, the hint and the panel. Collapsed until
-       the launch button is pressed; the end of the page. -->
-  <section id="planet" class="planet" aria-label="The Koaik system">
-    <canvas id="planetCanvas" aria-hidden="true"></canvas>
-    <!-- Body names, projected onto the canvas by system.js; real
-         buttons, so the keyboard can select a planet too. -->
-    <div class="sys-labels" id="sysLabels"></div>
-    <div class="planet-caption">
-      <p class="planet-label">Arrival <span class="sep">—</span> <span id="planetName"></span></p>
-      <p class="planet-sub" id="planetSub"></p>
-      <p class="planet-hint" id="planetHint"></p>
-    </div>
-    <!-- The HUD: pilot chip (top), map and hint (bottom). Shown once
-         the section has .is-system. -->
-    <div class="sys-hud">
-      <button class="sys-chip" id="sysChip" type="button" aria-label="Open the pilot card">
-        <span class="sys-chip-portrait" aria-hidden="true"><img id="chipPhoto" alt="" hidden><span id="chipInitials"></span></span>
-        <span class="sys-chip-text">
-          <span class="sys-chip-name" id="chipName"></span>
-          <span class="sys-chip-status"><span class="dash-dot" aria-hidden="true"></span><span id="chipStatus"></span></span>
-        </span>
-      </button>
-      <canvas class="sys-map" id="sysMap" width="150" height="150" aria-hidden="true"></canvas>
-      <button class="sys-home" id="sysHome" type="button" aria-label="Back to the whole system">⌂ System</button>
-      <p class="sys-hint" id="sysHint"></p>
-    </div>
-    <!-- The panel a selected body opens; hud.js fills it. -->
-    <aside class="probe" id="sysPanel" aria-live="polite" hidden></aside>
-    <!-- No WebGL (or no module support): the same content as a list. -->
-    <div class="sys-fallback" id="sysFallback" hidden></div>
-  </section>
-
-
-  <!-- WARP — the launch sequence's overlay: the streaking stars and
-       the jump flash, on a 2D canvas. Fixed over everything, invisible
-       until warp.js switches it on. -->
-  <div class="warp" id="warp" aria-hidden="true">
-    <canvas id="warpCanvas"></canvas>
   </div>
 
   <script src="js/galaxy/galaxy.js"></script>
   <script src="js/data.js"></script>
   <script src="js/profile.js"></script>
-  <script src="js/hud.js"></script>
-  <script src="js/warp.js"></script>
-  <!-- three.js is vendored (js/vendor/three, MIT) and loaded as ES
-       modules through this import map, so galaxy.html needs to be
-       SERVED (make serve): module scripts do not run from file://.
-       hud.js shows the plain list if the module never runs. -->
-  <script type="importmap">
-    { "imports": { "three": "./js/vendor/three/three.module.js",
-                   "three/addons/": "./js/vendor/three/addons/" } }
-  </script>
-  <script type="module" src="js/system.js"></script>
+  <!-- The system (three.js, system.js, emblems.js, hud.js, warp.js)
+       is NOT on this page: it has its own, system.html, which the orbit
+       button opens. This page is the galaxy, the name and the profile
+       only. -->
   <script>
     /* Mirrors the galaxy's scroll drift onto the CSS core bloom so the
        two pan together. Page-specific, so it lives here. */

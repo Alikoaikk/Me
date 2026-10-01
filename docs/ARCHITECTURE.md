@@ -4,6 +4,29 @@ A static, zero-dependency site. No build step is required to run it —
 `make build` only copies files so the deployed tree has the pages at its
 root.
 
+## Pages
+
+- `index.html` — the older one-page site (`main.js`, `globe.js`).
+- `projects.html` — standalone projects list.
+- `galaxy.html` — the galaxy hero, the star-written name and the
+  profile. Loads `galaxy.js`, `data.js`, `profile.js` only. With a
+  section's hash (`#about`, `#stack`, `#education`, `#build`) it opens
+  with the name already written and jumps to that section. Ends on
+  TARS, a link to:
+- `system.html` — the warp and the Koaik system (`galaxy.js` as the
+  sky, `data.js`, `hud.js`, `warp.js`, the three.js import map,
+  `system.js` + `emblems.js`). Its `<html>` carries `is-launched
+  is-sealed` (the CSS state the system's blocks expect) and
+  `data-sky`. Split from `galaxy.html` on 2026-10-02 so the first
+  page never loads three.js (2.5 MB → 0.26 MB) or holds a second
+  WebGL context; `profile.js` prefetches its files when TARS
+  comes into view.
+- `posts.html`, `activities.html` — reached from the top bar; empty
+  for now. No script: the bar, a title and one line, on a CSS night
+  (the "PLAIN PAGES" block of `galaxy.css`). Their bar links back to
+  `galaxy.html#section`.
+- `beyond.html` — where the collapse leads; a placeholder.
+
 ## Data flow
 
 All content lives in `src/js/data.js`, which exposes a single global
@@ -27,10 +50,21 @@ no state store — each page renders once on load.
   ACES curve, so bright stars bloom the way they do on a camera sensor
   rather than clipping to flat white. Two star populations — see
   *Populations* below. The volumetric dust pass is present but off
-  (`config.DUST`).
-- **`src/js/warp.js`** — the launch sequence, run from the "start the
-  trip" button, on a fixed 2D canvas overlay (`#warp`). No ship, by
-  the user's decision (two were tried and rejected): the reader is the
+  (`config.DUST`). Kept cheap on purpose: the sky's still part (wash
+  and far galaxies) is painted once per canvas size into `skyBaseRT`
+  and only the star layers run per frame; the live-star buffers are
+  uploaded only when `simulate()` ran; and once the scene is a
+  backdrop (behind the profile, the warp or the system) it is drawn
+  every second frame, back to full rate for the night ease, the
+  swallow and the leave. On `system.html` (`<html data-sky>`) it runs
+  in sky-only mode: the finished sky and nothing else — no scroll
+  stages, no name, no launch handler — and still answers
+  `window.galaxySky.night / swallow`.
+- **`src/js/warp.js`** — the launch sequence, on a fixed 2D canvas
+  overlay (`#warp`) of `system.html`, started by that page's inline
+  boot at DOMContentLoaded (the TARS button on `galaxy.html` plays the
+  take-off and then opens the page). No ship IN the warp, by the
+  user's decision (two were tried and rejected): the reader is the
   ship. A depth field of stars streaks toward the camera as the speed
   ramps up over ~1.1 s, a white flash hides a one-step `scrollTo` to
   the planet section, ~1.2 s at full speed with chromatic fringes,
@@ -41,17 +75,31 @@ no state store — each page renders once on load.
   moment for the headless harness. Never touches the galaxy.
 - **`src/js/system.js`** — the Koaik system, an ES module on three.js
   (vendored under `src/js/vendor/three/`, loaded through the import
-  map in `galaxy.html`). Koaik grows in on arrival, then the camera
+  map in `system.html`). Koaik grows in on arrival, then the camera
   pulls back to show it as the star of a system whose bodies are the
-  projects from `portfolioData.projects`, one orbit each. Koaik is
-  GENERATED: two bake passes into render targets (colour+altitude,
-  slopes+clouds+lights) from simplex noise, then a globe shader. The
+  projects from `portfolioData.projects`, one orbit each. Koaik is a
+  mini BLACK HOLE (`makeBlackHole`: a shadow billboard, a sheared
+  accretion disk, a glow with the photon ring); clicking it collapses
+  the system and leaves for `beyond.html`. The
   projects are EMBLEMS from `emblems.js` — each a small animated model
   of the project itself (push_swap's stacks running radix sort,
   cub3D's maze and live raycast view, minishell's typing terminal…),
   lit by a point light inside Koaik, compiled off-screen before they
-  appear, and chosen by name or by `world: { emblem }` in data.js. OrbitControls plus keyboard flight, raycast
+  appear, and chosen by name or by `world: { emblem }` in data.js.
+  `makeEmblem` packs each mesh's material groups and the builders
+  instance their repeated static parts, which keeps the whole system
+  near 230 draw calls. OrbitControls plus keyboard flight, raycast
   hover and click, HTML labels projected onto the canvas, a 2D map.
+  With a project in focus the frame is drawn in three steps
+  (`drawFrame`): everything but that project, a copy of the canvas
+  put back blurred and dimmed, then the project alone on top — the
+  "night", eased by `stepNight` and passed to the sky's composite
+  pass through `window.galaxySky.night(amount)` (`NIGHT_*` in both
+  configs). At 0 it is the plain single render.
+  The canvas's pixel ratio starts at 1.5 and gives way when frames
+  keep arriving late (`config.QUALITY`, `stepQuality`): one step down
+  at a time, a step that does not help is undone, it never climbs
+  back, and it is off under automation.
   Entry points `window.koaik.arm()/reveal()` for warp.js; events
   `system:ready` / `system:select` / `system:hover` / `system:fallback`
   on the section; `window.system` for tests.
@@ -132,7 +180,9 @@ The galaxy is two sets of points drawn by the same shader:
 - **Live** (`STAR_COUNT`, 15.5k) — simulated on the CPU every frame:
   infall, respawn at the rim, and the cursor wake. These are the stars
   that migrate to the sky and write the name in the burst. The CPU
-  cost of `simulate()` is what caps this count.
+  cost of `simulate()` is what caps this count; its ridge and cos/sin
+  come from interpolated tables (`ridgeFast`, `sinTab`/`cosTab`),
+  which is most of why it fits in under a millisecond.
 - **Field** (`FIELD_COUNT`, 48k) — placed once from the same
   distributions (`sampleDisc`), uploaded once, and never touched by
   the CPU again. Its rigid rotation is applied in the vertex shader
@@ -197,7 +247,21 @@ the sky value with it. It is gated on `burst >= 0.9` — a name cannot
 dissolve before it is written. `--release` fades the name block (and
 `.is-released` hides it) and the launch button with it; when the
 release has played (`release >= 0.985`) the frame loop calls
-`onLiftOff` once, which marks `.is-launched` and starts the warp.
+`onLiftOff` once, which follows TARS's link to `system.html`
+(that page opens on the warp).
+
+**Two documents since 2026-10-02.** What follows about the gate and
+the seal still describes `galaxy.html` up to the lift-off, with two
+differences: the launch control is TARS at the end of the profile
+(`<a id="launchBtn" href="system.html">`, not a button on a
+`.launch-layer`), and `.is-launched` is never set there any more — it
+is a static class on `system.html`'s root, together with `.is-sealed`,
+because the system's CSS expects that state. On the press galaxy.js
+moves TARS onto a fixed `.tars-flight` layer (CSS walks it off into
+the sky),
+runs the leave, the seal and the release as before, and then
+navigates. A plain click only: modified clicks, reduced motion,
+no-WebGL2 and no-script all just open the page.
 
 The written name is a **gate**. The planet section is `display: none`
 until `galaxy.js` adds

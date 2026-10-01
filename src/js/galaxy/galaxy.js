@@ -41,6 +41,9 @@
 
   const reduceMotion =
     window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  /* system.html: this script is only the SKY behind the system there —
+     see the SKY ONLY block at the end. */
+  const SKY_ONLY = document.documentElement.hasAttribute('data-sky');
 
   const config = {
     // simulate() is O(n) on the CPU and measured 13.65ms at 46k, which
@@ -354,12 +357,18 @@
   }
 
   let sceneRT = null;
+  let skyBaseRT = null;       // the sky's still part, painted once per size
+  let skyBaseDirty = true;
   let dustRT = null;          // half-res: the raymarch is the GPU cost
   const bloomRT = [];
 
   function disposeTargets() {
     if (sceneRT) {
       gl.deleteTexture(sceneRT.tex); gl.deleteFramebuffer(sceneRT.fbo);
+    }
+    if (skyBaseRT) {
+      gl.deleteTexture(skyBaseRT.tex); gl.deleteFramebuffer(skyBaseRT.fbo);
+      skyBaseRT = null;
     }
     if (dustRT) {
       gl.deleteTexture(dustRT.tex); gl.deleteFramebuffer(dustRT.fbo);
@@ -375,6 +384,8 @@
   function buildTargets(w, h) {
     disposeTargets();
     sceneRT = makeTarget(w, h);
+    skyBaseRT = makeTarget(w, h);
+    skyBaseDirty = true;
     // Dust is smooth and low-frequency, so half resolution is visually
     // free — and it is the difference between 39ms and 10ms per frame.
     dustRT = makeTarget(Math.max(2, w >> 1), Math.max(2, h >> 1));
@@ -454,7 +465,58 @@
       return d;
     }`;
 
-  /* ── Sky: deep field, nebulae, distant galaxies ── */
+  /* ── Sky: deep field, nebulae, distant galaxies ──
+     Two programs. The nebular wash and the far galaxies depend on
+     nothing but the pixel, yet they were most of the frame (two fbm =
+     64 hashes, seven atan/exp per pixel, every frame — measured ~60%
+     of the GPU time of the whole galaxy on an M2). skyBaseProg paints
+     them ONCE per canvas size into skyBaseRT; skyProg, per frame, reads
+     that texel and adds only what moves: the three star layers. */
+  const skyBaseProg = program(QUAD_VS, `
+    precision highp float;
+    in vec2 vUv;
+    out vec4 frag;
+    uniform vec2 uRes;
+    ${NOISE}
+
+    // A far galaxy: small inclined ellipse with a core and faint arms.
+    vec3 farGalaxy(vec2 uv, vec2 pos, float size, float rot, vec3 tint) {
+      vec2 d = uv - pos;
+      float c = cos(rot), s = sin(rot);
+      d = vec2(d.x * c - d.y * s, d.x * s + d.y * c);
+      d.y /= 0.42;
+      float r = length(d) / size;
+      float disc = exp(-r * r * 3.2) * 0.26;
+      float core = exp(-r * r * 44.0) * 0.80;
+      float th = atan(d.y, d.x);
+      float arms = 0.72 + 0.28 * cos(th * 2.0 - r * 7.0);
+      return tint * (disc * arms + core);
+    }
+
+    void main() {
+      float aspect = uRes.x / uRes.y;
+      vec2 p = vec2((vUv.x - 0.5) * aspect, vUv.y - 0.5);
+      vec3 col = vec3(0.0);
+
+      // Faint nebular wash: large scale, very low contrast.
+      vec3 np = vec3(p * 2.1, 0.0);
+      float n1 = fbm(np + vec3(0.0, 0.0, 0.7));
+      float n2 = fbm(np * 1.7 + vec3(4.2, 1.3, 0.0));
+      col += (vec3(0.15, 0.19, 0.40) * max(0.0, n1) * 0.26
+            + vec3(0.32, 0.15, 0.21) * max(0.0, n2) * 0.15) * 0.7;
+
+      // Distant galaxies, kept off-centre and away from the headline.
+      col += farGalaxy(p, vec2(-0.76,  0.29), 0.050, 0.7, vec3(0.86, 0.82, 1.00));
+      col += farGalaxy(p, vec2( 0.70, -0.32), 0.038, 2.2, vec3(1.00, 0.88, 0.76));
+      col += farGalaxy(p, vec2(-0.54, -0.39), 0.029, 1.1, vec3(0.80, 0.90, 1.00));
+      col += farGalaxy(p, vec2( 0.82,  0.17), 0.025, 4.0, vec3(1.00, 0.84, 0.70));
+      col += farGalaxy(p, vec2( 0.36,  0.45), 0.021, 3.1, vec3(0.88, 0.92, 1.00));
+      col += farGalaxy(p, vec2(-0.32,  0.47), 0.017, 5.2, vec3(0.92, 0.86, 1.00));
+      col += farGalaxy(p, vec2( 0.18, -0.47), 0.019, 0.3, vec3(0.82, 0.88, 1.00));
+
+      frag = vec4(col, 1.0);
+    }`);
+
   const skyProg = program(QUAD_VS, `
     precision highp float;
     in vec2 vUv;
@@ -462,7 +524,13 @@
     uniform vec2 uRes;
     uniform vec2 uParallax;
     uniform float uSkyTime;
-    ${NOISE}
+    uniform sampler2D uBase;   // skyBaseRT, same size as the target
+    vec3 hash33(vec3 p) {
+      p = vec3(dot(p, vec3(127.1, 311.7, 74.7)),
+               dot(p, vec3(269.5, 183.3, 246.1)),
+               dot(p, vec3(113.5, 271.9, 124.6)));
+      return fract(sin(p) * 43758.5453123) * 2.0 - 1.0;
+    }
 
     // Jittered grid: evenly spread without the clumping of pure random.
     /* The cull has climbed 0.30 -> 0.58 -> 0.72, so the painted sky now
@@ -523,45 +591,16 @@
       return col * core;
     }
 
-    // A far galaxy: small inclined ellipse with a core and faint arms.
-    vec3 farGalaxy(vec2 uv, vec2 pos, float size, float rot, vec3 tint) {
-      vec2 d = uv - pos;
-      float c = cos(rot), s = sin(rot);
-      d = vec2(d.x * c - d.y * s, d.x * s + d.y * c);
-      d.y /= 0.42;
-      float r = length(d) / size;
-      float disc = exp(-r * r * 3.2) * 0.26;
-      float core = exp(-r * r * 44.0) * 0.80;
-      float th = atan(d.y, d.x);
-      float arms = 0.72 + 0.28 * cos(th * 2.0 - r * 7.0);
-      return tint * (disc * arms + core);
-    }
-
     void main() {
       float aspect = uRes.x / uRes.y;
       vec2 p = vec2((vUv.x - 0.5) * aspect, vUv.y - 0.5);
-      vec3 col = vec3(0.0);
-
-      // Faint nebular wash: large scale, very low contrast.
-      vec3 np = vec3(p * 2.1, 0.0);
-      float n1 = fbm(np + vec3(0.0, 0.0, 0.7));
-      float n2 = fbm(np * 1.7 + vec3(4.2, 1.3, 0.0));
-      col += (vec3(0.15, 0.19, 0.40) * max(0.0, n1) * 0.26
-            + vec3(0.32, 0.15, 0.21) * max(0.0, n2) * 0.15) * 0.7;
+      // The wash and the far galaxies, painted once (skyBaseProg).
+      vec3 col = texelFetch(uBase, ivec2(gl_FragCoord.xy), 0).rgb;
 
       // Depth layers: nearer layers parallax further.
       col += starLayer(p + uParallax * 0.30, 20.0, 1.00, 1.0);
       col += starLayer(p + uParallax * 0.62, 42.0, 0.60, 2.0);
       col += starLayer(p + uParallax * 1.00, 86.0, 0.32, 3.0);
-
-      // Distant galaxies, kept off-centre and away from the headline.
-      col += farGalaxy(p, vec2(-0.76,  0.29), 0.050, 0.7, vec3(0.86, 0.82, 1.00));
-      col += farGalaxy(p, vec2( 0.70, -0.32), 0.038, 2.2, vec3(1.00, 0.88, 0.76));
-      col += farGalaxy(p, vec2(-0.54, -0.39), 0.029, 1.1, vec3(0.80, 0.90, 1.00));
-      col += farGalaxy(p, vec2( 0.82,  0.17), 0.025, 4.0, vec3(1.00, 0.84, 0.70));
-      col += farGalaxy(p, vec2( 0.36,  0.45), 0.021, 3.1, vec3(0.88, 0.92, 1.00));
-      col += farGalaxy(p, vec2(-0.32,  0.47), 0.017, 5.2, vec3(0.92, 0.86, 1.00));
-      col += farGalaxy(p, vec2( 0.18, -0.47), 0.019, 0.3, vec3(0.82, 0.88, 1.00));
 
       frag = vec4(col, 1.0);
     }`);
@@ -1192,10 +1231,11 @@
       // Premultiplied output: alpha from luminance so the page colour
       // shows through empty sky instead of the canvas painting it black.
       float a = clamp(dot(col, vec3(0.2126, 0.7152, 0.0722)) * 3.4, 0.0, 1.0);
+
       frag = vec4(col, a);
     }`);
 
-  if (!skyProg || !dustProg || !starProg || !meteorProg || !upsampleProg ||
+  if (!skyProg || !skyBaseProg || !dustProg || !starProg || !meteorProg || !upsampleProg ||
       !dustAbsorbProg || !brightProg || !blurProg || !compositeProg) return;
 
   /* ============================================================
@@ -1279,6 +1319,34 @@
     return (arm / config.ARMS) * Math.PI * 2 +
            Math.log(x / config.ARM_START + 0.30) * config.ARM_TIGHTNESS +
            0.09 * Math.sin(x * 11.3) + 0.05 * Math.sin(x * 23.7 + 1.7);
+  }
+
+  /* simulate() needs the ridge and a cos/sin for each of the 15.5k live
+     stars every frame; as Math calls that loop was ~2 ms of main
+     thread per frame on an M2, the largest thing the hero did on the
+     CPU. Tables with linear interpolation give the same values to
+     2e-6 rad (ridge) and 3e-7 (trig) — a thousandth of a pixel — for
+     about a quarter of the time. The ridge table holds the UNCLAMPED
+     curve and the lookup clamps to ARM_FLOOR, so the kink there stays
+     exact. Only simulate() uses these; spawning keeps armRidge(). */
+  const RIDGE_N = 4096, RIDGE_MAX = 1.5, RIDGE_SCALE = RIDGE_N / RIDGE_MAX;
+  const ridgeTab = new Float64Array(RIDGE_N + 2);
+  for (let k = 0; k < RIDGE_N + 2; k++) {
+    const x = k / RIDGE_SCALE;
+    ridgeTab[k] = Math.log(x / config.ARM_START + 0.30) * config.ARM_TIGHTNESS +
+                  0.09 * Math.sin(x * 11.3) + 0.05 * Math.sin(x * 23.7 + 1.7);
+  }
+  function ridgeFast(r) {
+    const f = (r > config.ARM_FLOOR ? r : config.ARM_FLOOR) * RIDGE_SCALE;
+    const k = f | 0;
+    if (k >= RIDGE_N) return armRidge(r, 0);
+    return ridgeTab[k] + (ridgeTab[k + 1] - ridgeTab[k]) * (f - k);
+  }
+  const TRIG_N = 4096, TRIG_SCALE = TRIG_N / (Math.PI * 2);
+  const sinTab = new Float64Array(TRIG_N + 1), cosTab = new Float64Array(TRIG_N + 1);
+  for (let k = 0; k <= TRIG_N; k++) {
+    sinTab[k] = Math.sin(k / TRIG_SCALE);
+    cosTab[k] = Math.cos(k / TRIG_SCALE);
   }
 
   /* Where a new star goes. Shared by the live population and the
@@ -2013,6 +2081,8 @@
   let leanX = 0, leanY = 0;
   let lastTime = performance.now();
   let running = false, visible = true;
+  let starsDirty = true;      // posArr / attrArr changed since the last upload
+  let frameNo = 0, drawnNight = 0;   // the backdrop's half rate (see frame)
   /* The black hole swallowing the sky (system.js drives it at the end
      of the collapse): where it is on screen, in uv, and how far. */
   let swallowAmt = 0;
@@ -2192,6 +2262,7 @@
        the meantime, which is why patternAngle advances below this
        line and nowhere else. */
     if (burst >= config.BURST_FREEZE) return;
+    starsDirty = true;
 
     /* The pattern rotation is simulation state and advances ONLY when
        the simulation does. It used to tick in the frame loop
@@ -2227,9 +2298,14 @@
       const r = radius[i];
       // Rebuild from the arm's CURRENT ridge so a falling star tracks
       // its arm instead of cutting straight across the spiral.
-      const armA = (pop === 4 || pop === 0) ? 0 : armRidge(r, 0);
+      const armA = (pop === 4 || pop === 0) ? 0 : ridgeFast(r);
       const a = armA + angle[i] + patternAngle;
-      const hx = Math.cos(a) * r, hy = Math.sin(a) * r;
+      // cos / sin from the tables (see ridgeFast): the angle in table
+      // steps, wrapped by the mask, interpolated.
+      const tf = a * TRIG_SCALE, tfl = Math.floor(tf);
+      const tt = tf - tfl, tk = tfl & (TRIG_N - 1);
+      const hx = (cosTab[tk] + (cosTab[tk + 1] - cosTab[tk]) * tt) * r;
+      const hy = (sinTab[tk] + (sinTab[tk + 1] - sinTab[tk]) * tt) * r;
 
       if (wakeEnergy > 0) {
         const sx = hx + offX[i], sy = hy + offY[i];
@@ -2340,6 +2416,17 @@
     if (!sceneRT || bloomRT.length === 0) return;
     const rot = rotMatrix();
 
+    /* 0. the sky's still part, once per canvas size */
+    if (skyBaseDirty) {
+      bindTarget(skyBaseRT);
+      gl.disable(gl.BLEND);
+      gl.useProgram(skyBaseProg.p);
+      gl.uniform2f(skyBaseProg.u.uRes, vw, vh);
+      gl.bindVertexArray(quadVAO);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      skyBaseDirty = false;
+    }
+
     /* 1. scene -> HDR */
     bindTarget(sceneRT);
     gl.clearColor(0, 0, 0, 1);
@@ -2347,6 +2434,9 @@
     gl.disable(gl.BLEND);
 
     gl.useProgram(skyProg.p);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, skyBaseRT.tex);
+    gl.uniform1i(skyProg.u.uBase, 0);
     gl.uniform2f(skyProg.u.uRes, vw, vh);
     /* Sky parallax = pointer lean + a slow autonomous drift.
        The lean was 0.012, which is below the threshold where the eye
@@ -2417,10 +2507,15 @@
 
     gl.useProgram(starProg.p);
     gl.bindVertexArray(starVAO);
-    gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
-    gl.bufferSubData(gl.ARRAY_BUFFER, 0, posArr);
-    gl.bindBuffer(gl.ARRAY_BUFFER, attrBuf);
-    gl.bufferSubData(gl.ARRAY_BUFFER, 0, attrArr);
+    // Only when simulate() moved them: frozen (the whole time the name
+    // or the settled sky is up) the buffers already hold these values.
+    if (starsDirty) {
+      gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, posArr);
+      gl.bindBuffer(gl.ARRAY_BUFFER, attrBuf);
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, attrArr);
+      starsDirty = false;
+    }
     if (tintDirty) {
       gl.bindBuffer(gl.ARRAY_BUFFER, tintBuf);
       gl.bufferSubData(gl.ARRAY_BUFFER, 0, tintArr);
@@ -2705,7 +2800,24 @@
     coreGlow += (feed - coreGlow) *
                 Math.min(1, dt * (feed > coreGlow ? 5.0 : 1.4));
 
-    draw(now / 1000);
+    /* A backdrop is drawn every second frame. Once the burst is over
+       the scene only twinkles; while it sits behind the profile (the
+       name and its stars scrolled away) or behind the system, half the
+       rate cannot be seen and frees the GPU for what is in front. Full
+       rate comes back for anything that moves fast: the night easing,
+       the swallow, the leave. NOT for meteors: one is in the air most
+       of the time (measured: 26–30 frames in 30), so waiting for a
+       clear sky meant the half rate almost never happened; a streak
+       stepping twice as far per drawn frame still reads as a streak.
+       Not drawing keeps the last frame on the canvas. */
+    const backdrop = burst >= 1 && swallowAmt === 0 &&
+      Math.abs(skyNight - drawnNight) < 0.002 &&   // the ease never quite lands
+      (launched ? release >= 0.999
+                : (!leaving && nameShiftPx > window.innerHeight * 0.75));
+    if (!(backdrop && (frameNo++ & 1))) {
+      draw(now / 1000);
+      drawnNight = skyNight;
+    }
     requestAnimationFrame(frame);
   }
 
@@ -2788,51 +2900,35 @@
   }
 
   /* ============================================================
-     LAUNCH — "press here to start the trip"
+     LAUNCH — the orbit mark at the end of the profile
      ============================================================
-     The button is the only way into the trip. Once the stars have
-     written the name, the page continues below it into the profile
-     (galaxy.html #profile: who Ali is, the numbers, the schools), and
-     the button is at the end of that. The system is display:none
-     until it is pressed; until then the reader may also scroll back
-     up to the galaxy. Pressing it
+     The system lives on its own page (system.html) and the mark is a real
+     link to it. A plain click is taken here to play the take-off
+     first; anything else (a modified click, no WebGL2, no script) is
+     the link's own business and simply opens the page.
 
-       1. locks the page (.is-leaving) and fades the profile (--leave)
-          while the name glides back down to the centre (LEAVE_MS);
-       2. seals the page once the profile is invisible, and lets the
-          letters go (the release, RELEASE_TIME, RELEASE_AFTER in);
-       3. once they have gone, marks the document .is-launched (the
-          system exists, the hero and profile collapse) and hands over
-          to warp.js, whose sequence streaks the stars past at light
-          speed and lands on Koaik.
+       1. the page locks (.is-leaving) and the profile fades (--leave),
+          the mark with it — the button itself does NOTHING on the
+          press (the user had a take-off animation removed) — while
+          the name glides back down to the centre (LEAVE_MS);
+       2. the page is sealed once the profile is invisible, and the
+          letters let go (the release, RELEASE_TIME, RELEASE_AFTER in);
+       3. when they have gone the frame loop calls liftOff, which
+          follows the link. system.html opens on the warp.
 
-     Under reduced motion there is no glide, release or warp: straight
-     to the system. Without warp.js the page simply arrives. */
+     Under reduced motion there is no take-off: straight to the page. */
   const launchBtn = document.getElementById('launchBtn');
-  if (launchBtn) {
-    launchBtn.addEventListener('click', () => {
+  if (launchBtn && !SKY_ONLY) {
+    const root = document.documentElement;
+    const go = () => { window.location.assign(launchBtn.href); };
+    launchBtn.addEventListener('click', e => {
+      if (e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      e.preventDefault();
       if (launched) return;
       launched = true;
-      const root = document.documentElement;
+      if (reduceMotion) { go(); return; }
+
       root.classList.add('is-leaving');          // scroll locked; the profile fades on --leave
-      /* .is-launched makes the planet exist AND collapses the hero and
-         the profile (galaxy.css), so the planet's top is the top of
-         the page. Shrinking the document makes the browser clamp
-         scrollY to the new END, so it is put back to 0 explicitly. */
-      const liftOff = () => {
-        root.classList.add('is-launched');
-        window.scrollTo(0, 0);
-        if (window.warpSequence) window.warpSequence.start();
-        else root.classList.add('is-arrived');   // no warp: the page simply arrives
-      };
-      if (reduceMotion) {
-        // No glide, no release and no warp under reduced motion:
-        // straight to the system.
-        seal();
-        root.classList.add('is-launched', 'is-arrived');
-        window.scrollTo(0, 0);
-        return;
-      }
       /* The leave: the profile fades (LEAVE_FADE_MS) while the name
          glides back down to the centre (LEAVE_MS); the page is sealed
          once the profile is invisible, so its scroll jump is unseen;
@@ -2846,8 +2942,49 @@
       leaving = { t0: performance.now(), from: Math.min(nameShiftPx, window.innerHeight * 0.9) };
       setTimeout(seal, LEAVE_FADE_MS + 20);
       releaseClock = -RELEASE_AFTER;
-      onLiftOff = liftOff;
+      onLiftOff = go;
     });
+    /* Coming BACK to this page from the system (the back button) can
+       restore it from the back-forward cache exactly as it was left:
+       sealed, the profile faded out, the name gone. Start over. */
+    window.addEventListener('pageshow', e => { if (e.persisted && launched) window.location.reload(); });
+  }
+
+  /* ============================================================
+     ARRIVING AT A SECTION — galaxy.html#about
+     ============================================================
+     The top bar on the other pages (posts.html, activities.html)
+     links to this page's sections. Someone coming for "Education"
+     must not be made to fly the approach and wait for the burst
+     first, so with such a hash the page opens with the name already
+     written: burst done, the profile there. profile.js, which runs
+     after this and fills the sections, does the scrolling. As in
+     the sky-only state, simulate() runs once first so the settled
+     stars have positions. Scrolling back up from there still rewinds
+     the burst, as always. */
+  if (!SKY_ONLY && !reduceMotion && /^#(about|stack|education|build)$/.test(window.location.hash)) {
+    simulate(0);
+    burstFired = true; burstClock = config.BURST_DURATION; burst = 1;
+    zoom = 1; zoomT = 1; rewindTarget = 1;
+    document.documentElement.classList.add('is-written');
+  }
+
+  /* ============================================================
+     SKY ONLY — system.html
+     ============================================================
+     There this script draws only the backdrop: the sky as the
+     take-off left it — burst done, the name released, the page
+     sealed. Nothing scrolls and nothing is written; the frame loop
+     settles at the backdrop's half rate, and window.galaxySky (the
+     night, the swallow) works as before. simulate() runs ONCE first:
+     frozen at burst 1 it would never fill the position buffers the
+     settled stars are drawn from. */
+  if (SKY_ONLY) {
+    simulate(0);
+    burstFired = true; burstClock = config.BURST_DURATION; burst = 1;
+    zoom = 1; zoomT = 1; rewindTarget = 1;
+    sealed = true; launched = true;
+    releaseT = 1; release = 1;
   }
 
   paintOnce();

@@ -1,8 +1,9 @@
 // node flow.js <outdir> [W H]  — the real reader flow, one browser session:
 // hero → scroll to the name → wait for the burst → scroll up (allowed, the
-// burst rewinds) and back → on into the profile → its end → press the button → the release → the warp → the arrival → the
+// burst rewinds) and back → on into the profile → its end → press TARS → the take-off and the release →
+// (the page changes: galaxy.html → system.html) → the warp → the arrival → the
 // system → a planet → the pilot → try to scroll. Screenshots at every beat, JSON
-// summary on stdout.
+// summary on stdout. state() answers { navigating: true } while the page is changing.
 const puppeteer = require('puppeteer-core');
 const fs = require('fs');
 const [,, outdir, W = 1280, H = 800] = process.argv;
@@ -25,8 +26,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     return { y: +(scrollY / h).toFixed(2), max: +((document.documentElement.scrollHeight - h) / h).toFixed(2),
              burst: g('--burst'), release: g('--release'), planetIn: g('--planet-in'),
              warping: document.documentElement.classList.contains('is-warping'),
+             page: location.pathname.split('/').pop(),
              system: window.system ? window.system.state() : null };
-  });
+  }).catch(() => ({ navigating: true }));
   const to = (vh) => page.evaluate(v => { scrollTo(0, v * innerHeight); dispatchEvent(new Event('scroll')); }, vh);
   const shot = async (name) => { await page.screenshot({ path: `${outdir}/${name}.png` }); console.log(name, JSON.stringify(await state())); };
 
@@ -39,11 +41,12 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await page.evaluate(() => scrollTo(0, document.documentElement.scrollHeight)); await sleep(3000); await shot('03d-button');
   await page.evaluate(() => document.getElementById('launchBtn').click());
   await sleep(1000); await shot('04-release');                     // the letters letting go (timed)
-  for (let i = 0; i < 20; i++) { await sleep(500); if ((await state()).warping) break; }
+  for (let i = 0; i < 120; i++) { await sleep(500); if (/system\.html/.test(page.url())) break; }   // the take-off ends by opening system.html
+  for (let i = 0; i < 40; i++) { await sleep(500); if ((await state()).warping) break; }
   await sleep(1200); await shot('05-warp');
   for (let i = 0; i < 40; i++) { await sleep(1000); if (!(await state()).warping) break; }
   await sleep(2500); await shot('06-arrival');
-  for (let i = 0; i < 40; i++) { await sleep(1000); if (await page.evaluate(() => document.getElementById('planet').classList.contains('is-system'))) break; }
+  for (let i = 0; i < 40; i++) { await sleep(1000); if (await page.evaluate(() => { const p = document.getElementById('planet'); return !!p && p.classList.contains('is-system'); }).catch(() => false)) break; }
   await sleep(1500); await shot('07-system');                    // the pull-back done, the system live
   await page.evaluate(() => window.system.select(3)); await sleep(3500); await shot('08-planet');
   await page.evaluate(() => window.system.overview()); await sleep(2500);

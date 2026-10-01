@@ -93,6 +93,19 @@ import { makeEmblem } from './emblems.js';
     IDLE_MS:    7000,                   // untouched this long at the overview: the view drifts
     DRIFT:      0.22,                   // that drift, in OrbitControls autoRotate units (2 = one turn per 30 s)
 
+    /* Staying smooth: the canvas gives up pixels before it gives up
+       frames. It starts at the top of QUALITY (or the device's own
+       ratio, if lower) and steps down when frames keep arriving later
+       than SLOW_MS. A step that does not buy the time back — a
+       display capped at 30 Hz, a busy main thread: not our pixels — is
+       undone and the ladder is left alone after that. It never climbs
+       back; a reload does. See stepQuality(). */
+    QUALITY:    [1.5, 1.25, 1.0, 0.8],  // pixel ratios, best first
+    SLOW_MS:    21,                     // a mean frame interval above this is slow (60 Hz is 16.7)
+    SLOW_FRAMES: 50,                    // …measured over this many frames,
+    SLOW_WINDOW: 2500,                  // or this long (ms) when they come that slowly
+    SLOW_GAIN:  0.88,                   // a step must bring the interval under this share of what it was
+
     /* The night: with a PROJECT in focus, everything that is not that
        project steps back — out of focus and darker — so the model and
        its card are the subject (see "The night" below; the sky's own
@@ -291,7 +304,7 @@ import { makeEmblem } from './emblems.js';
     return;
   }
   renderer.setClearColor(0x000000, 0);
-  renderer.setPixelRatio(Math.min(1.5, window.devicePixelRatio || 1));   // nine worlds + the galaxy behind: 1.5× is plenty
+  renderer.setPixelRatio(Math.min(config.QUALITY[0], window.devicePixelRatio || 1));   // the galaxy is behind it: 1.5× is plenty (and see stepQuality)
   renderer.toneMapping = THREE.NoToneMapping;
   renderer.autoClear = true;
 
@@ -690,6 +703,37 @@ import { makeEmblem } from './emblems.js';
       shift.open = !shift.open;   // re-measure the card at the new size (resize only runs after the module has loaded)
     }
     return true;
+  }
+
+  /* Staying smooth (config.QUALITY). Fed every frame's real interval
+     once the system is live; judged a window at a time, so one long
+     frame decides nothing. Everything that depends on the pixel ratio
+     reads it per frame, so a step is just setPixelRatio. Off under
+     automation (navigator.webdriver): the headless harness runs at a
+     few frames a second and would otherwise shoot every still at the
+     bottom of the ladder. */
+  const quality = {
+    steps: config.QUALITY.filter(q => q < renderer.getPixelRatio()),
+    sum: 0, n: 0, from: 0, was: 0, done: !!navigator.webdriver || reduceMotion,
+  };
+  function stepQuality(ms) {
+    const q = quality;
+    if (q.done || !ready || collapse) return;
+    if (ms > 1000) { q.sum = 0; q.n = Math.min(q.n, 0); return; }  // a stall (another tab, the lid), not a rate
+    if (++q.n <= 0) return;                                        // settling after a step
+    q.sum += ms;
+    if (q.n < config.SLOW_FRAMES && (q.sum < config.SLOW_WINDOW || q.n < 8)) return;
+    const mean = q.sum / q.n;
+    q.sum = 0; q.n = 0;
+    if (q.from) {                                                  // judging the last step
+      if (mean > q.was * config.SLOW_GAIN) { renderer.setPixelRatio(q.from); q.done = true; return; }
+      q.from = 0;
+    }
+    if (mean > config.SLOW_MS && q.steps.length) {
+      q.from = renderer.getPixelRatio(); q.was = mean;
+      renderer.setPixelRatio(q.steps.shift());
+      q.n = -12;
+    } else if (!q.steps.length) q.done = true;
   }
 
   /* Arrival: the camera distance at which the disk spans FILL of the
@@ -1296,6 +1340,7 @@ import { makeEmblem } from './emblems.js';
   function frame(now) {
     if (document.hidden || !resize()) return;
     const dt = Math.min(0.05, lastNow ? (now - lastNow) / 1000 : 0.016);
+    if (lastNow) stepQuality(now - lastNow);
     lastNow = now;
     if (!armed && !reduceMotion) { renderer.clear(); return; }
     if (!sun) return;
@@ -1444,7 +1489,7 @@ import { makeEmblem } from './emblems.js';
       build();
     },
     reveal() {
-      if (!armed || !sun) return;
+      if (!armed || !sun || revealAt) return;     // once per arm(): a late-loaded module is revealed by its loader too
       revealAt = performance.now();
     },
   };
@@ -1455,7 +1500,7 @@ import { makeEmblem } from './emblems.js';
   window.system = {
     select, overview, collapse: startCollapse,
     state: () => ({ ready, focus, hot, planets: planets.filter(Boolean).length, dist: +camera.position.distanceTo(controls.target).toFixed(2), flying: !!flight || rig.active,
-      night: +night.toFixed(3),
+      night: +night.toFixed(3), pixelRatio: renderer.getPixelRatio(),
       collapsing: collapse ? +((performance.now() - collapse.t0) / 1000).toFixed(2) : null }),
     /* For the harness: where the camera is and where a body sits on
        screen (NDC), so motion can be measured frame by frame. */

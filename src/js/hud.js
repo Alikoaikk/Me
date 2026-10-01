@@ -161,6 +161,9 @@
     box.innerHTML = `<div class="probe-frame">${pilotHtml().replace(/<button class="probe-back"[^]*?<\/button>/, '')}</div>` +
       projects.map((pr, i) => `<div class="probe-frame">${projectHtml(i, pr).replace(/<button class="probe-back"[^]*?<\/button>/, '')}</div>`).join('');
   }
+  /* system.js fires this without WebGL. And if the module never ran
+     at all (file://, no module support, offline) nothing will: the
+     list takes over a moment after the page has loaded. */
   section.addEventListener('system:fallback', fallback);
   window.addEventListener('load', () => { setTimeout(() => { if (!window.koaik) fallback(); }, 1500); });
 })();

@@ -5,6 +5,8 @@ const portfolioData = {
     email: "alikoaik004@gmail.com",
     status: "Open to opportunities",
     degree: "B.Sc. Computer Science",
+    /* The line under the name on the galaxy page's name screen. */
+    headline: "Computer Science student · Low\u2011level & systems programming",   // \u2011: a hyphen that does not break the line
     /* The pilot's portrait on the orbital dashboard (galaxy.html).
        Drop the photo at src/assets/portrait.jpg; until it exists the
        dashboard shows the initials instead. */

@@ -26,31 +26,13 @@
       #030409 100%);
 }
 
-/* Vignette + grain. The grain matters: an additive star field on flat
-   black shows visible banding in the faint gradients, and a little
-   noise breaks it up the way film grain does. */
-#hero .noise-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  /* Vignette only; the grain rides on ::after at low opacity. */
-  background-image: radial-gradient(ellipse 78% 78% at 50% 50%,
-    transparent 42%,
-    rgba(0, 0, 0, 0.30) 82%,
-    rgba(0, 0, 0, 0.58) 100%);
-  animation: none;
-}
-
-#hero .noise-overlay::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  background-size: 200px 200px;
-  opacity: 0.030;
-  pointer-events: none;
-}
+/* No CSS vignette or grain over the galaxy: the composite pass in
+   galaxy.js has its own. A fixed full-screen layer used to sit here
+   (a radial vignette with SVG grain on ::after), but it never reset
+   the `opacity: 0.025` it inherits from style.css, so it darkened the
+   corners by 1.4 % at most — invisible — while being blended over the
+   whole canvas on every frame. */
+#hero .noise-overlay { display: none; }
 
 /* ============================================================
    INTRO PANEL
@@ -189,58 +171,172 @@
   will-change: opacity;
 }
 
-/* ── The portfolio line ──
-   "Ali Koaik" alone is a title card; these three rows are what make it
-   a portfolio — what he does, whether he's available, and where to go
-   next. All are anchored to the SAME top/left as the name and offset
-   downward in units of the cap height, so they ride the star centroid
-   through resize instead of being laid out independently.
+/* ── Under the name ──
+   "Ali Koaik" alone is a title card; this block is what makes it a
+   portfolio. It is set like a title sequence, not like a web
+   template: TYPE AND HAIRLINES ONLY. No pills, no icon buttons, no
+   gradients, no glass, no glow — the user asked for elegant, and
+   those are what made the earlier version read as machine-made.
+   What carries it instead is weight (light), tracking (wide, on the
+   small capitals), one accent (gold, used twice) and space.
 
-   They share --name-koaik with the name: the stars finish writing it,
-   then the framing resolves under it. A separate token would have to
-   be driven from galaxy.js; reusing this one keeps the reveal in a
-   single place. */
-.gname-quote {
+   ONE box in normal flow (.gname-below), hung from the same anchor
+   as the name and pushed down by a multiple of its size, so it rides
+   the star centroid through resize; its children just stack. It
+   shares --name-koaik with the name (the stars finish writing it,
+   then the framing resolves under it), scrolls up with it
+   (--name-scroll, galaxy.js) and fades on the leave (--leave). No
+   transitions on any of those: they are written every frame. */
+.gname-below {
+  --S: clamp(1.6rem, 11vmin, 7.5rem);      /* the name's font size */
   position: absolute;
   left: 50%;
   top: 52%;                 /* = NAME_CENTER_Y, as above */
-  margin: 0;
+  width: min(90vw, 44rem);
+  transform: translate(-50%,
+    calc(var(--cap-shift, 0px) + 0.78 * var(--S) - var(--name-scroll, 0px)));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
   opacity: calc(var(--name-koaik, 0) * (1 - var(--leave, 0)));
   will-change: opacity;
-  /* Sits directly under the name, and scrolls up with it
-     (--name-scroll, galaxy.js). */
-  transform: translate(-50%,
-    calc(-50% + var(--cap-shift, 0px) + 1.05 * clamp(1.6rem, 11vmin, 7.5rem) - var(--name-scroll, 0px)));
-  /* Wraps on narrow screens rather than running off the sides, so the
-     longer lines stay readable. Centred because the text is a
-     rotating quotation, not a label. */
-  width: min(90vw, 46ch);
-  text-align: center;
-  font-family: var(--font-mono, 'JetBrains Mono', monospace);
-  font-size: clamp(0.78rem, 1.5vmin, 0.95rem);
-  line-height: 1.7;
-  letter-spacing: 0.08em;
-  color: rgba(176, 190, 210, 0.92);
-  /* The element must not collapse as lines swap, or the ship below it
-     would jump. Two lines of the above line-height, reserved. */
-  min-height: calc(2 * 1.7em);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  color: #DDE2EC;
+}
+/* A short gold rule: the one ornament. */
+.gname-rule {
+  width: 34px; height: 1px;
+  margin-bottom: 1.35rem;
+  background: #F2D28B;
+  opacity: 0.85;
+}
+/* What he is: small capitals, widely tracked. */
+.gname-role {
+  margin: 0;
+  font-size: clamp(0.66rem, 1.25vmin, 0.76rem);
+  font-weight: 500;
+  letter-spacing: 0.42em;
+  text-indent: 0.42em;          /* tracking adds space after the last letter; this recentres */
+  text-transform: uppercase;
+  color: #C9CFDB;
+}
+/* What he works on: one light line, the largest thing here. */
+.gname-focus {
+  margin: 0.8rem 0 0;
+  max-width: 30em;
+  font-size: clamp(1.1rem, 2.5vmin, 1.5rem);
+  font-weight: 300;
+  line-height: 1.35;
+  letter-spacing: 0.005em;
+  color: #F4F6FA;
+  text-wrap: balance;
+}
+/* Where, and that he is available: plain words, a dash between. */
+.gname-meta {
+  margin: 0.95rem 0 0;
+  font-size: 0.82rem;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  color: #8892A6;
+}
+.gname-meta span + span::before {
+  content: '';
+  display: inline-block;
+  width: 18px; height: 1px;
+  margin: 0 0.85em;
+  background: currentColor;
+  opacity: 0.6;
+  vertical-align: 0.3em;
 }
 
-/* The line itself fades and lifts. Only this inner span animates, so
-   the reserved box above stays put. */
+/* The links: text, nothing else. The way to the work first, in gold;
+   a hairline; then where to find him. Each underlines itself on
+   hover — the line grows from the left. They exist (and take the
+   pointer and the keyboard) only once the name is written — before
+   that the screen is the galaxy's — and come in on that class. */
+.gname-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 0.9rem 0;
+  margin-top: 2rem;
+  pointer-events: auto;
+  opacity: 0;
+  visibility: hidden;
+  translate: 0 6px;
+  transition: opacity 0.6s ease, translate 0.7s cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0s linear 0.6s;
+}
+:root.is-written .gname-actions {
+  opacity: 1;
+  visibility: visible;
+  translate: 0 0;
+  transition-delay: 0s;
+}
+.gname-links { display: inline-flex; align-items: center; }
+/* The hairline between the work link and the others. */
+.gname-links::before {
+  content: '';
+  width: 1px; height: 0.95em;
+  margin: 0 1.5rem;
+  background: rgba(255, 255, 255, 0.22);
+}
+.gname-go, .gname-link {
+  padding: 0.35em 0;
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+  color: #B4BCCC;
+  background: linear-gradient(currentColor, currentColor) 0 100% / 0 1px no-repeat;
+  transition: color 0.3s ease, background-size 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.gname-link + .gname-link { margin-left: 1.9rem; }
+.gname-go { color: #F2D28B; }
+.gname-go:hover, .gname-go:focus-visible,
+.gname-link:hover, .gname-link:focus-visible { background-size: calc(100% - 0.26em) 1px; }   /* not under the trailing tracking */
+.gname-link:hover, .gname-link:focus-visible { color: #F4F6FA; }
+.gname-arrow {
+  display: inline-block;
+  margin-left: 0.55em;
+  letter-spacing: 0;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  transition: translate 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.gname-go:hover .gname-arrow, .gname-go:focus-visible .gname-arrow { translate: 0 3px; }
+.gname-go:focus-visible, .gname-link:focus-visible { outline: 1px solid #8FB4FF; outline-offset: 6px; }
+
+/* The rotating line from the film, last and quiet. Two lines are
+   reserved so the swap never moves the block; only the inner span
+   fades and lifts. */
+.gname-quote {
+  margin: 2.3rem 0 0;
+  width: min(86vw, 40ch);
+  min-height: calc(2 * 1.6em);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  font-size: 0.84rem;
+  font-weight: 300;
+  font-style: italic;
+  line-height: 1.6;
+  letter-spacing: 0.02em;
+  color: rgba(150, 160, 180, 0.8);
+}
 .gname-quote-text {
   opacity: 0;
   transform: translateY(6px);
   transition: opacity 0.9s ease, transform 0.9s ease;
 }
-
 .gname-quote.is-visible .gname-quote-text {
   opacity: 1;
   transform: translateY(0);
 }
+/* A short window has no room for the epigraph above the cue. */
+@media (max-height: 700px) { .gname-quote { display: none; } }
 
 /* ── The greeting, above the name ── */
 .gname-hello {
@@ -259,44 +355,6 @@
   color: #F2D28B;
   opacity: calc(var(--name-koaik, 0) * (1 - var(--leave, 0)));
 }
-
-/* ── The ways to reach Ali, under the quote ── */
-.gname-links {
-  position: absolute;
-  left: 50%;
-  top: 52%;
-  width: min(92vw, 30rem);
-  transform: translate(-50%,
-    calc(-50% + var(--cap-shift, 0px) + 1.05 * clamp(1.6rem, 11vmin, 7.5rem) + 3.7rem - var(--name-scroll, 0px)));
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 10px;
-  opacity: calc(var(--name-koaik, 0) * (1 - var(--leave, 0)));
-  pointer-events: auto;
-}
-:root:not(.is-written) .gname-links { visibility: hidden; }
-.gname-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 15px 8px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 999px;
-  background: rgba(9, 12, 20, 0.5);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  color: #E6E9F2;
-  font-family: var(--font-mono, 'JetBrains Mono', monospace);
-  font-size: 0.74rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  text-decoration: none;
-  transition: border-color 0.3s ease, color 0.3s ease, background 0.3s ease;
-}
-.gname-link svg { width: 16px; height: 16px; flex: 0 0 auto; }
-.gname-link:hover, .gname-link:focus-visible { border-color: rgba(242, 210, 139, 0.6); color: #F2D28B; background: rgba(9, 12, 20, 0.75); }
-.gname-link:focus-visible { outline: 2px solid #8FB4FF; outline-offset: 2px; }
 
 /* ── The guides: what to do now ──
    "Scroll" holds the foot of the screen for the whole approach —
@@ -389,18 +447,27 @@
     text-indent: 0.05em;
   }
 
-  .gname-quote { font-size: 0.78rem; letter-spacing: 0.05em; }
+  .gname-below { width: 90vw; }
+  .gname-rule { margin-bottom: 1.1rem; }
+  .gname-role { letter-spacing: 0.32em; text-indent: 0.32em; }
+  .gname-actions { margin-top: 1.6rem; }
+  /* Two rows: the work link, then the three. No hairline between rows. */
+  .gname-go { flex: 0 0 100%; }
+  .gname-go:hover, .gname-go:focus-visible { background-size: 0 1px; }
+  .gname-links::before { display: none; }
+  .gname-link + .gname-link { margin-left: 1.5rem; }
+  .gname-quote { margin-top: 1.7rem; font-size: 0.8rem; }
 }
 
 /* Reduced motion: the burst never plays, so the name is simply
    present rather than assembling. */
 @media (prefers-reduced-motion: reduce) {
   .gname-full,
-  .gname-quote,
+  .gname-below,
   .gname-hello,
-  .gname-links,
   .gname-cue { opacity: 1; }
   .gname-quote-text { opacity: 1; transform: none; }
+  .gname-actions, .gname-go, .gname-link, .gname-arrow { transition: none; }
 }
 
 /* ── No WebGL: the stars can never arrive ──
@@ -419,9 +486,8 @@
   filter: drop-shadow(0 0 26px rgba(108, 99, 255, 0.34));
 }
 
-:root[data-no-webgl] .gname-quote,
+:root[data-no-webgl] .gname-below,
 :root[data-no-webgl] .gname-hello,
-:root[data-no-webgl] .gname-links,
 :root[data-no-webgl] .gname-cue {
   opacity: 1;
 }
@@ -432,212 +498,45 @@
 :root[data-no-webgl] .galaxy-name { position: absolute; top: 100vh; bottom: auto; height: 100vh; }
 
 /* ============================================================
-   START THE TRIP — the spaceship CTA
+   START THE TRIP — the orbit mark
    ============================================================
-   Its own fixed layer over the sky, outside the name block: it
-   appears AS the name goes. --release (galaxy.js) runs 0 → 1 as the
-   reader scrolls past the finished name and the stars leave the
-   letters; the name block fades on (1 - release) and this fades on
-   release, so the button takes the name's place at the centre of the
-   screen. --warp-fade takes it away again once the trip starts.
-   Plain multiplies, no transition, same as every JS-driven token.
-   It takes the pointer only once it is mostly there. */
-/* (The button used to sit on its own fixed layer under the quote. It
-   now lives at the end of the profile, in the page flow — see
-   THE PROFILE below.) */
-
-.gname-launch {
-  /* At the end of the profile, centred, in the page flow. */
-  position: relative;
-  width: fit-content;
-  margin: 1.4rem auto 0;
-  display: flex;
+   The way on, at the end of the profile (#build). After a ring
+   ship, a shuttle and two TARSes, the user asked for whatever fits
+   best: a small ORBIT DIAGRAM of what lies beyond — Koaik in gold,
+   nine projects on three hairline rings — and the words under it as a text link. Type and hairlines, the
+   same language as the name screen; no figure, no box.
+   It is a real link to system.html, and it is STILL: the rings do
+   not turn and nothing happens to the mark on the press (a take-off
+   that grew it toward the reader was removed at the user's request —
+   do not animate this button). Hover only changes colour and
+   underlines the words. */
+.orbit-btn {
+  display: inline-flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.55rem;
-  pointer-events: auto;
-  cursor: pointer;
-  /* Reset the UA button box — this is a bare control on a starfield.
-     (Its margin is set above: centred in the profile.) */
-  padding: 0.5rem 1rem;
-  border: 0;
-  background: none;
-  -webkit-appearance: none;
-  appearance: none;
+  gap: 1.6rem;
+  padding: 0.6rem 1.2rem;
+  color: #B4BCCC;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
 }
-
-/* The Endurance. No porthole ring around it: in the film the ship is
-   a bare silhouette against black, and a decorative circle enclosing
-   a circular ship just read as two rings fighting each other.
-
-   The colour is cold instrument-white rather than the site's purple.
-   Interstellar's hardware is deliberately unglamorous — NASA panels
-   and white light, no neon — so accent colour appears only on hover. */
-.gname-launch-ring {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 78px;
-  height: 78px;
-  color: rgba(226, 236, 248, 0.95);
-  /* NO drop-shadow here. A filter on the element that wraps the
-     spinning SVG forces the blur to be recomputed every frame of the
-     rotation, which is what made the spin stutter. The glow now lives
-     on ::before — a static, never-animated layer underneath — so the
-     browser rasterises it once. Only `color` transitions here, which
-     is cheap. */
-  transition: color var(--transition, 0.3s ease);
-}
-
-/* The glow, as its own static layer behind the hull. */
-.gname-launch-ring::before {
-  content: '';
-  position: absolute;
-  inset: -10%;
-  border-radius: 50%;
-  background: radial-gradient(circle,
-    rgba(180, 210, 255, 0.30) 0%,
-    rgba(180, 210, 255, 0.10) 45%,
-    transparent 70%);
-  opacity: 0.85;
-  transition: opacity var(--transition, 0.3s ease);
-  pointer-events: none;
-}
-
-.gname-launch-ring svg { width: 100%; height: 100%; }
-
-/* The spin IS the ship: the Endurance rotates to make its own
-   gravity. Slow — 18s per turn — because anything faster reads as a
-   loading spinner, which is the one thing it must not look like. */
-.gname-endurance {
-  transform-origin: 50% 50%;
-  animation: enduranceSpin 18s linear infinite;
-  /* Promote to its own compositor layer so the rotation runs on the
-     GPU instead of repainting the vector each frame. translateZ(0) is
-     what actually forces the layer; will-change tells the browser to
-     prepare it before the first frame rather than mid-spin. */
-  will-change: transform;
-  transform: translateZ(0);
-  backface-visibility: hidden;
-}
-
-@keyframes enduranceSpin {
-  from { transform: translateZ(0) rotate(0deg);   }
-  to   { transform: translateZ(0) rotate(360deg); }
-}
-
-/* Docking cue: a faint ring that closes in on hover, as though the
-   ship is being hailed. Sits outside the hull and never moves it. */
-.gname-launch-ring::after {
-  content: '';
-  position: absolute;
-  inset: -7px;
-  border-radius: 50%;
-  border: 1px solid rgba(180, 210, 255, 0.55);
-  opacity: 0;
-  /* The closing cue animates `inset`, not `transform`: this element
-     is a child of the hull, which rotates on hover, and a transform
-     here would compound with that rotation. */
-  inset: -2px;
-  transition: opacity var(--transition, 0.3s ease),
-              inset var(--transition, 0.3s ease);
-}
-
-.gname-launch-label {
-  font-family: var(--font-mono, 'JetBrains Mono', monospace);
-  font-size: clamp(0.75rem, 1.3vmin, 0.8rem);
-  letter-spacing: 0.16em;
+.launch-mark { display: block; width: clamp(104px, 17vmin, 148px); aspect-ratio: 1; }
+.launch-mark { color: rgba(221, 226, 236, 0.4); transition: color 0.4s ease; }
+.launch-mark svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.orbit-label {
+  padding: 0.35em 0;
+  font-size: 0.74rem;
+  font-weight: 500;
+  letter-spacing: 0.26em;
   text-transform: uppercase;
-  color: rgba(203, 213, 225, 0.95);
-  transition: color var(--transition, 0.3s ease);
+  white-space: nowrap;
+  color: #F2D28B;
+  background: linear-gradient(currentColor, currentColor) 0 100% / 0 1px no-repeat;
+  transition: background-size 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-
-/* Hover: the hull brightens, the docking ring closes, and the spin
-   picks up — the engines answering. */
-.gname-launch:hover .gname-launch-ring,
-.gname-launch:focus-visible .gname-launch-ring {
-  color: #ffffff;
-}
-
-/* Counter-spin: these pseudo-elements are children of the element
-   that carries the hover rotation, so without this they orbit with
-   it. Both are radially symmetric so it would not be visible, but it
-   keeps two extra layers churning for nothing. */
-.gname-launch:hover .gname-launch-ring::before,
-.gname-launch:focus-visible .gname-launch-ring::before {
-  opacity: 1;
-  animation: enduranceCounter 3.2s linear infinite;
-}
-
-@keyframes enduranceCounter {
-  from { transform: rotate(0deg);    }
-  to   { transform: rotate(-360deg); }
-}
-
-/* Speeding up on hover by changing animation-duration restarts the
-   animation from 0deg, so the ring visibly SNAPS backwards the moment
-   the cursor lands — the "lag" on hover. Instead the hull keeps its
-   own steady 18s spin and the boost rides on a wrapper, so the two
-   rotations add up and the ship only ever accelerates. */
-.gname-launch:hover .gname-launch-ring,
-.gname-launch:focus-visible .gname-launch-ring {
-  animation: enduranceBoost 3.2s linear infinite;
-}
-
-@keyframes enduranceBoost {
-  from { transform: translateZ(0) rotate(0deg);   }
-  to   { transform: translateZ(0) rotate(360deg); }
-}
-
-.gname-launch:hover .gname-launch-ring::after,
-.gname-launch:focus-visible .gname-launch-ring::after {
-  opacity: 1;
-  inset: -9px;
-  animation: enduranceCounter 3.2s linear infinite;
-}
-
-.gname-launch:hover .gname-launch-label,
-.gname-launch:focus-visible .gname-launch-label {
-  color: #ffffff;
-}
-
-/* The press cue must NOT set transform on the ring: that element
-   now owns the boost rotation, and a competing transform would cancel
-   the spin. Dim the glow instead. */
-.gname-launch:active .gname-launch-ring::before { opacity: 0.55; }
-
-.gname-launch:focus-visible {
-  outline: 1px solid rgba(190, 220, 255, 0.85);
-  outline-offset: 8px;
-  border-radius: 12px;
-}
-
-/* NO --drift fade here, deliberately.
-
-   An earlier version multiplied the CTA by max(0, 1 - --drift * 3.2)
-   to retire it once the trip was under way. That made it permanently
-   invisible: it only appears after ~0.9 viewport heights of
-   scrolling, by which point --drift has long since passed the 0.3125
-   where that factor reaches zero. The CTA belongs to the last screen
-   before the trip, a resting state the reader sits in — the page
-   cannot be scrolled past it (see #burst) — so it simply stays
-   visible there, as the one way on. */
-
-@media (max-width: 640px) {
-  .gname-launch-label { letter-spacing: 0.1em; }
-  .gname-launch-ring { width: 66px; height: 66px; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  /* The ring is the ship's defining feature, so it is slowed to a
-     drift rather than frozen outright. */
-  .gname-endurance { animation-duration: 90s; }
-  .gname-launch:hover .gname-launch-ring,
-  .gname-launch:focus-visible .gname-launch-ring,
-  .gname-launch:hover .gname-launch-ring::before,
-  .gname-launch:hover .gname-launch-ring::after { animation: none; }
-}
+.orbit-btn:hover .launch-mark, .orbit-btn:focus-visible .launch-mark { color: rgba(242, 210, 139, 0.75); }
+.orbit-btn:hover .orbit-label, .orbit-btn:focus-visible .orbit-label { background-size: 100% 1px; }
+.orbit-btn:focus-visible { outline: 1px solid #8FB4FF; outline-offset: 8px; }
 
 /* ============================================================
    THE PROFILE — below the name, a normal page
@@ -706,38 +605,43 @@
 .pf-rise:nth-child(6) { --d: 5; }
 
 /* ── The top bar ──
-   Liquid glass: a floating pill that blurs and saturates the sky
-   behind it, lit from above (inset highlight) and from the arms'
-   blue below, with a sheen that follows the pointer (--mx,
-   profile.js). The marker under the current link is a second drop
-   of the same glass, in gold: its left and width ease on different
-   curves, so it stretches toward the next link and then settles.
-   Both are set on a change of section only — not per frame — which
-   is why they may have transitions. */
+   LIQUID GLASS: a large floating pill, fully rounded, that blurs,
+   saturates and brightens the sky behind it. The glass is built in
+   layers — a body lit from above and from the arms' blue below
+   (insets), a specular rim that is bright at the top-left and the
+   bottom-right and thin in between (::after, a gradient border cut
+   out with a mask), and a soft highlight that follows the pointer
+   (::before at --mx, profile.js). No brand mark: the four sections
+   are all there is. The marker under the current link is a second
+   drop of the same glass, in gold: its left and width ease on
+   different curves, so it stretches toward the next link and then
+   settles. Both are set on a change of section only — not per frame
+   — which is why they may have transitions. */
 .site-nav {
   position: fixed;
-  top: 14px;
+  top: 18px;
   left: 50%;
   z-index: 5;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  padding: 8px;
   border-radius: 999px;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.03)),
-    rgba(10, 14, 24, 0.44);
-  backdrop-filter: blur(18px) saturate(180%);
-  -webkit-backdrop-filter: blur(18px) saturate(180%);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.05) 46%, rgba(255, 255, 255, 0.09) 100%),
+    rgba(12, 16, 28, 0.36);
+  backdrop-filter: blur(26px) saturate(190%) brightness(1.12);
+  -webkit-backdrop-filter: blur(26px) saturate(190%) brightness(1.12);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.3),
-    inset 0 -12px 18px -12px rgba(143, 180, 255, 0.38),
-    0 12px 40px rgba(0, 0, 0, 0.5);
-  transform: translate(-50%, -170%);
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.5),
+    inset 0 12px 18px -14px rgba(255, 255, 255, 0.34),
+    inset 0 -18px 26px -16px rgba(143, 180, 255, 0.5),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.12),
+    0 20px 56px rgba(0, 0, 0, 0.55),
+    0 3px 8px rgba(0, 0, 0, 0.35);
+  transform: translate(-50%, -190%);
   opacity: 0;
   visibility: hidden;
-  transition: transform 0.65s cubic-bezier(0.2, 0.9, 0.25, 1.12), opacity 0.4s ease, visibility 0s linear 0.65s;
+  transition: transform 0.7s cubic-bezier(0.2, 0.9, 0.25, 1.12), opacity 0.4s ease, visibility 0s linear 0.7s;
 }
 :root.nav-on .site-nav {
   transform: translate(-50%, 0);
@@ -750,52 +654,91 @@
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: radial-gradient(130px 46px at var(--mx, 50%) 0%, rgba(255, 255, 255, 0.3), transparent 72%);
+  background: radial-gradient(190px 70px at var(--mx, 50%) 0%, rgba(255, 255, 255, 0.34), transparent 72%);
   opacity: 0;
   transition: opacity 0.35s ease;
   pointer-events: none;
 }
 .site-nav:hover::before { opacity: 1; }
-.site-nav-brand {
-  position: relative;
-  display: grid;
-  place-items: center;
-  width: 38px; height: 38px;
-  flex: 0 0 auto;
-  border: 1px solid rgba(242, 210, 139, 0.5);
-  border-radius: 50%;
-  background: rgba(9, 12, 20, 0.5);
-  font-family: 'Orbitron', var(--font-mono, monospace);
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  color: #F2D28B;
-  transition: border-color 0.25s ease, background 0.25s ease;
+/* The rim: a 1.5px gradient border, kept to the edge by masking out
+   the padding box. */
+.site-nav::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  padding: 1.5px;
+  border-radius: inherit;
+  background: linear-gradient(135deg,
+    rgba(255, 255, 255, 0.85) 0%,
+    rgba(255, 255, 255, 0.16) 26%,
+    rgba(255, 255, 255, 0.06) 52%,
+    rgba(160, 196, 255, 0.3) 76%,
+    rgba(255, 255, 255, 0.6) 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  pointer-events: none;
 }
-.site-nav-brand:hover, .site-nav-brand:focus-visible { border-color: #F2D28B; background: rgba(242, 210, 139, 0.12); }
-.site-nav-links { position: relative; display: flex; }
+/* The links scroll sideways inside the bar when six do not fit (a
+   phone); no scrollbar is shown, profile.js keeps the current link
+   in the middle. */
+.site-nav { max-width: calc(100vw - 20px); }
+.site-nav-links {
+  position: relative;
+  display: flex;
+  gap: 2px;
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  border-radius: 999px;
+}
+.site-nav-links::-webkit-scrollbar { display: none; }
+/* Between the sections of this page and the pages of their own. */
+.site-nav-sep {
+  flex: 0 0 auto;
+  align-self: center;
+  width: 1px; height: 22px;
+  margin: 0 8px;
+  background: linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.34), transparent);
+}
+/* On posts.html / activities.html there is no moving marker: the
+   page's own link wears the gold drop. */
+.site-nav-links a[aria-current="page"] {
+  color: #FFFFFF;
+  background: linear-gradient(180deg, rgba(242, 210, 139, 0.34), rgba(242, 210, 139, 0.1));
+  box-shadow:
+    inset 0 0 0 1px rgba(242, 210, 139, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    0 0 22px rgba(242, 210, 139, 0.2);
+}
 .site-nav-links a {
   position: relative;
-  padding: 9px 16px;
+  flex: 0 0 auto;
+  padding: 14px 22px;
   border-radius: 999px;
-  font-size: 0.88rem;
+  font-size: 1rem;
   font-weight: 500;
   line-height: 1.25;
+  letter-spacing: 0.01em;
   white-space: nowrap;
-  color: #B8C0D2;
+  color: #C6CEDF;
   transition: color 0.25s ease;
 }
 .site-nav-links a:hover, .site-nav-links a.is-active { color: #FFFFFF; }
-.site-nav-brand:focus-visible, .site-nav-links a:focus-visible { outline: 2px solid #8FB4FF; outline-offset: 2px; }
+.site-nav-links a:focus-visible { outline: 2px solid #8FB4FF; outline-offset: 2px; }
 .site-nav-blob {
   position: absolute;
   top: 0; bottom: 0;
   left: var(--bx, 0px);
   width: var(--bw, 0px);
-  border: 1px solid rgba(242, 210, 139, 0.42);
+  border: 1px solid rgba(242, 210, 139, 0.5);
   border-radius: 999px;
-  background: linear-gradient(180deg, rgba(242, 210, 139, 0.28), rgba(242, 210, 139, 0.09));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 0 18px rgba(242, 210, 139, 0.18);
+  background: linear-gradient(180deg, rgba(242, 210, 139, 0.34), rgba(242, 210, 139, 0.1));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    inset 0 -8px 12px -8px rgba(242, 210, 139, 0.35),
+    0 0 22px rgba(242, 210, 139, 0.2);
   transition: left 0.55s cubic-bezier(0.3, 1.45, 0.4, 1), width 0.36s cubic-bezier(0.3, 1.2, 0.4, 1);
 }
 
@@ -1026,6 +969,103 @@
 .pf-body:active .pf-body-disc { transform: scale(0.95); }
 .pf-body:focus-visible { outline: 2px solid #8FB4FF; outline-offset: 4px; border-radius: 50%; }
 
+/* ── #about and the career, on the reference layout ──
+   (aliitawi.me, by the user's wish: the design of these two sections
+   only — its structure, with this site's content, type and gold.)
+   A strip; a small numbered label; a very large, heavy title; copy
+   with its key names in bold beside a portrait frame; a 2x2 grid of
+   numbers under the copy; and the career as a timeline — a line, a
+   ring per entry, the date in gold capitals, what and where. */
+.ab { padding-top: clamp(110px, 16vh, 170px); }
+.ab-strip { display: flex; align-items: center; gap: 16px; margin: 0 0 clamp(36px, 6vh, 56px); }
+.ab-mark { width: 9px; height: 9px; border-radius: 50%; background: #F2D28B; box-shadow: 0 0 14px rgba(242, 210, 139, 0.7); }
+.ab-word { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.34em; text-transform: uppercase; color: #F2D28B; }
+.ab-strip-rule { width: 80px; height: 1px; background: rgba(255, 255, 255, 0.16); }
+.ab-strip-line { font-size: 0.86rem; font-style: italic; font-weight: 300; color: #8892A6; }
+.ab-label { margin: 0 0 0.5rem; font-size: 0.7rem; font-weight: 500; letter-spacing: 0.3em; text-transform: uppercase; color: #7C869A; }
+.ab-title {
+  margin: 0;
+  font-size: clamp(2.8rem, 7.4vw, 5.6rem);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.035em;
+  color: #FFFFFF;
+}
+.ab-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  gap: clamp(36px, 8vw, 128px);
+  align-items: start;
+  margin-top: clamp(44px, 9vh, 96px);
+}
+.ab-copy p { margin: 0 0 1.5em; max-width: 31em; font-size: 1.02rem; line-height: 1.9; color: #9AA3B8; }
+.ab-copy p:first-child { font-size: clamp(1.1rem, 1.6vw, 1.25rem); color: #C3CAD8; }
+.ab-copy strong { font-weight: 600; color: #FFFFFF; }
+.ab-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  max-width: 496px;
+  margin-top: clamp(28px, 5vh, 52px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 22px;
+  background: rgba(6, 8, 14, 0.5);
+  overflow: hidden;
+}
+.ab-stat { padding: 30px 28px 34px; }
+.ab-stat:nth-child(odd) { border-right: 1px solid rgba(255, 255, 255, 0.1); }
+.ab-stat:nth-child(n + 3) { border-top: 1px solid rgba(255, 255, 255, 0.1); }
+.ab-num {
+  font-size: clamp(2.4rem, 4.6vw, 3.5rem);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: #F2D28B;
+  text-shadow: 0 0 34px rgba(242, 210, 139, 0.35);
+}
+.ab-stat-label { margin-top: 14px; font-size: 0.62rem; font-weight: 500; letter-spacing: 0.2em; text-transform: uppercase; color: #7C869A; }
+.ab .pf-links { gap: 0; margin-top: 2rem; }
+.ab-frame {
+  position: relative;
+  justify-self: end;
+  width: min(100%, 400px);
+  aspect-ratio: 4 / 5;
+  margin-top: clamp(0px, 8vh, 80px);
+  border: 1px solid rgba(242, 210, 139, 0.45);
+  border-radius: 24px;
+  background: radial-gradient(120% 90% at 30% 20%, #1a2136 0%, #0a0d16 60%, #05070c 100%);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55), 0 0 60px rgba(242, 210, 139, 0.07);
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+}
+.ab-frame img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.ab-initials { font-family: 'Orbitron', var(--font-mono, monospace); font-size: clamp(2.6rem, 6vw, 4.4rem); font-weight: 800; letter-spacing: 0.06em; color: rgba(255, 255, 255, 0.82); }
+
+.tl { position: relative; margin: clamp(40px, 8vh, 80px) 0 0; padding: 0; list-style: none; }
+.tl::before { content: ''; position: absolute; left: 0; top: -34px; bottom: -34px; width: 1px; background: linear-gradient(180deg, transparent, rgba(242, 210, 139, 0.45) 12%, rgba(242, 210, 139, 0.45) 80%, transparent); }
+.tl-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(150px, 232px) minmax(0, 1fr);
+  align-items: start;
+  margin-left: 48px;
+  padding: 34px 0 38px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+.tl-item:last-child { border-bottom: 0; }
+.tl-dot { position: absolute; left: -55px; top: 37px; width: 13px; height: 13px; border: 2px solid #F2D28B; border-radius: 50%; background: #06080d; box-shadow: 0 0 16px rgba(242, 210, 139, 0.55); }
+.tl-date { padding-top: 0.35em; font-size: 0.7rem; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: #F2D28B; }
+.tl-body h3 { margin: 0; font-size: 1.22rem; font-weight: 700; letter-spacing: -0.01em; color: #FFFFFF; }
+.tl-body p { margin: 0.45rem 0 0; font-size: 0.92rem; color: #8892A6; }
+@media (max-width: 860px), (max-aspect-ratio: 1/1) {
+  .ab-split { grid-template-columns: minmax(0, 1fr); }
+  .ab-frame { justify-self: start; width: min(78vw, 320px); margin-top: 0; order: -1; }
+  .ab-strip-rule { width: 36px; }
+  .ab-stat { padding: 22px 20px 26px; }
+  .tl-item { grid-template-columns: minmax(0, 1fr); gap: 10px; margin-left: 34px; }
+  .tl-dot { left: -41px; }
+}
+
 /* ── #stack ──
    Three stages on one line of flight: languages, then the tools they
    are written in, then the technologies around them. The line runs
@@ -1166,7 +1206,19 @@
 }
 
 /* ── #build ── the way on */
-.pf-build { padding-bottom: clamp(96px, 18vh, 200px); text-align: center; }
+/* A screen of its own, its content centred, so the mark is never
+   pressed up under the top bar at the end of the page. */
+.pf-build {
+  min-height: 100vh;
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding-top: clamp(104px, 14vh, 150px);
+  padding-bottom: clamp(48px, 9vh, 110px);
+  text-align: center;
+}
 .profile-launch-lead {
   max-width: 34em;
   margin: 1.3rem auto 0;
@@ -1174,9 +1226,7 @@
   line-height: 1.5;
   color: #C9CFDB;
 }
-.profile-launch { margin-top: clamp(28px, 5vh, 52px); }
-.profile-launch .gname-launch { margin-top: 0; gap: 0.8rem; }
-.profile-launch .gname-launch-ring { width: 96px; height: 96px; }
+.profile-launch { margin-top: clamp(36px, 6vh, 64px); }
 
 /* One column: a narrow or portrait viewport has no room for two. */
 @media (max-width: 860px), (max-aspect-ratio: 1/1) {
@@ -1207,14 +1257,18 @@
   .pf-card { min-height: 0; }
 }
 @media (max-width: 640px) {
-  .gname-link { padding: 7px 12px 7px 10px; font-size: 0.68rem; }
   .pf-body-label { font-size: 0.74rem; }
-  .profile-launch .gname-launch-ring { width: 84px; height: 84px; }
+}
+@media (max-width: 820px) {
+  .site-nav { top: 14px; padding: 7px; }
+  .site-nav-links a { padding: 12px 16px; font-size: 0.94rem; }
+  .site-nav-sep { margin: 0 5px; }
 }
 @media (max-width: 480px) {
-  .site-nav { top: 10px; padding: 5px; }
-  .site-nav-brand { display: none; }
-  .site-nav-links a { padding: 8px 11px; font-size: 0.8rem; }
+  .site-nav { top: 12px; padding: 6px; }
+  .site-nav-links { gap: 0; }
+  .site-nav-links a { padding: 11px 13px; font-size: 0.88rem; }
+  .site-nav-sep { margin: 0 3px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .pf-rise { opacity: 1; translate: 0 0; transition: none; }
@@ -1226,6 +1280,50 @@
   .pf-card-front, .pf-card-back, .site-nav, .site-nav-blob { transition: none; }
   .gname-cue-chevron { animation: none; }
   .guide-dots i { animation: none; }
+}
+
+/* ============================================================
+   PLAIN PAGES — posts.html, activities.html
+   ============================================================
+   Pages of their own, reached from the top bar; empty for now. No
+   canvas and no script: the night is a CSS gradient with a handful
+   of painted stars, the bar is the same glass (shown by a static
+   .nav-on on the root), and the body is a tag, a title and a line.
+   The bar's section links go back to galaxy.html#section. */
+body.page {
+  min-height: 100vh;
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  color: #E6E9F2;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  background:
+    radial-gradient(1.6px 1.6px at 12% 18%, rgba(255, 255, 255, 0.7), transparent 60%),
+    radial-gradient(1.3px 1.3px at 27% 64%, rgba(255, 255, 255, 0.5), transparent 60%),
+    radial-gradient(1.8px 1.8px at 41% 31%, rgba(242, 210, 139, 0.7), transparent 60%),
+    radial-gradient(1.4px 1.4px at 58% 82%, rgba(255, 255, 255, 0.55), transparent 60%),
+    radial-gradient(1.6px 1.6px at 69% 22%, rgba(190, 214, 255, 0.75), transparent 60%),
+    radial-gradient(1.3px 1.3px at 83% 57%, rgba(255, 255, 255, 0.5), transparent 60%),
+    radial-gradient(1.7px 1.7px at 91% 12%, rgba(255, 255, 255, 0.65), transparent 60%),
+    radial-gradient(1.4px 1.4px at 6% 88%, rgba(190, 214, 255, 0.6), transparent 60%),
+    radial-gradient(ellipse 85% 65% at 50% 42%, #0B0F1A 0%, #05070D 55%, #030409 100%);
+  background-attachment: fixed;
+}
+.page-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 140px 24px 96px;
+  text-align: center;
+}
+.page-empty {
+  margin-top: 1.4rem;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 0.86rem;
+  letter-spacing: 0.1em;
+  color: #9AA3B8;
 }
 
 /* ============================================================

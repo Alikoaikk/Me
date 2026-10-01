@@ -56,6 +56,47 @@ const std = (color, o = {}) => new THREE.MeshStandardMaterial({
   emissiveIntensity: o.ei ?? 1, flatShading: !!o.flat, map: o.map || null,
   transparent: !!o.t, opacity: o.o ?? 1, side: o.side ?? THREE.FrontSide, depthWrite: o.dw ?? true,
 });
+/* ── Fewer draw calls ──
+   three.js draws a mesh that has a material ARRAY once per geometry
+   group, so a box with six materials is six draw calls even when four
+   of its faces share one — and the nine emblems together were 755
+   calls a frame, most of what the system cost. Two tools:
+   packGroups() reorders a mesh's index so that each distinct material
+   is one group ([side ×4, front ×2] → 2 calls); makeEmblem runs it on
+   every mesh, so builders need not care. instances() makes the copies
+   of one static mesh (a map's walls, an island's tiles) a single
+   InstancedMesh. */
+const packedGeo = new WeakMap();           // geometry → Map(pattern → its packed copy)
+function packGroups(mesh) {
+  const mats = mesh.material, geo = mesh.geometry;
+  if (!Array.isArray(mats) || !geo || !geo.index || !geo.groups.length) return;
+  const uniq = [...new Set(geo.groups.map(g => mats[g.materialIndex]))];
+  if (uniq.length === geo.groups.length) return;
+  const pattern = geo.groups.map(g => uniq.indexOf(mats[g.materialIndex])).join();
+  let byPattern = packedGeo.get(geo);
+  if (!byPattern) packedGeo.set(geo, byPattern = new Map());
+  let out = byPattern.get(pattern);
+  if (!out) {
+    const src = geo.index.array, idx = new src.constructor(src.length);
+    out = geo.clone(); out.clearGroups();
+    let at = 0;
+    uniq.forEach((m, k) => {
+      const start = at;
+      for (const g of geo.groups) if (mats[g.materialIndex] === m) { idx.set(src.subarray(g.start, g.start + g.count), at); at += g.count; }
+      if (uniq.length > 1) out.addGroup(start, at - start, k);
+    });
+    out.setIndex(new THREE.BufferAttribute(idx.slice(0, at), 1));
+    byPattern.set(pattern, out);
+  }
+  mesh.geometry = out;
+  mesh.material = uniq.length === 1 ? uniq[0] : uniq;
+}
+function instances(geo, mat, positions) {
+  const im = new THREE.InstancedMesh(geo, mat, positions.length), m = new THREE.Matrix4();
+  positions.forEach((p, i) => im.setMatrixAt(i, m.makeTranslation(p[0], p[1], p[2])));
+  im.instanceMatrix.needsUpdate = true;
+  return im;
+}
 /* A text sprite (always faces the camera) with a redrawable canvas. */
 function board(w, h, worldH, draw) {
   const t = canvasTex(w, h);
@@ -239,9 +280,9 @@ function cub3d() {
   const mat = t => new THREE.MeshStandardMaterial({ map: t, roughness: 0.85 });
   const wallMats = [mat(EA), mat(WE), topMat, topMat, mat(SO), mat(NO)];   // +x E, -x W, +y, -y, +z S, -z N
   const wallGeo = new THREE.BoxGeometry(CELL, WALL_H, CELL);
-  for (let y = 0; y < R; y++) for (let x = 0; x < C; x++) if (MAP[y][x] === '1') {
-    const w = new THREE.Mesh(wallGeo, wallMats); w.position.set(X(x + 0.5), WALL_H / 2, Z(y + 0.5)); root.add(w);
-  }
+  const walls = [];
+  for (let y = 0; y < R; y++) for (let x = 0; x < C; x++) if (MAP[y][x] === '1') walls.push([X(x + 0.5), WALL_H / 2, Z(y + 0.5)]);
+  root.add(instances(wallGeo, wallMats, walls));
   const floorTex = canvasTex(16, 16, g => { g.fillStyle = '#2a2d33'; g.fillRect(0, 0, 16, 16); g.fillStyle = '#33373e'; g.fillRect(0, 0, 8, 8); g.fillRect(8, 8, 8, 8); }, true);
   floorTex.wrapS = floorTex.wrapT = THREE.RepeatWrapping; floorTex.repeat.set(C / 2, R / 2);
   const floor = new THREE.Mesh(new THREE.BoxGeometry(C * CELL, 0.04, R * CELL), new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.9 }));
@@ -496,16 +537,16 @@ function soLong() {
   const grass = pix(21, ['#3f8a3a', '#4a9a41', '#377d33', '#56a84a', '#3f8a3a']);
   const stone = pix(22, ['#6c6f76', '#7b7e86', '#5d6068', '#868991']);
   const dirt = pix(23, ['#6b4a2e', '#5c3f27', '#7a5534']);
-  const grassMats = [std(null, { map: dirt, r: 0.9 }), std(null, { map: dirt, r: 0.9 }), std(null, { map: grass, r: 0.9 }), std(null, { map: dirt, r: 0.9 }), std(null, { map: dirt, r: 0.9 }), std(null, { map: dirt, r: 0.9 })];
-  grassMats.forEach(m => m.color.set(0xffffff));
+  const dirtMat = std(0xffffff, { map: dirt, r: 0.9 }), grassMat = std(0xffffff, { map: grass, r: 0.9 });
+  const grassMats = [dirtMat, dirtMat, grassMat, dirtMat, dirtMat, dirtMat];   // grass on top (+y), dirt round it
   const stoneMat = std(0xffffff, { map: stone, r: 0.85 });
   const tileGeo = new THREE.BoxGeometry(CELL, 0.1, CELL), wallGeo = new THREE.BoxGeometry(CELL, 0.16, CELL);
-  const snitches = [], open = [];
+  const snitches = [], open = [], tiles = [], walls = [];
   let start = null, exit = null;
   for (let y = 0; y < R; y++) for (let x = 0; x < C; x++) {
     const ch = MAP[y][x];
-    const tile = new THREE.Mesh(tileGeo, grassMats); tile.position.set(X(x), -0.05, Z(y)); root.add(tile);
-    if (ch === '1') { const w = new THREE.Mesh(wallGeo, stoneMat); w.position.set(X(x), 0.08, Z(y)); root.add(w); }
+    tiles.push([X(x), -0.05, Z(y)]);
+    if (ch === '1') walls.push([X(x), 0.08, Z(y)]);
     if (ch === 'P') start = [x, y];
     if (ch === 'E') exit = [x, y];
     if (ch === 'C') {
@@ -519,6 +560,7 @@ function soLong() {
     }
     if (ch !== '1') open.push([x, y]);
   }
+  root.add(instances(tileGeo, grassMats, tiles), instances(wallGeo, stoneMat, walls));
   // Floating-island underside.
   const under = new THREE.Mesh(new THREE.ConeGeometry(1.15, 0.95, 7), std('#5a4030', { flat: true, r: 0.95 }));
   under.rotation.x = Math.PI; under.scale.set(1, 1, 0.72); under.position.y = -0.1 - 0.95 / 2; root.add(under);
@@ -912,6 +954,7 @@ function solidBounds(obj, box, tmp) {
 export function makeEmblem(project) {
   const kind = emblemKind(project);
   const made = MAKERS[kind](project);
+  made.root.traverse(o => { if (o.isMesh) packGroups(o); });
   made.update({ dt: 0, t: 0, camera: null, detail: true });
   const inner = made.root;
   inner.updateMatrixWorld(true);

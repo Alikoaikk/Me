@@ -26,7 +26,8 @@ Scripts — all paths are absolute or relative to where you run them:
   The whole reader flow in ONE browser session, the way a reader
   actually gets it: hero → approach → the name (24s settle; the page
   written) → a scroll-up (allowed; the burst rewinds) and back → on
-  into the profile → its end → `.click()` on the button → the release → the warp → the arrival →
+  into the profile → its end → `.click()` on TARS → the take-off and the release →
+  the page changes to `system.html` (state lines read `{"navigating":true}` meanwhile) → the warp → the arrival →
   waits for `.is-system` → the system → `window.system.select(3)` →
   `select('pilot')` → a wheel (the page is one screen now). Eleven
   stills plus a JSON state line for each (`y`, `max`, the published
@@ -34,10 +35,9 @@ Scripts — all paths are absolute or relative to where you run them:
   nine worlds take ~10 s to bake. After launch `y` reads 0 at the planet: the trip
   is one-way and the sections above have collapsed. `URL=` overrides
   the page. Takes 2–3 minutes
-  under SwiftShader. Use this, not `render.js` with a forced
-  `.is-launched`, whenever the sky behind the planet matters: a direct
-  jump never fires the burst, so the disc sits intact and bright
-  behind it, which is not what the reader sees.
+  under SwiftShader. The system can also be rendered on its own: `system.html`
+  opens on the warp and needs no flow before it (its sky is galaxy.js
+  in sky-only mode, already settled).
 - REAL GPU. Headless Chrome on this Mac can use the M2 through Metal
   (`--use-angle=metal --enable-gpu --ignore-gpu-blocklist`), which runs
   at a true 60 fps — use it for anything about smoothness; SwiftShader

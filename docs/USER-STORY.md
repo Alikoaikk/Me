@@ -1,4 +1,4 @@
-# The trip — user story of `galaxy.html`
+# The trip — user story of `galaxy.html` and `system.html`
 
 The whole site is one journey. The reader arrives in front of a galaxy,
 scrolls into it, watches it write the name, lets the name go, presses
@@ -32,7 +32,7 @@ film.
 - **The sky** — the galaxy canvas (`galaxy.js`), fixed behind everything, alive from the first frame to the last: 15.5k simulated stars plus a 48k GPU field, slow drift, occasional shooting stars, a wake under the cursor.
 - **The name** — `ALI KOAIK`, drawn only by stars; there is no text fill.
 - **The quote** — one line of Interstellar under the name, rotating.
-- **The button** — the Endurance ring, "Press here to start the trip". The only control on the page.
+- **TARS** — the robot from Interstellar, "Press here to start the trip". The way on: a link to the system's own page, with a take-off first.
 - **The warp** — the launch overlay (`warp.js`): streaks, flash, and the jump.
 - **Koaik** — Ali's own world, a generated planet and the star of the system (`system.js`): relief, drifting clouds, a glint on the sea, a warm corona.
 - **The nine emblems** — the projects, each a living model of itself on its own orbit (`emblems.js`).
@@ -80,15 +80,23 @@ into the disc.
 
 ### 3 · The name screen, and who Ali is
 
-**Sees:** "HELLO, I'M" in gold above the name, the name in stars, the
-Interstellar line beneath it, and under that three pills: GitHub,
-LinkedIn, Email. At the foot of the screen a small "Who I am" cue with
-a chevron breathing downward.
-**Moves:** the greeting, the quote and the links resolve with the last
-letter, so identity lands first. Scrolling on, the whole block — the
+**Sees:** "HELLO, I'M" in gold above the name, the name in stars, and
+under it a block set like a title sequence — type and hairlines, no
+buttons or badges: a short gold rule, "COMPUTER SCIENCE STUDENT" in
+small tracked capitals, "Low-level & systems programming" as one
+light line, "Lebanon — Open to opportunities" in muted words, then a
+row of text links ("View my work ↓" in gold, a hairline, GitHub,
+LinkedIn, Email) and last, quietly, the Interstellar line in light
+italic. At the foot of the screen a small "Who I am"
+cue with a chevron breathing downward.
+**Moves:** the greeting and the block under the name resolve with the
+last letter, so identity lands first; the actions ease in once the
+name is fully written. Scrolling on, the whole block — the
 star name included — slides up with the page, and from here it reads
-like a normal site. A glass top bar drops in (AK · About · Stack ·
-Education · Projects, a gold drop under the section in view), and
+like a normal site. A large liquid-glass top bar drops in (About ·
+Stack · Education · Projects, then Posts · Activities, which are pages
+of their own and empty for now — no logo; a gold drop under the
+section in view), and
 four sections follow: `// about` — "Who I am", the brief, the bio,
 status and links beside Ali's portrait in a floating circle with four
 numbers in orbit around it (projects, 42 level, languages,
@@ -96,29 +104,41 @@ universities; they count up once, and each is a link to its section);
 `// stack` — languages, tools & IDEs, technologies on one line of
 flight; `// education` — "Academic path", a card per school that
 turns to its story on hover; `// projects` — "What I build", one
-sentence and the Endurance ring with "Press here to start the trip".
+sentence and a mini TARS, the robot from Interstellar, standing
+mid-stride in three dimensions: four jointed slabs of satin steel,
+two legs forward and two back, a small screen printing, with "Press
+here to start the trip" under it. Hovering it makes it walk on the
+spot.
 Each section comes in once, as a whole, when it is reached.
 **Control:** the reader's. The profile only exists once the name is
 written, so nothing can be scrolled past while the stars are still
 writing it. Scrolling back up returns to the name (the top bar leaves)
 and, further, to the galaxy (the burst rewinds). The bar's links and
-the orbiting numbers jump between sections; the button is the only way
-forward.
+the orbiting numbers jump between sections ("View my work" on the name
+screen goes straight to TARS); TARS is the only way on to the system.
+Posts and Activities open their own pages, whose bar leads back to any
+section here without replaying the galaxy.
 **Ends:** on the press.
 
 ### 4 · Take-off — the leave and the release
 
-**Sees:** on the press the profile fades away and the name glides back
-down to the centre of the sky; a beat later its letters let go, the
-stars that made them sliding back into the field, until the sky is
-just sky.
-**Moves:** the fade 0.4 s, the glide 0.6 s, the release 1.2 s starting
-0.5 s in — then the warp at once.
-**Control:** the site's. This is the one-way door: the page is locked
-and sealed, and there is no way back to the galaxy from here.
+**Sees:** on the press TARS turns its back and walks away into the sky,
+small with distance, toward the centre of the screen; behind it the
+profile fades away and the name glides back down to the centre of the
+sky; a beat later its letters let go, the stars that made them sliding
+back into the field, until the sky is just sky.
+**Moves:** TARS 1.8 s, the fade 0.4 s, the glide 0.6 s, the release
+1.2 s starting 0.5 s in — then the page changes: TARS's link is
+followed to `system.html` (about 3 s after the press; a cross-fade
+where the browser supports it), which opens on the warp.
+**Control:** the site's. The page is locked and sealed. The system is
+a page of its own, so the browser's Back returns to this one, from
+the top.
 
 ### 5 · Launch — the warp, timed 3.6 s
 
+(On `system.html`, from its first frame — also when that page is
+opened directly or reloaded.)
 **Sees:** the stars begin to streak toward the reader. The streaks
 grow, red and blue fringes appear at the edges, a tunnel of light opens
 at the centre. At 1.1 s a white flash. Light speed holds for 1.2 s,
@@ -128,8 +148,8 @@ grows in from a point.
 ship). Second set piece, timed.
 **Control:** the site's. Scrolling is locked for 3.6 s and touch is
 refused.
-**Ends:** at 3.6 s, overlay gone, scrolling unlocked. The hero section
-has collapsed too, so the planet is now the top of the page.
+**Ends:** at 3.6 s, overlay gone. The system fills the window; the page
+is one screen and nothing scrolls.
 
 ### 6 · Arrival at Koaik
 
@@ -194,6 +214,12 @@ never overshoots and lands without a jolt. Clicking another planet
 mid-flight simply re-aims it, with no stop. The card's parts arrive in
 order; the selected orbit brightens. Dragging or scrolling mid-flight
 hands the camera straight back to the reader.
+**Night:** as the camera closes on a project the rest of the world
+steps back — the sky, the hole, the orbits and the other projects go
+out of focus and dark over a third of a second, their names dim, and
+only the project and its card stay sharp and lit. It lifts the same
+way the moment the focus ends, by any route. The pilot's card has no
+night: there the hole is the subject.
 **Control:** the reader's. "Back to the system", the `⌂ System`
 button, the map, or Escape fly back to the overview; zooming far out
 or flying away simply lets the planet go.
@@ -216,10 +242,13 @@ page. To see the galaxy again, reload.
 ## Accessibility and fallbacks
 
 - **Reduced motion:** no burst and no release — the name is simply
-  there with the button under it; the press is a plain jump to the
-  planet; the system is simply there, nothing orbits or spins, the
-  controls still work; the ring drifts instead of spinning.
-- **Keyboard:** the button is a real `<button>` with a focus ring; the
+  there with the profile under it; the press opens the system's page
+  at once, with no take-off and no warp; the system is simply there,
+  nothing orbits or spins, the controls still work; TARS stands
+  still, its screens steady.
+- **No script / no WebGL2:** TARS is a real link, so it still
+  opens the system's page.
+- **Keyboard:** TARS is a real link with a focus ring; the
   planet labels are buttons too, so the system can be browsed by Tab
   and Enter; W A S D / arrows fly, Escape backs out.
 - **Touch:** the launch refuses `touchmove` while it runs; the gate is

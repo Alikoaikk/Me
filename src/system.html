@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<!-- THE SYSTEM'S OWN PAGE. The ship button at the end of galaxy.html's
+     profile opens it; it starts with the warp and lands on Koaik and
+     the projects in orbit. It is a page of its own so the first page
+     (galaxy, name, profile) never loads three.js or holds a second
+     WebGL context.
+
+     The root's classes and attribute are the state the old one-page
+     flow reached by the time the system showed:
+       .is-launched  the planet section exists, fixed to the window,
+                     and #hero is collapsed (galaxy.css);
+       .is-sealed    nothing above to scroll back to;
+       data-sky      galaxy.js draws ONLY the finished sky — burst
+                     done, name released — as the backdrop (and still
+                     answers window.galaxySky.night / swallow). -->
+<html lang="en" class="is-launched is-sealed" data-sky>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The Koaik system — Ali Koaik</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <!-- Orbitron only for the initials on the chip and the pilot card. -->
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Orbitron:wght@800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/galaxy.css" />
+  <link rel="stylesheet" href="css/cursor.css" />
+</head>
+<body>
+
+  <!-- The sky: the same fixed canvas as galaxy.html's hero, drawn by
+       galaxy.js in its sky-only state. The section itself is collapsed
+       (.is-launched); only the fixed background shows. -->
+  <section id="hero" aria-hidden="true">
+    <div class="hero-bg">
+      <canvas id="heroCanvas"></canvas>
+    </div>
+  </section>
+
+  <!-- ARRIVAL — Koaik, and the system around it. The warp (warp.js)
+       lands the page here: system.js grows the hole in over the sky,
+       then pulls the camera back to show it is the centre of a system
+       whose bodies are the projects. The reader moves through it
+       (drag, scroll, keys, touch) and selects bodies; hud.js writes
+       the caption, the chip, the hint and the panel. -->
+  <section id="planet" class="planet" aria-label="The Koaik system">
+    <canvas id="planetCanvas" aria-hidden="true"></canvas>
+    <!-- Body names, projected onto the canvas by system.js; real
+         buttons, so the keyboard can select a planet too. -->
+    <div class="sys-labels" id="sysLabels"></div>
+    <div class="planet-caption">
+      <p class="planet-label">Arrival <span class="sep">—</span> <span id="planetName"></span></p>
+      <p class="planet-sub" id="planetSub"></p>
+      <p class="planet-hint" id="planetHint"></p>
+    </div>
+    <!-- The HUD: pilot chip (top), map and hint (bottom). Shown once
+         the section has .is-system. -->
+    <div class="sys-hud">
+      <button class="sys-chip" id="sysChip" type="button" aria-label="Open the pilot card">
+        <span class="sys-chip-portrait" aria-hidden="true"><img id="chipPhoto" alt="" hidden><span id="chipInitials"></span></span>
+        <span class="sys-chip-text">
+          <span class="sys-chip-name" id="chipName"></span>
+          <span class="sys-chip-status"><span class="dash-dot" aria-hidden="true"></span><span id="chipStatus"></span></span>
+        </span>
+      </button>
+      <canvas class="sys-map" id="sysMap" width="150" height="150" aria-hidden="true"></canvas>
+      <button class="sys-home" id="sysHome" type="button" aria-label="Back to the whole system">⌂ System</button>
+      <p class="sys-hint" id="sysHint"></p>
+    </div>
+    <!-- The panel a selected body opens; hud.js fills it. -->
+    <aside class="probe" id="sysPanel" aria-live="polite" hidden></aside>
+    <!-- No WebGL (or no module support): the same content as a list. -->
+    <div class="sys-fallback" id="sysFallback" hidden></div>
+  </section>
+
+  <!-- WARP — the launch sequence's overlay: the streaking stars and
+       the jump flash, on a 2D canvas. Fixed over everything, invisible
+       until warp.js switches it on. -->
+  <div class="warp" id="warp" aria-hidden="true">
+    <canvas id="warpCanvas"></canvas>
+  </div>
+
+  <script src="js/galaxy/galaxy.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/hud.js"></script>
+  <script src="js/warp.js"></script>
+  <!-- three.js is vendored (js/vendor/three, MIT) and loaded as ES
+       modules through this import map, so the page needs to be SERVED
+       (make serve): module scripts do not run from file://. hud.js
+       shows the plain list if the module never runs. -->
+  <script type="importmap">
+    { "imports": { "three": "./js/vendor/three/three.module.js",
+                   "three/addons/": "./js/vendor/three/addons/" } }
+  </script>
+  <script type="module" src="js/system.js"></script>
+  <script>
+    /* The page opens ON the trip: the warp runs from the first frame
+       and arms / reveals the system (warp.js → window.koaik). Module
+       scripts run before DOMContentLoaded, so the system is there by
+       then if it is going to be. Reduced motion: no warp — system.js
+       arms itself and the page simply arrives. */
+    (function () {
+      'use strict';
+      const root = document.documentElement;
+      const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      function begin() {
+        if (reduce) { root.classList.add('is-arrived'); return; }
+        if (window.warpSequence) { window.warpSequence.start(); return; }
+        // No warp overlay: arrive at once.
+        root.classList.add('is-arrived');
+        if (window.koaik) { window.koaik.arm(); window.koaik.reveal(); }
+      }
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', begin);
+      else begin();
+      /* Back from beyond.html (or any return from the back-forward
+         cache) would show a frozen, half-collapsed system: start again. */
+      window.addEventListener('pageshow', e => { if (e.persisted) window.location.reload(); });
+    })();
+  </script>
+</body>
+</html>
