@@ -11,6 +11,15 @@
   --accent-purple: #6c63ff;
   --accent-cyan: #00d4ff;
   --accent-gradient: linear-gradient(135deg, #6c63ff, #00d4ff);
+  /* THE ACCENT of the galaxy pages (galaxy / system / posts /
+     activities) — one family; galaxy.css repeats it so it stands
+     alone. index.html and projects.html still wear the purple / cyan
+     pair above. */
+  --accent: #9CC4FF;                 /* ice blue */
+  --accent-rgb: 156, 196, 255;       /* for rgba(var(--accent-rgb), a) */
+  --accent-dim: #6F9CE8;             /* the same hue, deeper */
+  --accent-dim-rgb: 111, 156, 232;
+  --accent-pale: #DDEBFF;            /* text on an accent-tinted fill */
   --text-primary: #e2e8f0;
   --text-secondary: #94a3b8;
   --text-muted: #475569;

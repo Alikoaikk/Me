@@ -118,7 +118,7 @@
 
   /* ── The stack: three stages, in the order they are reached for ── */
   const STAGES = [
-    { label: 'Languages', items: skills.languages, tone: 'gold',
+    { label: 'Languages', items: skills.languages, tone: 'accent',
       icon: '<path d="m8.5 8-4 4 4 4M15.5 8l4 4-4 4M13.2 5.5l-2.4 13"/>' },
     { label: 'Tools & IDEs', items: skills.tools, tone: 'plain',
       icon: '<path d="M14.6 6.4a4 4 0 0 0-5.2 5.2L4 17l3 3 5.4-5.4a4 4 0 0 0 5.2-5.2l-2.6 2.6-2.2-.6-.6-2.2 2.4-2.8Z"/>' },
@@ -202,12 +202,6 @@
     secLinks.forEach(l => l.addEventListener('click', e => {
       if (goTo($(l.dataset.sec))) e.preventDefault();
     }));
-    // The glass catches the light where the pointer is (a sheen on
-    // ::before at --mx). Written on pointermove over the bar only.
-    nav.addEventListener('pointermove', e => {
-      const r = nav.getBoundingClientRect();
-      nav.style.setProperty('--mx', ((e.clientX - r.left) / Math.max(1, r.width) * 100).toFixed(1) + '%');
-    });
     onScroll();
   }
   if (orbit) orbit.querySelectorAll('a.pf-body').forEach(b => b.addEventListener('click', e => {

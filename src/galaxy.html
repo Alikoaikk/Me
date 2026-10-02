@@ -60,26 +60,18 @@
         </p>
       </div>
     </div>
-    <!-- The guides, in the same slot as the cue below: "Scroll" on the
-         approach (until the burst fires), then "Wait" while the
-         burst writes the name (.is-bursting, galaxy.js). Decorative:
-         hidden from assistive tech. -->
-    <p class="guide guide-scroll" aria-hidden="true"><span>Scroll</span><span class="gname-cue-chevron"></span></p>
-    <p class="guide guide-wait" aria-hidden="true"><span>Wait<span class="guide-dots"><i>.</i><i>.</i><i>.</i></span></span></p>
     <!-- The cue at the foot of the name screen: there is more below. -->
     <a class="gname-cue" href="#profile" id="gnameCue"><span>Who I am</span><span class="gname-cue-chevron" aria-hidden="true"></span></a>
   </section>
 
-
-  <!-- INTRO — scroll length only. The galaxy holds the screen here
-       before the burst fires; there is no text over it. -->
-  <section id="intro" aria-hidden="true"></section>
-
-  <!-- BURST — just the scroll that reaches the trigger; its end is the
-       name screen. Below it the profile (once the name is written);
-       on the button press the page is sealed and this collapses too
-       (see #burst in galaxy.css). -->
-  <section id="burst" aria-hidden="true"></section>
+  <!-- The hero IS the name screen: one screen, then the profile. There
+       is no approach and no burst any more (the #intro / #burst scroll
+       spacers are gone). Scrolling on, the name's stars let go and run
+       as a ribbon down the page, between the sections, and gather into
+       a mini galaxy above the launch link (galaxy.js, "THE FLOW"). The
+       stars never leave the sky: the canvas stays BEHIND the profile's
+       sheet, and the sheet is cut open along their way (THE RIVER,
+       below) so the sky shows through. -->
 
   <!-- PROFILE — below the name the page reads like a normal site:
        a top bar, then four sections one after another. It exists once
@@ -123,6 +115,26 @@
       </div>
     </nav>
 
+    <!-- THE SHEET: everything from "Becoming" to the end is one
+         container with its own opaque background; the sky is fixed,
+         so the sheet slides up over it as the page scrolls.
+         THE RIVER: the sheet's background (.sheet::before) is cut open
+         along the way the stars take — a channel down the margins and
+         across between the sections, ending in a round window where
+         the mini galaxy turns — so the sky, and the stars in it, show
+         through. galaxy.js measures the page and writes the cut
+         (--sheet-cut, a clip-path) and the same outline into this SVG,
+         which lies UNDER the background: only the inner half of each
+         stroke shows, inside the opening — a hairline of light on the
+         edge and a soft shadow falling in. Static; it scrolls with the
+         page like any other content. -->
+    <div class="sheet">
+      <svg class="sheet-edge" id="sheetEdge" aria-hidden="true" focusable="false">
+        <path class="sheet-edge-shade sheet-edge-shade--far" />
+        <path class="sheet-edge-shade sheet-edge-shade--near" />
+        <path class="sheet-edge-rim" />
+      </svg>
+
     <!-- ABOUT, then CAREER: the layout of aliitawi.me's two sections
          (the user's reference) with this site's content and gold. A
          strip (mark, word, rule, a line), a small numbered label, a
@@ -164,28 +176,22 @@
       <h2 class="pf-title pf-rise" id="buildTitle">What I build</h2>
       <p class="profile-launch-lead pf-rise" id="profileLead"></p>
       <div class="profile-launch pf-rise">
-        <!-- THE WAY ON. A small orbit diagram — what is on the other
-             side: Koaik at the centre (gold), nine projects on three
-             hairline rings, turning — and under it the words. Type
-             and hairlines, like the name screen. A real link to the
-             system's own page; galaxy.js takes the plain click to
-             play the take-off first (the diagram opens up toward the
-             reader as the profile fades and the letters let go) and
-             then follows the link. -->
+        <!-- THE WAY ON. The mini galaxy, and under it the words. The
+             box (#miniGalaxy) is EMPTY: it only reserves the place —
+             galaxy.js measures it, cuts a round window in the sheet
+             there and gathers the name's stars behind it as the same
+             spiral the site used to open on, small and slowly turning.
+             The link itself is still: nothing of it animates. A real
+             link to the system's own page; galaxy.js takes the plain
+             click to fade the page, then follows it. -->
         <a class="orbit-btn" id="launchBtn" href="system.html">
-          <span class="launch-mark" aria-hidden="true">
-            <svg viewBox="0 0 100 100" fill="none">
-              <g class="orbit-ring orbit-ring--0"><circle cx="50" cy="50" r="16" stroke="currentColor" stroke-width="0.5"/><circle cx="66.0" cy="50.0" r="1.3" fill="#DDE2EC"/><circle cx="34.0" cy="50.0" r="1.3" fill="#DDE2EC"/></g>
-              <g class="orbit-ring orbit-ring--1"><circle cx="50" cy="50" r="27" stroke="currentColor" stroke-width="0.5"/><circle cx="70.7" cy="67.4" r="1.5" fill="#DDE2EC"/><circle cx="24.6" cy="59.2" r="1.5" fill="#DDE2EC"/><circle cx="54.7" cy="23.4" r="1.5" fill="#DDE2EC"/></g>
-              <g class="orbit-ring orbit-ring--2"><circle cx="50" cy="50" r="38" stroke="currentColor" stroke-width="0.5"/><circle cx="86.3" cy="61.2" r="1.5" fill="#DDE2EC"/><circle cx="38.8" cy="86.3" r="1.5" fill="#DDE2EC"/><circle cx="13.7" cy="38.8" r="1.5" fill="#DDE2EC"/><circle cx="61.2" cy="13.7" r="1.5" fill="#DDE2EC"/></g>
-              <circle cx="50" cy="50" r="3.2" fill="#F2D28B"/>
-              <circle cx="50" cy="50" r="6.5" stroke="#F2D28B" stroke-width="0.5" opacity="0.5"/>
-            </svg>
-          </span>
+          <span class="launch-mark" id="miniGalaxy" aria-hidden="true"></span>
           <span class="orbit-label">Press here to start the trip<span class="gname-arrow" aria-hidden="true">&rarr;</span></span>
         </a>
       </div>
     </div>
+
+    </div><!-- /.sheet -->
   </div>
 
   <script src="js/galaxy/galaxy.js"></script>

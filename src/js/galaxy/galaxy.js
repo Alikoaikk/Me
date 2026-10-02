@@ -550,26 +550,31 @@
 
        Going sparser still starts to read as an overcast night before
        the burst has fired, which undersells the hero. */
-    vec3 starLayer(vec2 uv, float density, float bright, float seed) {
+    vec3 starLayer(vec2 uv, float density, float bright, float seed, float amp) {
       vec2 g = uv * density;
       vec2 id = floor(g);
       vec2 f = fract(g) - 0.5;
       vec3 h = hash33(vec3(id, seed));
       if (h.z < 0.72) return vec3(0.0);
 
-      /* Per-star drift. Each star gets its own phase and its own pair
-         of frequencies from the hash, so the field never moves as a
-         sheet — which is what made the parallax read as a texture
-         sliding rather than as sky. The amplitude is a fraction of a
-         cell (0.10 of 0.38) so a star wanders within its own cell and
-         can never cross into a neighbour's, keeping the jittered grid
-         evenly spread. */
-      float ph = h.x * 6.2831853;
-      vec2 wob = vec2(
-        sin(uSkyTime * (0.09 + h.y * 0.11) + ph),
-        cos(uSkyTime * (0.07 + h.x * 0.10) + ph * 1.37)) * 0.10;
+      /* THE FLOAT. Each star wanders on its own slow loop: its own
+         phase and its own pair of periods (15–40 s, from the hash), so
+         the field never moves as a sheet and never repeats in step.
+         amp is in cells, so the same fraction is more pixels on the
+         near (coarse) layer than on the far one — depth for free.
 
-      vec2 off = h.xy * 0.38 + wob;
+         A star must stay inside its own cell, glow included, or it is
+         cut at the boundary and pops: home is at most 0.26 from the
+         centre, the wander at most 0.15, and the core is below 2 % by
+         0.087 — 0.41 + 0.087 < 0.5. Raise one, lower another.
+         uSkyTime is 0 under reduced motion: no float, no twinkle. */
+      float ph = h.x * 6.2831853;
+      vec2 fq = 0.157 + 0.262 * fract(h.yx * vec2(33.7, 71.3));
+      vec2 wob = vec2(
+        sin(uSkyTime * fq.x + ph),
+        cos(uSkyTime * fq.y + ph * 1.37)) * amp;
+
+      vec2 off = h.xy * 0.26 + wob;
       float d = length(f - off);
       float mag = fract(h.z * 91.7);
       float lum = pow(mag, 3.2) * bright;
@@ -598,9 +603,10 @@
       vec3 col = texelFetch(uBase, ivec2(gl_FragCoord.xy), 0).rgb;
 
       // Depth layers: nearer layers parallax further.
-      col += starLayer(p + uParallax * 0.30, 20.0, 1.00, 1.0);
-      col += starLayer(p + uParallax * 0.62, 42.0, 0.60, 2.0);
-      col += starLayer(p + uParallax * 1.00, 86.0, 0.32, 3.0);
+      // Last argument: the float, in cells (≈ 4 / 3 / 1.5 css px at 840 high).
+      col += starLayer(p + uParallax * 0.30, 20.0, 1.00, 1.0, 0.10);
+      col += starLayer(p + uParallax * 0.62, 42.0, 0.60, 2.0, 0.14);
+      col += starLayer(p + uParallax * 1.00, 86.0, 0.32, 3.0, 0.15);
 
       frag = vec4(col, 1.0);
     }`);
@@ -771,9 +777,30 @@
     uniform float uBurst;     // 0..1, the disc flies apart
     uniform float uRelease;   // 0..1, the written name lets go into the sky
     uniform float uNameShift; // NDC y: the name scrolls up with the page (profile below it)
+    /* THE FLOW (galaxy.html; uFlow is 0 on system.html) — see the JS
+       block of the same name. The name's stars leave their letters
+       for a river glued to the page, then gather into a mini galaxy. */
+    uniform float uFlow;      // 1: the flow is on
+    uniform vec2  uView;      // the viewport, CSS px
+    uniform float uScroll;    // scrollY, CSS px: the river is in DOCUMENT space
+    uniform sampler2D uPath;  // the river's centreline, a texel a sample: x, y, tangent (document px)
+    uniform vec4  uPathInfo;  // px of arc between samples; samples; the arc at the galaxy's centre
+                              // (the river's end); px of arc over which a star takes its place in the disc
+    uniform vec4  uWin;       // the stretch of river the stars are on: its start (px of arc), its length;
+                              // turns of the conveyor so far (time); the share that never gathers
+    uniform vec2  uStream;    // the stream's half width and its meander, px
+    uniform vec3  uBand;      // the river's first stretch, along the name: x0, y (document px), length
+    uniform float uRel;       // 0..1: the letters let go (scroll, eased)
+    uniform float uGather;    // 0..1: the page's end, everything gathers
+    uniform vec3  uGal;       // the mini galaxy: centre (NDC) and radius (NDC y)
+    uniform vec2  uMiniTilt;  // cos, sin of its tilt
+    uniform float uSpin;      // its rotation, radians
+    uniform float uFlowTime;  // seconds, for the meander (0 under reduced motion)
+    uniform vec3  uPtr;       // the pointer (NDC) and its energy
     uniform float uHalf;      // -1 behind the disc plane, +1 in front, 0 all
     uniform float uMigrate;   // 1: live star, joins the burst; 0: field star, dissolves
     uniform float uPattern;   // rigid rotation, applied here for the field only
+    uniform float uFloatTime; // seconds: the settled sky stars' slow wander
     out vec3  vColor;
     out float vAlpha;
     out float vBright;
@@ -917,6 +944,20 @@
       float bow = sin(m * 3.14159) * (h3 - 0.5) * mix(0.10, 0.02, fillW);
       vec2 ndc = mix(gNdc, dest, m) + perp * bow;
 
+      /* THE FLOAT. A star that has joined the sky wanders round its
+         home on its own slow loop (15–40 s, own phase per axis), a few
+         pixels wide — more for the larger, nearer-looking ones (h2 is
+         also their size). Weighted by scatter, so nothing floats while
+         it is still part of the galaxy, and by 1 − fillW, so the
+         letters stay crisp. The field never gets here: its scatter is
+         0 and it has dissolved by burst 0.55. uFloatTime is 0 under
+         reduced motion. */
+      vec2 ffq = 0.157 + 0.262 * vec2(h3, fract(h * 17.31));
+      vec2 fl = vec2(sin(uFloatTime * ffq.x + h * 6.2831853),
+                     cos(uFloatTime * ffq.y + h2 * 6.2831853));
+      fl *= (0.0036 + 0.0074 * h2) * scatter * (1.0 - fillW);
+      ndc += vec2(fl.x / uAspect, fl.y);
+
       gl_Position = vec4(ndc, 0.0, 1.0);
 
       vColor = aTint.rgb;
@@ -992,6 +1033,126 @@
          the settled sky uses for the same reason: a tight core on a
          ~1.5px point falls between the pixels and renders dark. */
       vSettled = uMigrate > 0.5 ? scatter : 0.7;
+
+      /* ── THE FLOW (galaxy.html) ──
+         The page opens on the written name (burst pinned at 1), so
+         everything above has put a fill star in its letter and a sky
+         star at its sky home. From there a fill star is in one of
+         three places, blended:
+
+           NAME    its letter (home), scrolling up with the page;
+           RIVER   on the river: a centreline glued to the DOCUMENT
+                   (uPath — out along the name, down the margin, across
+                   between the sections, in to the galaxy; the JS block
+                   THE FLOW builds it and cuts the same shape out of
+                   the profile's sheet, so the star is seen THROUGH the
+                   page, in the sky behind it);
+           GALAXY  its own place in the disc (aPos — the very positions
+                   the big galaxy was drawn from, so the arms, bulge
+                   and colours are the same), small, turned by uSpin.
+
+         THE CONVEYOR. On the river a star has a place along the arc,
+         sig, that moves on its own with TIME (uWin.z, each star at its
+         own pace) and with nothing else: scrolling does not move a
+         star along the river — the river scrolls with the page. Only
+         uWin.y px of river are populated, the stretch around the
+         window, and the star's place is taken modulo that stretch
+         from its start (uWin.x): one that falls out of one end comes
+         back in at the other. Both ends are off-screen, and a star is
+         faded out at the seam, so the one place the seam can be seen —
+         the river's spring, at the name — is a fade-in.
+
+         uRel carries a star from its letter onto the river: it joins
+         where the river passes its letter (the first stretch runs
+         along the name) and runs along it to its place. uGather, at
+         the page's end, runs it on to the river's end, the galaxy's
+         centre, where it takes its place in the disc. A share
+         (uWin.w) never gathers: the river keeps running into the
+         galaxy, and those melt into the disc as they arrive. */
+      if (uFlow > 0.5 && uMigrate > 0.5) {
+        if (fill) {
+          float Lw = uWin.y;
+          float sig = fract(h + uWin.z * (0.75 + 0.50 * h2)) * Lw;
+          float sRaw = uWin.x + mod(sig - uWin.x, Lw);
+          float seamU = (sRaw - uWin.x) / Lw;
+          float seam = smoothstep(0.0, 0.035, seamU) * (1.0 - smoothstep(0.965, 1.0, seamU));
+          float sEnd = uPathInfo.z;
+          float tr = step(fract(h * 61.37 + h3 * 17.11), uWin.w);    // 1: never gathers
+          float gat = (1.0 - tr) * smoothstep(h3 * 0.55, h3 * 0.55 + 0.45, uGather);
+          float sT = mix(min(sRaw, sEnd), sEnd, gat);
+
+          // From its letter: where the river passes it, and how far
+          // below the river's line it sits there.
+          float relI = smoothstep(h3 * 0.55, h3 * 0.55 + 0.45, uRel);
+          vec2 homePx = vec2((home.x * 0.5 + 0.5) * uView.x,
+                             (0.5 - home.y * 0.5) * uView.y + uScroll);
+          float sJoin = clamp(homePx.x - uBand.x, 0.0, uBand.z);
+          float s = mix(sJoin, sT, relI);
+
+          // The centreline there.
+          float pf = clamp(s / uPathInfo.x, 0.0, uPathInfo.y - 1.001);
+          int ix = int(pf);
+          vec4 pp = mix(texelFetch(uPath, ivec2(ix, 0), 0),
+                        texelFetch(uPath, ivec2(ix + 1, 0), 0), pf - float(ix));
+          vec2 tg = normalize(pp.zw + vec2(1e-6, 0.0));
+          vec2 nrm = vec2(-tg.y, tg.x);
+
+          /* Across the stream: most stars near the middle, a few far
+             out; the whole thread meanders slowly inside its channel
+             (two waves travelling along the arc), and each star sways
+             a little on its own. */
+          float lj = aAttr.y * 2.0 - 1.0;
+          float lat = sign(lj) * pow(abs(lj), 3.0) * uStream.x
+                    + uStream.y * (sin(s * 0.0110 - uFlowTime * 0.45)
+                                 + 0.55 * sin(s * 0.0263 + uFlowTime * 0.28 + 1.7))
+                    + uStream.x * 0.10 * sin(uFlowTime * (0.17 + h * 0.19) + h3 * 6.2831853);
+          float latHome = homePx.y - uBand.y;
+          vec2 rp = pp.xy + nrm * mix(latHome, lat, smoothstep(0.0, 0.6, relI));
+          vec2 rNdc = vec2(rp.x / uView.x * 2.0 - 1.0, 1.0 - (rp.y - uScroll) / uView.y * 2.0);
+
+          float wR = smoothstep(0.0, 0.10, relI);
+          float wG = smoothstep(sEnd - uPathInfo.w, sEnd - 6.0, s);
+
+          // The disc, turned; a star still arriving is further out and
+          // behind its place, so it spirals in.
+          float arr = 1.0 - wG;
+          float an = uSpin - arr * 2.2;
+          float ca = cos(an), sa = sin(an);
+          vec2 dxy = vec2(aPos.x * ca - aPos.y * sa, aPos.x * sa + aPos.y * ca) * (1.0 + arr * 1.3);
+          vec2 gxy = vec2(dxy.x, dxy.y * uMiniTilt.x - aPos.z * uMiniTilt.y);
+          vec2 gal = uGal.xy + vec2(gxy.x / uAspect, gxy.y) * uGal.z;
+
+          vec2 p = mix(mix(home, rNdc, wR), gal, wG);
+          gl_Position = vec4(p, 0.0, 1.0);
+
+          float wRib = wR * (1.0 - wG), wName = (1.0 - wR) * (1.0 - wG);
+          /* Unseen at the conveyor's seam, unless gathered (then it is
+             in the disc for good); and one that never gathers melts
+             away as it reaches its place. */
+          float vis = mix(seam, 1.0, gat) * (1.0 - tr * wG);
+          float base = aAttr.z * (0.14 + pow(aLum, 0.85) * 0.52);
+          // A few leaders, larger and brighter, give the stream depth.
+          float lead = step(0.93, fract(h3 * 7.31 + h * 3.17));
+          float galSize = uPointScale * aTint.a * (0.62 + pow(aLum, 0.50) * 0.44) * 0.70;
+          gl_PointSize = wName * fillSize
+                       + wRib * uPointScale * (0.95 + h2 * 0.70 + lead * 0.55)
+                       + wG * galSize;
+          vAlpha = base * (wName * fillFloor + (wRib * (0.95 + lead * 0.90) + wG * 0.85) * vis);
+          vBright = smoothstep(2.2, 5.0, aLum) * (wName * 0.55 + wRib * 0.30 + wG * 0.30);
+          vSettled = 1.0 - wG * 0.45;
+        }
+        /* The pointer parts the stars — every live one, letter, river,
+           galaxy or sky. A push away from it in screen space, scaled by
+           how fast it is moving (uPtr.z), so a resting pointer leaves
+           the letters whole. */
+        if (uPtr.z > 0.001) {
+          vec2 pd = (gl_Position.xy - uPtr.xy) * vec2(uAspect, 1.0);
+          float pl = length(pd);
+          float q = 1.0 - clamp(pl / 0.20, 0.0, 1.0);
+          gl_Position.xy += (pd / max(pl, 1e-4)) / vec2(uAspect, 1.0)
+                          * (q * q * 0.055 * uPtr.z);
+        }
+      }
     }
   `, `
     precision highp float;
@@ -2056,12 +2217,12 @@
   window.addEventListener('resize', measureNameScreen, { passive: true });
   function stepNameShift(now) {
     if (leaving) {
-      const u = Math.min(1, (now - leaving.t0) / LEAVE_MS);
-      const e = 1 - Math.pow(1 - u, 3);
-      nameShiftPx = leaving.from * (1 - e);
+      // The press: the page fades (--leave) and that is all — the name
+      // is not on screen to glide anywhere, and nothing is released.
       const lv = Math.min(1, (now - leaving.t0) / LEAVE_FADE_MS);
       if (lv !== lastLeave) { lastLeave = lv; document.documentElement.style.setProperty('--leave', lv.toFixed(3)); }
-    } else nameShiftPx = sealed ? 0 : Math.max(0, window.scrollY - nameScreenY);
+    }
+    nameShiftPx = sealed ? 0 : Math.max(0, window.scrollY - nameScreenY);
     const q = Math.round(nameShiftPx * 2) / 2;
     if (q !== lastShift) {
       lastShift = q;
@@ -2111,6 +2272,380 @@
   }
   document.addEventListener('visibilitychange', wake);
 
+  /* ============================================================
+     THE FLOW — name → river → mini galaxy (galaxy.html)
+     ============================================================
+     The page opens ON the name: no approach, no burst (burst is
+     pinned at 1 from the first frame, see the end of this file). What
+     the scroll drives now is where the name's stars are:
+
+       top          the name, written; it scrolls up with the page;
+       scrolling    the letters let go and the stars run as a RIVER
+                    glued to the document — out to the right along the
+                    name, down the right margin beside About, across
+                    the gap to the left margin beside Career, back
+                    across the next gap to the right beside Stack: an
+                    S through the gaps, never over the text (where the
+                    margins are too narrow for it the runs are off the
+                    edge and only the crossings show);
+       the end      in #build the river turns in from the side and the
+                    stars take their places in a MINI GALAXY in the
+                    empty box above the launch link (#miniGalaxy): the
+                    same disc the site used to open on, small, turning.
+
+     THE STARS STAY IN THE SKY (user: "the stars should still stay in
+     the galaxy, so the background of the stars only should be open to
+     see the galaxy behind it"). The canvas is BEHIND the profile's
+     opaque sheet; measureFlow() cuts the river's shape out of the
+     sheet's background (a clip-path, --sheet-cut, and the same outline
+     stroked in #sheetEdge for the light and the shadow on its edge),
+     so the sky and the stars in it are seen through the page. The cut
+     is DOM: it scrolls with the page on the compositor, where a mask
+     drawn on this fixed canvas trailed the page by a frame.
+
+     THE STARS FLOW ON THEIR OWN (user: "the stars should automatically
+     … move, I don't mean while scrolling", then "remove the animation
+     of the stars while scrolling, keep the stars move alone"). The
+     river is ONE centreline, sampled by arc length into a texture
+     (uPath); a star's place on it is a conveyor driven by TIME alone,
+     FLOW_SPEED px a second — the star shader's THE FLOW block has the
+     details. Scrolling moves the river with the page and nothing
+     else, except at the two ends of the story: `rel` (the letters let
+     go) and `gather` (everything runs on into the galaxy) are
+     functions of the scroll, eased, so scrolling up plays them
+     backwards and the name re-forms.
+
+     NOTHING here runs per star on the CPU: this block measures the
+     page when its layout changes and hands the vertex shader a few
+     uniforms a frame. */
+  const FLOW = !SKY_ONLY;
+  const FLOW_REL_SPAN     = 0.40;  // screens of scroll over which the letters let go
+  const FLOW_GATHER_START = 0.66;  // screens before the page's end where the gathering starts
+  const FLOW_GATHER_SPAN  = 0.52;  // ... and how long it takes: done 0.14 screens before the end, so a
+                                   // #build deep link (70 px short of it, scroll-padding-top) is whole
+  const FLOW_SPEED        = 78;    // px of river a second a star travels on its own (each at 0.75–1.25× that)
+  const FLOW_PAD          = 0.35;  // screens: how far past the window's top and bottom the stars reach
+  const FLOW_TRICKLE      = 0.24;  // the share that never gathers: the river keeps running into the galaxy
+  const FLOW_EASE         = 9.0;   // per second, for rel / gather only
+  const FLOW_MARGIN_MIN   = 104;   // px: a narrower side margin has no room for the river — its runs go off-screen
+  const RIVER_W_MAX       = 88;    // px: the channel's width at most
+  const RIVER_UNIT        = 7;     // the texture unit the centreline keeps (the passes use 0–3)
+  const MINI_TILT = 0.50;          // radians; the big galaxy rested at 0.34
+  const MINI_SPIN = 0.070;         // rad/s — PATTERN_SPEED, about 90 s a turn
+  const MINI_FILL = 0.86;          // the disc's radius, as a share of its window's
+  const flow = {
+    ok: false, W: 1, H: 1,
+    n: 2, ds: 1, len: 1, cy: null,        // the centreline: samples, px of arc between them, its length, y per sample
+    Lw: 1, s0: 0, cyc: 0,                 // the conveyor: the populated stretch, where it starts, turns so far
+    ribW: 12, wob: 4,                     // the stream's half width and its meander, px
+    x0: 0, nameY: 0, bandLen: 1,          // the first stretch, along the name
+    galX: 0, galY: 1e9, galR: 0, basin: 1, maxScroll: 1,
+    sheetTop: 1e9, holes: null, seen: true, cut: null,
+    y: -1, rel: 0, gather: 0,
+    px: 0, py: 0, ptx: 0, pty: 0, pe: 0, pOn: false,
+  };
+  /* The centreline's texture: RGBA32F, one row, read with texelFetch
+     (so it needs no float-filtering extension). A two-texel stand-in
+     is uploaded at once, so the star program always has something on
+     its sampler — on system.html too, where there is no river. */
+  const pathTex = gl.createTexture();
+  function uploadPath(data, n) {
+    gl.activeTexture(gl.TEXTURE0 + RIVER_UNIT);
+    gl.bindTexture(gl.TEXTURE_2D, pathTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, n, 1, 0, gl.RGBA, gl.FLOAT, data);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.activeTexture(gl.TEXTURE0);
+  }
+  uploadPath(new Float32Array([0, 0, 1, 0, 1, 0, 1, 0]), 2);
+  /* The arc at which the river reaches document height y. Its y never
+     decreases along the arc, but a crossing is level — a whole stretch
+     at one height: `last` picks the far end of such a stretch (the
+     last sample at or above y), otherwise the near end. */
+  function riverAt(y, last) {
+    const a = flow.cy;
+    if (!a) return 0;
+    let lo = 0, hi = flow.n;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (last ? a[mid] <= y : a[mid] < y) lo = mid + 1; else hi = mid;
+    }
+    return Math.max(0, Math.min(flow.n - 1, last ? lo - 1 : lo)) * flow.ds;
+  }
+  /* The cut, written to the page: the clip-path of the sheet's ink and
+     the same outline for the edge's strokes. Only when it changed. */
+  function writeCut(sheetEl, d, w, h) {
+    const clip = d ? `path(evenodd, "M-400 -800H${Math.ceil(w) + 400}V${Math.ceil(h) + 800}H-400Z ${d}")` : '';
+    if (!sheetEl || clip === flow.cut) return;
+    flow.cut = clip;
+    if (clip) sheetEl.style.setProperty('--sheet-cut', clip);
+    else sheetEl.style.removeProperty('--sheet-cut');
+    const edge = document.getElementById('sheetEdge');
+    if (edge) for (const path of edge.querySelectorAll('path')) path.setAttribute('d', d);
+  }
+  function measureFlow() {
+    if (!FLOW) return;
+    const W = canvas.clientWidth || window.innerWidth;
+    const H = canvas.clientHeight || window.innerHeight;
+    const $ = id => document.getElementById(id);
+    const shown = el => !!el && el.offsetParent !== null;
+    /* Where the LAYOUT puts a box, in document px — not where it is
+       drawn: the sections' parts rise in on a translate (.pf-rise),
+       and the river is cut for where they come to rest. */
+    const at = el => {
+      let x = 0, y = 0;
+      for (let e = el; e; e = e.offsetParent) {
+        x += e.offsetLeft; y += e.offsetTop;
+        if (e.offsetParent) { x += e.offsetParent.clientLeft; y += e.offsetParent.clientTop; }
+      }
+      return { x, y, w: el.offsetWidth, h: el.offsetHeight };
+    };
+    const sheetEl = document.querySelector('.sheet');
+    const markEl = $('miniGalaxy');
+    flow.W = W; flow.H = H;
+    flow.ok = shown(sheetEl) && shown(markEl) && markEl.offsetWidth > 0;
+    if (!flow.ok) { writeCut(sheetEl, '', 0, 0); return; }
+
+    const sh = at(sheetEl), mk = at(markEl);
+    // A section's CONTENT box (its padding is the gap the river crosses).
+    const box = el => {
+      if (!shown(el)) return null;
+      const b = at(el), cs = getComputedStyle(el);
+      return { top: b.y + (parseFloat(cs.paddingTop) || 0),
+               bottom: b.y + b.h - (parseFloat(cs.paddingBottom) || 0),
+               left: b.x, right: b.x + b.w };
+    };
+    const secs = [box($('about')), box($('education')), box($('stack'))].filter(Boolean);
+    flow.sheetTop = sh.y;
+    flow.maxScroll = Math.max(1, document.documentElement.scrollHeight - H);
+    flow.nameY = NAME_CENTER_Y * H;
+    flow.galX = mk.x + mk.w / 2;
+    flow.galY = mk.y + mk.h / 2;
+    flow.basin = Math.min(mk.w, mk.h) / 2;       // the round window's radius
+    flow.galR = flow.basin * MINI_FILL;
+
+    /* ── The channel ── its width, the radius of its bends, and where
+       its two runs are: down the side margins when they have room for
+       it (a strip of sheet left on either side), off the screen
+       otherwise — then only the level crossings are seen. */
+    const ref = secs[0];
+    const mL = ref ? ref.left - sh.x : 0, mR = ref ? sh.x + sh.w - ref.right : 0;
+    const m = Math.min(mL, mR);
+    const inMargin = m >= FLOW_MARGIN_MIN;
+    let Wc = inMargin ? m - 2 * Math.max(24, m * 0.22) : W * 0.16;
+    Wc = Math.min(RIVER_W_MAX, Math.max(inMargin ? 48 : 56, Wc));
+    for (let k = 0; k + 1 < secs.length; k++)        // no wider than the gaps it crosses allow
+      Wc = Math.min(Wc, secs[k + 1].top - secs[k].bottom - 56);
+    Wc = Math.max(36, Wc);
+    const w = Wc / 2;
+    const R = w + Math.min(56, Math.max(24, Wc * 0.6));
+    const xR = inMargin ? ref.right + Math.min(mR / 2, 120) : sh.x + sh.w + w + R + 12;
+    const xL = inMargin ? ref.left - Math.min(mL / 2, 120) : sh.x - (w + R + 12);
+    flow.ribW = Math.max(6, (w - 5) * 0.56);
+    flow.wob = w * 0.16;
+
+    /* ── The centreline ── level and upright stretches, in document
+       px. It starts at the name's left edge and runs along the name's
+       own band (so every letter has the river passing through it),
+       turns down the right side, crosses in the middle of each gap
+       between two sections, alternating sides, and comes in level to
+       the galaxy's centre. */
+    const nameEl = document.querySelector('.gname-full');
+    const nr = nameEl ? nameEl.getBoundingClientRect() : null;
+    flow.x0 = Math.min(nr && nr.width > 0 ? nr.left : W * 0.25, xR - 4 * R);
+    const V = [[flow.x0, flow.nameY], [xR, flow.nameY]];
+    const crossings = [];
+    let x = xR;
+    for (let k = 0; k + 1 < secs.length; k++) {
+      const a = secs[k], b = secs[k + 1];
+      if (b.top - a.bottom < Wc + 40) continue;
+      const yc = (a.bottom + b.top) / 2, nx = x === xR ? xL : xR;
+      V.push([x, yc], [nx, yc]);
+      crossings.push(yc);
+      x = nx;
+    }
+    V.push([x, flow.galY], [flow.galX, flow.galY]);
+    // Rounded: every corner is a quarter turn of radius R (less where
+    // a stretch is too short for two of them).
+    const dense = [[V[0][0], V[0][1]]];
+    const push = (px, py) => {
+      const q = dense[dense.length - 1];
+      if (Math.hypot(px - q[0], py - q[1]) > 0.01) dense.push([px, py]);
+    };
+    let bandR = 0;
+    for (let i = 1; i < V.length - 1; i++) {
+      const p = V[i - 1], c = V[i], nx = V[i + 1];
+      const l1 = Math.hypot(c[0] - p[0], c[1] - p[1]), l2 = Math.hypot(nx[0] - c[0], nx[1] - c[1]);
+      const r = Math.min(R, l1 / 2, l2 / 2);
+      if (i === 1) bandR = r;
+      const d1x = (c[0] - p[0]) / l1, d1y = (c[1] - p[1]) / l1;
+      const d2x = (nx[0] - c[0]) / l2, d2y = (nx[1] - c[1]) / l2;
+      const steps = Math.max(6, Math.ceil(r * Math.PI / 2 / 3));
+      for (let k = 0; k <= steps; k++) {
+        const th = (k / steps) * Math.PI / 2, co = Math.cos(th), si = Math.sin(th);
+        push(c[0] - d1x * r + d2x * r * (1 - co) + d1x * r * si,
+             c[1] - d1y * r + d2y * r * (1 - co) + d1y * r * si);
+      }
+    }
+    push(V[V.length - 1][0], V[V.length - 1][1]);
+    flow.bandLen = Math.max(1, xR - flow.x0 - bandR);
+    // ... and sampled evenly along its arc: x, y, tangent.
+    const cum = new Float64Array(dense.length);
+    for (let i = 1; i < dense.length; i++)
+      cum[i] = cum[i - 1] + Math.hypot(dense[i][0] - dense[i - 1][0], dense[i][1] - dense[i - 1][1]);
+    const len = cum[dense.length - 1];
+    const n = Math.min(2048, Math.max(32, Math.ceil(len / 5) + 1));
+    const ds = len / (n - 1);
+    const data = new Float32Array(n * 4), cy = new Float32Array(n);
+    for (let i = 0, j = 0; i < n; i++) {
+      const sI = Math.min(len, i * ds);
+      while (j < dense.length - 2 && cum[j + 1] < sI) j++;
+      const seg = cum[j + 1] - cum[j], t = seg > 0 ? Math.min(1, (sI - cum[j]) / seg) : 0;
+      data[i * 4]     = dense[j][0] + (dense[j + 1][0] - dense[j][0]) * t;
+      data[i * 4 + 1] = cy[i] = dense[j][1] + (dense[j + 1][1] - dense[j][1]) * t;
+    }
+    for (let i = 0; i < n; i++) {
+      const a = Math.max(0, i - 1), b = Math.min(n - 1, i + 1);
+      const tx = data[b * 4] - data[a * 4], ty = data[b * 4 + 1] - data[a * 4 + 1], tl = Math.hypot(tx, ty) || 1;
+      data[i * 4 + 2] = tx / tl; data[i * 4 + 3] = ty / tl;
+    }
+    flow.n = n; flow.ds = ds; flow.len = len; flow.cy = cy;
+    uploadPath(data, n);
+
+    /* The populated stretch: long enough to cover, at any scroll
+       position, the river from FLOW_PAD above the window to FLOW_PAD
+       below it — so both of the conveyor's ends are always unseen. */
+    const pad = FLOW_PAD * H;
+    let Lw = 0;
+    for (let y = 0; y <= flow.maxScroll + 8; y += 8)
+      Lw = Math.max(Lw, riverAt(y + H + pad, true) - riverAt(y - pad, false));
+    flow.Lw = Math.max(200, Math.min(len, Lw + 2 * ds));
+
+    /* ── The cut ── the river's outline in the sheet's own px: from a
+       notch in the top edge (its lips rounded), the two walls a
+       half-width either side of the centreline, and at the end the
+       round window, the channel opening into it through two fillets.
+       Under reduced motion there is no river: the window alone. */
+    const pts = [];
+    const add = (px, py) => pts.push([px - sh.x, py - sh.y]);
+    const arc = (cx, cy0, r, a0, a1, put) => {
+      const k = Math.max(2, Math.ceil(Math.abs(a1 - a0) * r / 4));
+      for (let i = 0; i <= k; i++) {
+        const a = a0 + (a1 - a0) * i / k;
+        put(cx + r * Math.cos(a), cy0 + r * Math.sin(a));
+      }
+    };
+    const Rb = flow.basin, Cx = flow.galX, Cy = flow.galY;
+    if (reduceMotion) {
+      arc(Cx, Cy, Rb, 0, Math.PI * 2, add);
+    } else {
+      const top = sh.y, lip = Math.min(18, w * 0.6), xRun = V[1][0];
+      const fr = Math.min(18, w * 0.5);
+      const xi = Math.sqrt(Math.max(0, (Rb + fr) * (Rb + fr) - (w + fr) * (w + fr)));
+      let iA = 0;
+      while (iA < n - 1 && cy[iA] < top + lip) iA++;
+      const iB = Math.max(iA, Math.min(n - 1, Math.floor((len - xi) / ds)));
+      // The window's frame: back along the last stretch, and across it.
+      const fx = data[(n - 1) * 4 + 2], fy = data[(n - 1) * 4 + 3];
+      const loc = (u, v) => add(Cx - fx * u - fy * v, Cy - fy * u + fx * v);
+      // The +N side (N = (-ty, tx): the side nearer the text on the first run).
+      add(xRun - w - lip, top - 80); add(xRun - w - lip, top);
+      arc(xRun - w - lip, top + lip, lip, -Math.PI / 2, 0, add);
+      for (let i = iA; i <= iB; i++) add(data[i * 4] - data[i * 4 + 3] * w, data[i * 4 + 1] + data[i * 4 + 2] * w);
+      loc(xi, w);
+      arc(xi, w + fr, fr, -Math.PI / 2, Math.atan2(-(w + fr), -xi), loc);
+      const th = Math.atan2(w + fr, xi);
+      arc(0, 0, Rb, th, 2 * Math.PI - th, loc);
+      arc(xi, -(w + fr), fr, Math.atan2(w + fr, -xi), Math.PI / 2, loc);
+      loc(xi, -w);
+      // ... and back up the other side.
+      for (let i = iB; i >= iA; i--) add(data[i * 4] + data[i * 4 + 3] * w, data[i * 4 + 1] - data[i * 4 + 2] * w);
+      arc(xRun + w + lip, top + lip, lip, Math.PI, Math.PI * 1.5, add);
+      add(xRun + w + lip, top - 80);
+    }
+    // Drop the points a straight wall does not need.
+    const keep = [pts[0]];
+    for (let i = 1; i < pts.length - 1; i++) {
+      const a = keep[keep.length - 1], b = pts[i], c = pts[i + 1];
+      const span = Math.hypot(c[0] - a[0], c[1] - a[1]);
+      const off = Math.abs((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]));
+      if (span < 1e-6 || off / span > 0.03) keep.push(b);
+    }
+    keep.push(pts[pts.length - 1]);
+    writeCut(sheetEl, 'M' + keep.map(q => q[0].toFixed(1) + ' ' + q[1].toFixed(1)).join('L') + 'Z', sh.w, sh.h);
+
+    /* Where the sky can be seen through the sheet, as document heights
+       — null when it is everywhere (the runs are in the margins). With
+       none of them in the window, and the hero scrolled away, the
+       canvas is wholly behind the sheet and is not drawn (frame). */
+    flow.holes = inMargin && !reduceMotion ? null
+      : (reduceMotion ? [] : crossings.map(yc => [yc - w, yc + w])).concat([[Cy - Rb, Cy + Rb]]);
+  }
+  if (FLOW) {
+    let flowTick = false;
+    const remeasure = () => {
+      if (flowTick) return;
+      flowTick = true;
+      requestAnimationFrame(() => { flowTick = false; measureFlow(); });
+    };
+    window.addEventListener('resize', remeasure, { passive: true });
+    window.addEventListener('load', remeasure);
+    // profile.js fills the sections after this script has run, fonts
+    // arrive, the photo loads: the layout changes each time.
+    if ('ResizeObserver' in window) {
+      const ro = new ResizeObserver(remeasure);
+      for (const el of document.querySelectorAll('.sheet, .sheet > .pf-sec')) ro.observe(el);
+    }
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(remeasure).catch(() => {});
+    if (!reduceMotion) {
+      window.addEventListener('pointermove', e => {
+        if (e.pointerType && e.pointerType !== 'mouse') return;
+        const W = flow.W || 1, H = flow.H || 1;
+        flow.ptx = (e.clientX / W) * 2 - 1;
+        flow.pty = 1 - (e.clientY / H) * 2;
+        if (!flow.pOn) { flow.px = flow.ptx; flow.py = flow.pty; flow.pOn = true; }
+      }, { passive: true });
+    }
+  }
+  /* Once a frame: the eased stage values, the conveyor, the pointer's
+     energy, and whether any sky can be seen at all. */
+  function stepFlow(dt) {
+    if (!FLOW) return;
+    if (!flow.ok) measureFlow();
+    if (!flow.ok) return;
+    const y = window.scrollY, H = flow.H;
+    if (flow.y < 0 || Math.abs(y - flow.y) > 3 * H) flow.y = y;      // first frame, or a jump (a deep link)
+    else flow.y += (y - flow.y) * Math.min(1, dt * FLOW_EASE);
+    if (Math.abs(y - flow.y) < 0.4) flow.y = y;
+    if (reduceMotion) {
+      // No river: the name is the name until the galaxy's screen is
+      // near, then the stars are the galaxy. Both are off-screen at
+      // the switch.
+      flow.gather = flow.galY - y < 1.5 * H ? 1 : 0;
+      flow.rel = flow.gather;
+    } else {
+      flow.rel = Math.min(1, Math.max(0, flow.y / (FLOW_REL_SPAN * H)));
+      flow.gather = Math.min(1, Math.max(0,
+        (flow.y - (flow.maxScroll - FLOW_GATHER_START * H)) / (FLOW_GATHER_SPAN * H)));
+      flow.cyc += dt * FLOW_SPEED / flow.Lw;      // the conveyor turns on time alone
+    }
+    flow.s0 = riverAt(y - FLOW_PAD * H, false);
+    flow.seen = y < flow.sheetTop + 8 || !flow.holes ||
+                flow.holes.some(v => v[1] > y && v[0] < y + H);
+    // The pointer: energy from its speed, like the old cursor wake.
+    if (flow.pOn) {
+      const dx = flow.ptx - flow.px, dy = flow.pty - flow.py;
+      const sp = dt > 0 ? Math.hypot(dx, dy) / dt : 0;
+      flow.px = flow.ptx; flow.py = flow.pty;
+      const target = Math.min(1, sp / 1.4);
+      if (target > flow.pe) flow.pe += (target - flow.pe) * Math.min(1, dt * 10);
+      flow.pe -= flow.pe * Math.min(1, dt * 2.2);
+      if (flow.pe < 0.003) flow.pe = 0;
+    }
+  }
+
   /* ── Scroll stages ──
      The page tells one continuous story as it scrolls:
 
@@ -2145,6 +2680,11 @@
      smooth 0..1 values and never has to know about pixels. */
   function readScroll() {
     if (sealed) return;                 // frozen at the finished sky
+    /* galaxy.html no longer has an approach or a burst: the page opens
+       on the written name and the scroll drives THE FLOW instead
+       (stepFlow). system.html is sealed. So nothing below runs today;
+       it is the old approach → burst story, kept for reference. */
+    if (FLOW) return;
     const h = window.innerHeight || 1;
     const y = window.scrollY;
     scrollProgress = Math.min(1, Math.max(0, y / h));
@@ -2416,6 +2956,10 @@
     if (!sceneRT || bloomRT.length === 0) return;
     const rot = rotMatrix();
 
+    // THE FLOW, this frame: the river is in document space.
+    const flowOn = FLOW && flow.ok;
+    const scrollNow = flowOn ? window.scrollY : 0;
+
     /* 0. the sky's still part, once per canvas size */
     if (skyBaseDirty) {
       bindTarget(skyBaseRT);
@@ -2446,11 +2990,12 @@
 
        The drift term keeps the field alive when the pointer is
        still — two incommensurate periods (23s / 31s) so the motion
-       never visibly repeats. It is a third of the lean's amplitude:
-       enough to float, not enough to notice as movement. */
+       never visibly repeats. It was 0.010 (up to 8 px of the far
+       layer sliding as one sheet); each star now floats on its own
+       path in the shader, so the common part is only a breath, 0.003. */
     gl.uniform2f(skyProg.u.uParallax,
-      leanX * 0.030 + Math.sin(time * 0.2731) * 0.010,
-      leanY * 0.030 + Math.cos(time * 0.2026) * 0.010);
+      leanX * 0.030 + Math.sin(time * 0.2731) * 0.003,
+      leanY * 0.030 + Math.cos(time * 0.2026) * 0.003);
     gl.uniform1f(skyProg.u.uSkyTime, time);
     gl.bindVertexArray(quadVAO);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
@@ -2541,6 +3086,32 @@
     gl.uniform1f(starProg.u.uRelease, release);
     if (starProg.u.uNameShift) gl.uniform1f(starProg.u.uNameShift, 2 * nameShiftPx / Math.max(1, window.innerHeight));
     gl.uniform1f(starProg.u.uPattern, patternAngle);
+    {
+      const u = starProg.u;
+      gl.uniform1f(u.uFlow, flowOn ? 1 : 0);
+      // The river's centreline keeps a unit of its own.
+      gl.activeTexture(gl.TEXTURE0 + RIVER_UNIT);
+      gl.bindTexture(gl.TEXTURE_2D, pathTex);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.uniform1i(u.uPath, RIVER_UNIT);
+      if (flowOn) {
+        const W = flow.W, H = flow.H;
+        gl.uniform2f(u.uView, W, H);
+        gl.uniform1f(u.uScroll, scrollNow);
+        gl.uniform4f(u.uPathInfo, flow.ds, flow.n, flow.len, flow.basin * 0.95);
+        gl.uniform4f(u.uWin, flow.s0, flow.Lw, flow.cyc, reduceMotion ? 0 : FLOW_TRICKLE);
+        gl.uniform2f(u.uStream, flow.ribW, reduceMotion ? 0 : flow.wob);
+        gl.uniform3f(u.uBand, flow.x0, flow.nameY, flow.bandLen);
+        gl.uniform1f(u.uRel, flow.rel);
+        gl.uniform1f(u.uGather, flow.gather);
+        gl.uniform3f(u.uGal, (flow.galX / W) * 2 - 1, 1 - ((flow.galY - scrollNow) / H) * 2, flow.galR / (H / 2));
+        gl.uniform2f(u.uMiniTilt, Math.cos(MINI_TILT), Math.sin(MINI_TILT));
+        gl.uniform1f(u.uSpin, reduceMotion ? 0 : time * MINI_SPIN);
+        gl.uniform1f(u.uFlowTime, reduceMotion ? 0 : time);
+        gl.uniform3f(u.uPtr, flow.px, flow.py, flow.pe);
+      }
+    }
+    if (starProg.u.uFloatTime) gl.uniform1f(starProg.u.uFloatTime, time);
 
     const drawStars = half => {
       gl.useProgram(starProg.p);
@@ -2745,7 +3316,8 @@
 
     if (reduceMotion) {
       stepNameShift(performance.now());
-      draw(0);
+      stepFlow(dt);
+      if (!(FLOW && flow.ok && !flow.seen && !leaving)) draw(0);
       requestAnimationFrame(frame);
       return;
     }
@@ -2769,6 +3341,7 @@
     }
     // The release is the take-off, timed from the press.
     stepNameShift(performance.now());
+    stepFlow(dt);
     if (releaseClock !== null) {
       releaseClock += dt;
       releaseT = smooth01(Math.max(0, releaseClock) / config.RELEASE_TIME);
@@ -2810,11 +3383,17 @@
        clear sky meant the half rate almost never happened; a streak
        stepping twice as far per drawn frame still reads as a streak.
        Not drawing keeps the last frame on the canvas. */
-    const backdrop = burst >= 1 && swallowAmt === 0 &&
+    /* galaxy.html (THE FLOW) has no half rate: the river runs on its
+       own all the time. But what the canvas shows there is seen only
+       above the sheet and through its cut; when neither is in the
+       window (a narrow screen, between two crossings) the canvas is
+       wholly covered and nothing is drawn at all. */
+    const backdrop = !FLOW && burst >= 1 && swallowAmt === 0 &&
       Math.abs(skyNight - drawnNight) < 0.002 &&   // the ease never quite lands
       (launched ? release >= 0.999
                 : (!leaving && nameShiftPx > window.innerHeight * 0.75));
-    if (!(backdrop && (frameNo++ & 1))) {
+    const covered = FLOW && flow.ok && !flow.seen && !leaving;
+    if (!covered && !(backdrop && (frameNo++ & 1))) {
       draw(now / 1000);
       drawnNight = skyNight;
     }
@@ -2900,23 +3479,22 @@
   }
 
   /* ============================================================
-     LAUNCH — the orbit mark at the end of the profile
+     LAUNCH — the link under the mini galaxy
      ============================================================
-     The system lives on its own page (system.html) and the mark is a real
-     link to it. A plain click is taken here to play the take-off
-     first; anything else (a modified click, no WebGL2, no script) is
-     the link's own business and simply opens the page.
+     The system lives on its own page (system.html) and the launch
+     link is a real link to it. A plain click is taken here only to
+     fade the page first; anything else (a modified click, no WebGL2,
+     no script) is the link's own business and simply opens the page.
 
-       1. the page locks (.is-leaving) and the profile fades (--leave),
-          the mark with it — the button itself does NOTHING on the
-          press (the user had a take-off animation removed) — while
-          the name glides back down to the centre (LEAVE_MS);
-       2. the page is sealed once the profile is invisible, and the
-          letters let go (the release, RELEASE_TIME, RELEASE_AFTER in);
-       3. when they have gone the frame loop calls liftOff, which
-          follows the link. system.html opens on the warp.
+     The press: the page locks (.is-leaving) and the profile fades on
+     --leave over LEAVE_FADE_MS (stepNameShift writes it); the sheet
+     fades with it, so the sky comes back around the mini galaxy,
+     which stays as it is. Then the link is followed.
+     NOTHING of the link animates, and there is no name to release any
+     more (it is at the top of the page, not here) — the old glide /
+     seal / release take-off is gone.
 
-     Under reduced motion there is no take-off: straight to the page. */
+     Under reduced motion: straight to the page. */
   const launchBtn = document.getElementById('launchBtn');
   if (launchBtn && !SKY_ONLY) {
     const root = document.documentElement;
@@ -2929,44 +3507,34 @@
       if (reduceMotion) { go(); return; }
 
       root.classList.add('is-leaving');          // scroll locked; the profile fades on --leave
-      /* The leave: the profile fades (LEAVE_FADE_MS) while the name
-         glides back down to the centre (LEAVE_MS); the page is sealed
-         once the profile is invisible, so its scroll jump is unseen;
-         the letters let go RELEASE_AFTER seconds in, and the frame
-         loop calls liftOff once the release has played. */
-      /* The glide starts from just above the screen, not from where the
-         name really is: the profile is several screens long now, and
-         the name coming back from three screens up in LEAVE_MS was a
-         streak, not a glide. Both places are off-screen, so the cut
-         from one to the other is unseen. */
-      leaving = { t0: performance.now(), from: Math.min(nameShiftPx, window.innerHeight * 0.9) };
-      setTimeout(seal, LEAVE_FADE_MS + 20);
-      releaseClock = -RELEASE_AFTER;
-      onLiftOff = go;
+      leaving = { t0: performance.now() };
+      wake();
+      setTimeout(go, LEAVE_FADE_MS + 80);
     });
     /* Coming BACK to this page from the system (the back button) can
        restore it from the back-forward cache exactly as it was left:
-       sealed, the profile faded out, the name gone. Start over. */
+       locked, the profile faded out. Start over. */
     window.addEventListener('pageshow', e => { if (e.persisted && launched) window.location.reload(); });
   }
 
   /* ============================================================
-     ARRIVING AT A SECTION — galaxy.html#about
+     THE PAGE OPENS ON THE NAME — galaxy.html
      ============================================================
-     The top bar on the other pages (posts.html, activities.html)
-     links to this page's sections. Someone coming for "Education"
-     must not be made to fly the approach and wait for the burst
-     first, so with such a hash the page opens with the name already
-     written: burst done, the profile there. profile.js, which runs
-     after this and fills the sections, does the scrolling. As in
-     the sky-only state, simulate() runs once first so the settled
-     stars have positions. Scrolling back up from there still rewinds
-     the burst, as always. */
-  if (!SKY_ONLY && !reduceMotion && /^#(about|stack|education|build)$/.test(window.location.hash)) {
+     No approach and no burst: the first frame is the finished name
+     screen — burst done (and pinned: readScroll no longer moves it),
+     .is-written at once, so the profile below exists from the start.
+     simulate() runs ONCE first: frozen at burst 1 it would never fill
+     the position buffers, and those positions are both the settled
+     sky and the mini galaxy's disc. A section hash (galaxy.html#build)
+     needs nothing special any more: profile.js scrolls there and THE
+     FLOW is a function of the scroll. Reduced motion takes the same
+     path (its frame loop never simulates). */
+  if (FLOW) {
     simulate(0);
     burstFired = true; burstClock = config.BURST_DURATION; burst = 1;
     zoom = 1; zoomT = 1; rewindTarget = 1;
     document.documentElement.classList.add('is-written');
+    measureFlow();
   }
 
   /* ============================================================

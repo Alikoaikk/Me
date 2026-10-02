@@ -34,7 +34,12 @@ import * as THREE from 'three';
 
 const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
 const SANS = '"Space Grotesk", system-ui, sans-serif';
-const GOLD = '#F2D28B', BLUE = '#8FB4FF', TEXT = '#E6E9F2', MUTED = '#9AA3B8', GREEN = '#6EE7A0';
+// accent — keep in step with --accent / --accent-dim (css/style.css)
+const ACCENT = '#9CC4FF', BLUE = '#6F9CE8', ACCENT_PALE = '#DDEBFF';
+// Warm that belongs to a PROJECT (pasta and the 'eating' state, gilt on
+// the book spines, the record's equaliser) — not the site accent.
+const WARM = '#F2D28B';
+const TEXT = '#E6E9F2', MUTED = '#9AA3B8', GREEN = '#6EE7A0';
 
 /* ── Helpers ── */
 function rng(seed) {                       // mulberry32: deterministic textures
@@ -136,7 +141,7 @@ function pushSwap() {
   const N = VALS.length;
   const sorted = [...VALS].sort((a, b) => a - b);
   const H = 0.13, GAP = 0.035, STEP = H + GAP, XA = -0.56, XB = 0.56, BASE = -0.8, DEPTH = 0.34;
-  const cLo = new THREE.Color('#4F7BFF'), cHi = new THREE.Color('#F2D28B');
+  const cLo = new THREE.Color('#4F7BFF'), cHi = new THREE.Color(ACCENT_PALE);
   const slabs = sorted.map((v, rank) => {
     const w = 0.30 + 0.66 * (rank + 1) / N;
     const col = cLo.clone().lerp(cHi, rank / (N - 1));
@@ -166,7 +171,7 @@ function pushSwap() {
     [baseSide, baseSide, baseSide, baseSide, new THREE.MeshStandardMaterial({ map: baseTex, roughness: 0.6 }), new THREE.MeshStandardMaterial({ map: baseTex, roughness: 0.6 })]);
   base.position.y = BASE - 0.045;
   root.add(base);
-  const rim = new THREE.LineSegments(new THREE.EdgesGeometry(base.geometry), new THREE.LineBasicMaterial({ color: GOLD, transparent: true, opacity: 0.45 }));
+  const rim = new THREE.LineSegments(new THREE.EdgesGeometry(base.geometry), new THREE.LineBasicMaterial({ color: ACCENT, transparent: true, opacity: 0.45 }));
   rim.position.copy(base.position); root.add(rim);
   // The op readout above the stacks.
   const readout = board(512, 150, 0.46);
@@ -174,10 +179,10 @@ function pushSwap() {
   root.add(readout.sprite);
   function drawReadout(op, bit, count, note) {
     readout.draw((g, w, h) => {
-      pill(g, 4, 4, w - 8, h - 8, 22, 'rgba(10,13,22,0.78)', 'rgba(242,210,139,0.45)');
+      pill(g, 4, 4, w - 8, h - 8, 22, 'rgba(10,13,22,0.78)', 'rgba(156,196,255,0.45)');
       g.textBaseline = 'middle'; g.textAlign = 'left';
       g.font = `500 22px ${MONO}`; g.fillStyle = MUTED; g.fillText(note || `radix · bit ${bit}`, 30, 42);
-      g.font = `600 58px ${MONO}`; g.fillStyle = GOLD; g.fillText(op, 30, 100);
+      g.font = `600 58px ${MONO}`; g.fillStyle = ACCENT; g.fillText(op, 30, 100);
       g.textAlign = 'right'; g.font = `500 26px ${MONO}`; g.fillStyle = TEXT; g.fillText(`ops ${count}`, w - 30, 100);
     });
   }
@@ -406,7 +411,7 @@ function minishell() {
   // A slow ring of shell syntax around it.
   const ring = new THREE.Group(); ring.rotation.x = 0.32; ring.userData.deco = true; root.add(ring);
   const GL = ['$', '|', '>', '<<', '&&', '*', '$?', '>>', '~', '||'];
-  GL.forEach((g, i) => { const sp = glyph(g, i % 2 ? GOLD : GREEN, 0.2); const a = i / GL.length * Math.PI * 2; sp.position.set(Math.cos(a) * 1.28, 0, Math.sin(a) * 1.28); ring.add(sp); });
+  GL.forEach((g, i) => { const sp = glyph(g, i % 2 ? ACCENT : GREEN, 0.2); const a = i / GL.length * Math.PI * 2; sp.position.set(Math.cos(a) * 1.28, 0, Math.sin(a) * 1.28); ring.add(sp); });
 
   const SCRIPT = [
     ['cmd', 'echo "Hello, 42"'], ['out', 'Hello, 42'],
@@ -439,7 +444,7 @@ function minishell() {
       const put = (s, c) => { g.fillStyle = c; g.fillText(s, x, y); x += g.measureText(s).width; };
       if (kind === 'cmd') {
         put(PROMPT, GREEN);
-        let last = 0; text.replace(OPS, (m, _1, off) => { put(text.slice(last, off), TEXT); put(m, GOLD); last = off + m.length; return m; });
+        let last = 0; text.replace(OPS, (m, _1, off) => { put(text.slice(last, off), TEXT); put(m, ACCENT); last = off + m.length; return m; });
         put(text.slice(last), TEXT);
         if (live && cursor % 1 < 0.5) { g.fillStyle = TEXT; g.fillRect(x + 2, y - 11, 11, 22); }
       } else if (kind === 'hd') { put('> ', MUTED); put(text, '#c9cfdb'); }
@@ -506,7 +511,7 @@ function pipex() {
   for (const i of [2, 5]) {
     const n = new THREE.Mesh(new THREE.SphereGeometry(0.15, 32, 20), std('#1a2030', { m: 0.6, r: 0.22, e: '#0d1a33', ei: 1 }));
     n.position.copy(P[i]); root.add(n);
-    const r = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.012, 8, 48), new THREE.MeshBasicMaterial({ color: 0x8FB4FF }));
+    const r = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.012, 8, 48), new THREE.MeshBasicMaterial({ color: 0x6F9CE8 }));
     r.position.copy(P[i]); root.add(r); rings.push(r);
   }
   const tag = (text, pos, color) => { const b = board(256, 72, 0.16, g => { g.font = `600 40px ${MONO}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = color; g.shadowColor = 'rgba(0,0,0,0.9)'; g.shadowBlur = 8; g.fillText(text, 128, 38); }); b.sprite.position.copy(pos); root.add(b.sprite); };
@@ -514,7 +519,7 @@ function pipex() {
   tag('cmd1', P[2].clone().add(new THREE.Vector3(0, 0.3, 0)), BLUE);
   tag('cmd2', P[5].clone().add(new THREE.Vector3(0, -0.3, 0)), BLUE);
   tag('> outfile', P[7].clone().add(new THREE.Vector3(0.1, 0.34, 0)), TEXT);
-  tag('|', curve.getPointAt(0.5).add(new THREE.Vector3(0.14, 0.12, 0)), GOLD);
+  tag('|', curve.getPointAt(0.5).add(new THREE.Vector3(0.14, 0.12, 0)), ACCENT);
   let t = 0;
   function update(ctx) {
     t += ctx.dt;
@@ -581,9 +586,9 @@ function soLong() {
   counter.sprite.position.set(0, 0.62, 0); root.add(counter.sprite);
   function drawCounter(moves, got) {
     counter.draw((g, w, h) => {
-      pill(g, 3, 3, w - 6, h - 6, 18, 'rgba(10,13,22,0.8)', 'rgba(242,210,139,0.45)');
+      pill(g, 3, 3, w - 6, h - 6, 18, 'rgba(10,13,22,0.8)', 'rgba(156,196,255,0.45)');
       g.font = `500 30px ${MONO}`; g.textBaseline = 'middle'; g.fillStyle = TEXT; g.textAlign = 'left'; g.fillText(`moves ${moves}`, 22, h / 2 + 1);
-      g.textAlign = 'right'; g.fillStyle = GOLD; g.fillText(`✦ ${got}/${snitches.length}`, w - 22, h / 2 + 1);
+      g.textAlign = 'right'; g.fillStyle = ACCENT; g.fillText(`✦ ${got}/${snitches.length}`, w - 22, h / 2 + 1);
     });
   }
   // The route: collect every snitch (BFS between points), then the exit.
@@ -665,13 +670,13 @@ function philosophers() {
     const a = seatA(j) + Math.PI / N;
     return { g, a, owner: -1, rest: new THREE.Vector3(Math.cos(a) * 0.42, 0.04, Math.sin(a) * 0.42) };
   });
-  const COL = { think: new THREE.Color('#8FB4FF'), eat: new THREE.Color('#F2D28B'), sleep: new THREE.Color('#B48CFF') };
+  const COL = { think: new THREE.Color(BLUE), eat: new THREE.Color(WARM), sleep: new THREE.Color('#B48CFF') };
   const philos = [...Array(N)].map((_, i) => {
     const a = seatA(i), g = new THREE.Group();
-    const mat = std('#8FB4FF', { r: 0.5, e: '#8FB4FF', ei: 0.25 });
+    const mat = std(BLUE, { r: 0.5, e: BLUE, ei: 0.25 });
     const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.075, 0.14, 6, 14), mat); body.position.y = 0.02; g.add(body);
     const head = new THREE.Mesh(new THREE.SphereGeometry(0.065, 18, 14), mat); head.position.y = 0.2; g.add(head);
-    const halo = new THREE.Mesh(new THREE.TorusGeometry(0.1, 0.008, 6, 36), new THREE.MeshBasicMaterial({ color: 0x8FB4FF, transparent: true, opacity: 0.8 }));
+    const halo = new THREE.Mesh(new THREE.TorusGeometry(0.1, 0.008, 6, 36), new THREE.MeshBasicMaterial({ color: 0x6F9CE8, transparent: true, opacity: 0.8 }));
     halo.rotation.x = Math.PI / 2; halo.position.y = 0.32; g.add(halo);
     g.position.set(Math.cos(a) * 0.84, 0, Math.sin(a) * 0.84); root.add(g);
     return { i, a, g, mat, halo, head, state: 'think', until: 0.2 + i * 0.13 };
@@ -681,14 +686,14 @@ function philosophers() {
   const lines = [];
   function drawLog() {
     log.draw((g, w, h) => {
-      pill(g, 3, 3, w - 6, h - 6, 18, 'rgba(10,13,22,0.82)', 'rgba(143,180,255,0.45)');
+      pill(g, 3, 3, w - 6, h - 6, 18, 'rgba(10,13,22,0.82)', 'rgba(111,156,232,0.45)');
       g.font = `500 25px ${MONO}`; g.textBaseline = 'middle';
       lines.slice(-4).forEach((l, i) => { g.fillStyle = l.color; g.fillText(l.text, 20, 26 + i * 33); });
     });
   }
   let ms = 0;
   function say(p, what) {
-    lines.push({ text: `${String(Math.floor(ms)).padStart(5, ' ')} ${p.i + 1} ${what}`, color: what.includes('eat') ? GOLD : what.includes('sleep') ? '#C8A8FF' : what.includes('fork') ? MUTED : BLUE });
+    lines.push({ text: `${String(Math.floor(ms)).padStart(5, ' ')} ${p.i + 1} ${what}`, color: what.includes('eat') ? WARM : what.includes('sleep') ? '#C8A8FF' : what.includes('fork') ? MUTED : BLUE });
     if (lines.length > 8) lines.shift();
   }
   const EAT = 1.25, SLEEP = 1.0, THINK = 0.25;
@@ -738,13 +743,13 @@ function libft() {
   const root = new THREE.Group();
   const coreTex = canvasTex(256, 256, g => {
     g.fillStyle = '#12151f'; g.fillRect(0, 0, 256, 256);
-    g.strokeStyle = GOLD; g.lineWidth = 6; g.strokeRect(10, 10, 236, 236);
-    g.font = `600 46px ${MONO}`; g.fillStyle = GOLD; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('libft.a', 128, 110);
+    g.strokeStyle = ACCENT; g.lineWidth = 6; g.strokeRect(10, 10, 236, 236);
+    g.font = `600 46px ${MONO}`; g.fillStyle = ACCENT; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('libft.a', 128, 110);
     g.font = `500 22px ${MONO}`; g.fillStyle = MUTED; g.fillText('ar rcs', 128, 160);
   });
-  const core = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), new THREE.MeshStandardMaterial({ map: coreTex, roughness: 0.5, metalness: 0.3, emissive: 0x2a2310, emissiveIntensity: 0.6 }));
+  const core = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), new THREE.MeshStandardMaterial({ map: coreTex, roughness: 0.5, metalness: 0.3, emissive: 0x101a2a, emissiveIntensity: 0.6 }));
   root.add(core);
-  const coreEdge = new THREE.LineSegments(new THREE.EdgesGeometry(core.geometry), new THREE.LineBasicMaterial({ color: GOLD }));
+  const coreEdge = new THREE.LineSegments(new THREE.EdgesGeometry(core.geometry), new THREE.LineBasicMaterial({ color: ACCENT }));
   core.add(coreEdge);
   const NAMES = ['libft', 'ft_printf', 'get_next_line', 'ft_split', 'ft_strjoin', 'ft_memcpy', 'ft_itoa', 'ft_lstmap', 'ft_atoi'];
   const COLS = ['#7a2233', '#1f3a66', '#2d5a3a', '#8a6a1f', '#1f5c63', '#5a2d63', '#44505e', '#8a3f1f', '#3a3f7a'];
@@ -754,7 +759,7 @@ function libft() {
     const h = 0.52 + ((i * 37) % 5) * 0.03, th = 0.1 + ((i * 13) % 3) * 0.015;
     const spine = canvasTex(64, 320, g => {
       g.fillStyle = COLS[i]; g.fillRect(0, 0, 64, 320);
-      g.fillStyle = GOLD; g.fillRect(0, 18, 64, 4); g.fillRect(0, 298, 64, 4);
+      g.fillStyle = WARM; g.fillRect(0, 18, 64, 4); g.fillRect(0, 298, 64, 4);
       g.save(); g.translate(34, 160); g.rotate(-Math.PI / 2);
       g.font = `600 ${name.length > 10 ? 22 : 26}px ${MONO}`; g.fillStyle = '#f3e6c4'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(name, 0, 0);
       g.restore();
@@ -768,7 +773,7 @@ function libft() {
     m.rotation.z = ((i * 7) % 5 - 2) * 0.04;
     return { m, a, out: 0 };
   });
-  const linkMat = new THREE.LineBasicMaterial({ color: GOLD, transparent: true, opacity: 0 });
+  const linkMat = new THREE.LineBasicMaterial({ color: ACCENT, transparent: true, opacity: 0 });
   const link = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), linkMat);
   ring.add(link);
   let t = 0;
@@ -804,7 +809,7 @@ function cpp() {
       g.font = `500 20px ${MONO}`; g.fillStyle = '#C8A8FF'; g.fillText('class', 22, 24);
       g.font = `600 30px ${SANS}`; g.fillStyle = TEXT; g.fillText(name, 22, 50);
       g.font = `500 19px ${MONO}`; g.fillStyle = MUTED; if (sub) g.fillText(sub, 22, 92);
-      members.forEach((m, i) => { g.fillStyle = m[0] === '#' ? '#C8A8FF' : GOLD; g.fillText(m, 22, 126 + i * 30); });
+      members.forEach((m, i) => { g.fillStyle = m[0] === '#' ? '#C8A8FF' : ACCENT; g.fillText(m, 22, 126 + i * 30); });
     }).sprite;
   }
   const nodes = {
@@ -823,7 +828,7 @@ function cpp() {
     const tube = new THREE.Mesh(new THREE.TubeGeometry(new THREE.LineCurve3(A, B), 8, 0.011, 8, false), edgeMat); root.add(tube);
     const head = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.09, 16), edgeMat);
     head.position.copy(B); head.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir); root.add(head);
-    const pulse = new THREE.Mesh(new THREE.SphereGeometry(0.028, 12, 8), new THREE.MeshBasicMaterial({ color: 0xF2D28B })); root.add(pulse);
+    const pulse = new THREE.Mesh(new THREE.SphereGeometry(0.028, 12, 8), new THREE.MeshBasicMaterial({ color: 0x9CC4FF })); root.add(pulse);
     pulses.push({ pulse, A, B, off: i * 0.25 });
   });
   const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.26, 0), new THREE.MeshBasicMaterial({ color: 0xB48CFF, wireframe: true, transparent: true, opacity: 0.55 }));
@@ -875,12 +880,12 @@ function music() {
   // The equalizer ring.
   const NB = 44;
   const bars = new THREE.InstancedMesh(new THREE.BoxGeometry(0.045, 1, 0.045), new THREE.MeshBasicMaterial({ color: 0xffffff }), NB);
-  const cA = new THREE.Color('#FF7EB6'), cB = new THREE.Color('#F2D28B'), cC = new THREE.Color('#8FB4FF');
+  const cA = new THREE.Color('#FF7EB6'), cB = new THREE.Color(WARM), cC = new THREE.Color(BLUE);
   for (let i = 0; i < NB; i++) { const u = i / NB; bars.setColorAt(i, u < 0.5 ? cA.clone().lerp(cB, u * 2) : cB.clone().lerp(cC, (u - 0.5) * 2)); }
   deck.add(bars);
   const levels = new Float32Array(NB);
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), pos = new THREE.Vector3(), scl = new THREE.Vector3();
-  const notes = [...Array(5)].map((_, i) => { const sp = glyph(i % 2 ? '♫' : '♪', i % 2 ? GOLD : '#FF9CC6', 0.22, `600 80px ${SANS}`); deck.add(sp); return { sp, t: i * 0.7 }; });
+  const notes = [...Array(5)].map((_, i) => { const sp = glyph(i % 2 ? '♫' : '♪', i % 2 ? ACCENT : '#FF9CC6', 0.22, `600 80px ${SANS}`); deck.add(sp); return { sp, t: i * 0.7 }; });
   let t = 0;
   function update(ctx) {
     const dt = ctx.dt; t += dt;
@@ -912,7 +917,7 @@ function music() {
    ============================================================ */
 function generic(project) {
   const root = new THREE.Group();
-  const shell = new THREE.Mesh(new THREE.IcosahedronGeometry(0.8, 1), new THREE.MeshBasicMaterial({ color: 0x8FB4FF, wireframe: true, transparent: true, opacity: 0.5 }));
+  const shell = new THREE.Mesh(new THREE.IcosahedronGeometry(0.8, 1), new THREE.MeshBasicMaterial({ color: 0x6F9CE8, wireframe: true, transparent: true, opacity: 0.5 }));
   const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.45, 0), std('#2a3a66', { e: '#3a5aa0', ei: 0.8, flat: true, r: 0.3 }));
   root.add(shell, core);
   if (project.icon) { const s = glyph(project.icon, TEXT, 0.5, `64px ${SANS}`); root.add(s); }

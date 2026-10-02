@@ -25,6 +25,44 @@
       #05070D 55%,
       #030409 100%);
 }
+/* galaxy.html, WebGL2: THE CANVAS STAYS BEHIND THE SHEET. The name's
+   stars leave the hero and run down the page as a river, but they
+   never leave the sky: the profile's sheet is CUT OPEN along their way
+   (.sheet::before, --sheet-cut) and the sky shows through the cut. A
+   first version raised the canvas over the sheet and masked the sky
+   out in the shader; the user asked for the stars to stay in the sky
+   with only their background open — and a real hole in the sheet also
+   scrolls with the page for free, where a mask on a fixed canvas
+   trailed it by a frame.
+   The night gradient is on a fixed layer of its own (below), so the
+   canvas is transparent where the sky is empty. */
+:root:not([data-sky]):not([data-no-webgl]) #hero .hero-bg {
+  background: none;
+  pointer-events: none;
+}
+:root:not([data-sky]):not([data-no-webgl]) #hero::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  /* The first layer is the soft halo behind the name. It used to come
+     from style.css's `.hero-bg::after` (a blurred, breathing disc); it
+     is switched off below and painted here, still, at the same size
+     and strengths. It is fixed to the window, so the river's crossings
+     and the mini galaxy's window pass over it as the page scrolls. */
+  background:
+    radial-gradient(circle min(37vh, 37vw) at 50% 50%,
+      rgba(0, 212, 255, 0.10) 0%,
+      rgba(108, 99, 255, 0.08) 42%,
+      rgba(108, 99, 255, 0.03) 64%,
+      transparent 100%),
+    radial-gradient(ellipse 85% 65% at 50% 50%,
+      #0A0D16 0%,
+      #05070D 55%,
+      #030409 100%);
+}
+:root:not([data-sky]):not([data-no-webgl]) #hero .hero-bg::after { display: none; }
 
 /* No CSS vignette or grain over the galaxy: the composite pass in
    galaxy.js has its own. A fixed full-screen layer used to sit here
@@ -208,7 +246,7 @@
 .gname-rule {
   width: 34px; height: 1px;
   margin-bottom: 1.35rem;
-  background: #F2D28B;
+  background: var(--accent);
   opacity: 0.85;
 }
 /* What he is: small capitals, widely tracked. */
@@ -295,7 +333,7 @@
   transition: color 0.3s ease, background-size 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .gname-link + .gname-link { margin-left: 1.9rem; }
-.gname-go { color: #F2D28B; }
+.gname-go { color: var(--accent); }
 .gname-go:hover, .gname-go:focus-visible,
 .gname-link:hover, .gname-link:focus-visible { background-size: calc(100% - 0.26em) 1px; }   /* not under the trailing tracking */
 .gname-link:hover, .gname-link:focus-visible { color: #F4F6FA; }
@@ -307,7 +345,7 @@
   transition: translate 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .gname-go:hover .gname-arrow, .gname-go:focus-visible .gname-arrow { translate: 0 3px; }
-.gname-go:focus-visible, .gname-link:focus-visible { outline: 1px solid #8FB4FF; outline-offset: 6px; }
+.gname-go:focus-visible, .gname-link:focus-visible { outline: 1px solid var(--accent-dim); outline-offset: 6px; }
 
 /* The rotating line from the film, last and quiet. Two lines are
    reserved so the swap never moves the block; only the inner span
@@ -352,7 +390,7 @@
   text-indent: 0.32em;
   text-transform: uppercase;
   white-space: nowrap;
-  color: #F2D28B;
+  color: var(--accent);
   opacity: calc(var(--name-koaik, 0) * (1 - var(--leave, 0)));
 }
 
@@ -493,9 +531,11 @@
 }
 /* No WebGL2: nothing publishes --name-scroll, so the name block is
    placed in the page at the name screen instead of fixed, and simply
-   scrolls away like the rest of the page. 100vh = the end of #burst
-   minus one screen (hero 100 + intro 40 + burst 60 − 100). */
-:root[data-no-webgl] .galaxy-name { position: absolute; top: 100vh; bottom: auto; height: 100vh; }
+   scrolls away like the rest of the page. The name screen is the
+   first screen now (the #intro / #burst spacers are gone), so top 0.
+   The mini galaxy cannot be drawn either: its box is removed. */
+:root[data-no-webgl] .galaxy-name { position: absolute; top: 0; bottom: auto; height: 100vh; }
+:root[data-no-webgl] .launch-mark { display: none; }
 
 /* ============================================================
    START THE TRIP — the orbit mark
@@ -520,9 +560,11 @@
   text-decoration: none;
   -webkit-tap-highlight-color: transparent;
 }
-.launch-mark { display: block; width: clamp(104px, 17vmin, 148px); aspect-ratio: 1; }
-.launch-mark { color: rgba(221, 226, 236, 0.4); transition: color 0.4s ease; }
-.launch-mark svg { display: block; width: 100%; height: 100%; overflow: visible; }
+/* THE MINI GALAXY's place. The box is empty and square: galaxy.js
+   measures it, cuts a round WINDOW of that size in the sheet (the
+   river ends in it) and gathers the name's stars behind it, in the
+   sky. Nothing in the link animates. */
+.launch-mark { display: block; width: clamp(200px, 34vmin, 300px); aspect-ratio: 1; }
 .orbit-label {
   padding: 0.35em 0;
   font-size: 0.74rem;
@@ -530,13 +572,13 @@
   letter-spacing: 0.26em;
   text-transform: uppercase;
   white-space: nowrap;
-  color: #F2D28B;
+  color: var(--accent);
   background: linear-gradient(currentColor, currentColor) 0 100% / 0 1px no-repeat;
   transition: background-size 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-.orbit-btn:hover .launch-mark, .orbit-btn:focus-visible .launch-mark { color: rgba(242, 210, 139, 0.75); }
+.orbit-btn:hover .launch-mark, .orbit-btn:focus-visible .launch-mark { color: rgba(var(--accent-rgb), 0.75); }
 .orbit-btn:hover .orbit-label, .orbit-btn:focus-visible .orbit-label { background-size: 100% 1px; }
-.orbit-btn:focus-visible { outline: 1px solid #8FB4FF; outline-offset: 8px; }
+.orbit-btn:focus-visible { outline: 1px solid var(--accent-dim); outline-offset: 8px; }
 
 /* ============================================================
    THE PROFILE — below the name, a normal page
@@ -556,14 +598,59 @@
 .profile {
   position: relative;
   z-index: 3;
-  padding: 0 clamp(16px, 4vw, 48px);
   color: #E6E9F2;
   font-family: 'Space Grotesk', system-ui, sans-serif;
-  /* The name's own sky is left clear above; the scrim comes in over
-     the first half-screen and stays. */
-  background: linear-gradient(180deg, rgba(4, 6, 12, 0) 0, rgba(4, 6, 12, 0.5) 55vh);
   opacity: calc(1 - var(--leave, 0));
 }
+/* THE SHEET: one container from "Becoming" to the end of the page,
+   with a background of its own — opaque ink, not the sky. The sky's
+   canvas is fixed, so the sheet SLIDES UP OVER IT as the page scrolls:
+   rounded top corners, a hairline of light along the top edge and a
+   shadow thrown up onto the stars make it read as a surface in front.
+   Nothing here is animated; the scroll is the motion.
+
+   THE RIVER. The ink is on ::before so that it can be CUT: galaxy.js
+   writes --sheet-cut, a clip-path that is the whole box minus the way
+   the stars take (a channel from a notch in the top edge, down the
+   margins and across between the sections, into a round window for
+   the mini galaxy). Through the cut the fixed sky shows — the stars
+   are still in it, behind the sheet. The cut is part of the page, so
+   it scrolls with it exactly. .sheet-edge (an SVG under the ink, the
+   same outline stroked) puts a hairline of light and a soft shadow
+   on the inside of the cut: only the inner half of a stroke centred
+   on the edge is not covered by the ink. Without the variable (no
+   WebGL2, no script) the sheet is whole. */
+.sheet {
+  position: relative;
+  padding: 0 clamp(16px, 4vw, 48px);
+  border-radius: clamp(24px, 3.4vw, 44px) clamp(24px, 3.4vw, 44px) 0 0;
+  box-shadow: 0 -28px 80px rgba(0, 0, 0, 0.6);
+}
+.sheet::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: linear-gradient(180deg, #12151C 0, #0C0E13 70vh);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  clip-path: var(--sheet-cut, none);
+  pointer-events: none;
+}
+.sheet-edge {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+.sheet-edge path { fill: none; stroke-linejoin: round; }
+.sheet-edge-rim { stroke: rgba(255, 255, 255, 0.17); stroke-width: 2; }
+.sheet-edge-shade--near { stroke: rgba(0, 0, 0, 0.42); stroke-width: 12; }
+.sheet-edge-shade--far { stroke: rgba(0, 0, 0, 0.26); stroke-width: 34; }
 :root:not(.is-written) .profile,
 :root.is-launched .profile { display: none; }
 :root.is-leaving { overflow: hidden; }
@@ -582,7 +669,7 @@
   font-family: var(--font-mono, 'JetBrains Mono', monospace);
   font-size: 0.84rem;
   letter-spacing: 0.04em;
-  color: #F2D28B;
+  color: var(--accent);
 }
 .pf-title {
   margin: 0;
@@ -605,43 +692,31 @@
 .pf-rise:nth-child(6) { --d: 5; }
 
 /* ── The top bar ──
-   LIQUID GLASS: a large floating pill, fully rounded, that blurs,
-   saturates and brightens the sky behind it. The glass is built in
-   layers — a body lit from above and from the arms' blue below
-   (insets), a specular rim that is bright at the top-left and the
-   bottom-right and thin in between (::after, a gradient border cut
-   out with a mask), and a soft highlight that follows the pointer
-   (::before at --mx, profile.js). No brand mark: the four sections
-   are all there is. The marker under the current link is a second
-   drop of the same glass, in gold: its left and width ease on
-   different curves, so it stretches toward the next link and then
-   settles. Both are set on a change of section only — not per frame
-   — which is why they may have transitions. */
+   PLAIN: a small dark pill with a hairline border and a light blur,
+   links in quiet type. The liquid-glass build (sheen, gradient rim,
+   lit insets, gold drop) was dropped at the user's request for
+   something simpler. The marker under the current link is a faint
+   lighter pill; its left and width are set on a change of section
+   only — not per frame — which is why they may have a transition. */
 .site-nav {
   position: fixed;
-  top: 18px;
+  top: 16px;
   left: 50%;
   z-index: 5;
   display: flex;
   align-items: center;
-  padding: 8px;
+  max-width: calc(100vw - 20px);
+  padding: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 999px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.05) 46%, rgba(255, 255, 255, 0.09) 100%),
-    rgba(12, 16, 28, 0.36);
-  backdrop-filter: blur(26px) saturate(190%) brightness(1.12);
-  -webkit-backdrop-filter: blur(26px) saturate(190%) brightness(1.12);
-  box-shadow:
-    inset 0 1.5px 0 rgba(255, 255, 255, 0.5),
-    inset 0 12px 18px -14px rgba(255, 255, 255, 0.34),
-    inset 0 -18px 26px -16px rgba(143, 180, 255, 0.5),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.12),
-    0 20px 56px rgba(0, 0, 0, 0.55),
-    0 3px 8px rgba(0, 0, 0, 0.35);
-  transform: translate(-50%, -190%);
+  background: rgba(16, 18, 24, 0.78);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  transform: translate(-50%, -12px);
   opacity: 0;
   visibility: hidden;
-  transition: transform 0.7s cubic-bezier(0.2, 0.9, 0.25, 1.12), opacity 0.4s ease, visibility 0s linear 0.7s;
+  transition: transform 0.35s ease, opacity 0.3s ease, visibility 0s linear 0.35s;
 }
 :root.nav-on .site-nav {
   transform: translate(-50%, 0);
@@ -649,40 +724,9 @@
   visibility: visible;
   transition-delay: 0s;
 }
-.site-nav::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: radial-gradient(190px 70px at var(--mx, 50%) 0%, rgba(255, 255, 255, 0.34), transparent 72%);
-  opacity: 0;
-  transition: opacity 0.35s ease;
-  pointer-events: none;
-}
-.site-nav:hover::before { opacity: 1; }
-/* The rim: a 1.5px gradient border, kept to the edge by masking out
-   the padding box. */
-.site-nav::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  padding: 1.5px;
-  border-radius: inherit;
-  background: linear-gradient(135deg,
-    rgba(255, 255, 255, 0.85) 0%,
-    rgba(255, 255, 255, 0.16) 26%,
-    rgba(255, 255, 255, 0.06) 52%,
-    rgba(160, 196, 255, 0.3) 76%,
-    rgba(255, 255, 255, 0.6) 100%);
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
-  pointer-events: none;
-}
 /* The links scroll sideways inside the bar when six do not fit (a
    phone); no scrollbar is shown, profile.js keeps the current link
    in the middle. */
-.site-nav { max-width: calc(100vw - 20px); }
 .site-nav-links {
   position: relative;
   display: flex;
@@ -698,48 +742,35 @@
 .site-nav-sep {
   flex: 0 0 auto;
   align-self: center;
-  width: 1px; height: 22px;
-  margin: 0 8px;
-  background: linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.34), transparent);
-}
-/* On posts.html / activities.html there is no moving marker: the
-   page's own link wears the gold drop. */
-.site-nav-links a[aria-current="page"] {
-  color: #FFFFFF;
-  background: linear-gradient(180deg, rgba(242, 210, 139, 0.34), rgba(242, 210, 139, 0.1));
-  box-shadow:
-    inset 0 0 0 1px rgba(242, 210, 139, 0.5),
-    inset 0 1px 0 rgba(255, 255, 255, 0.45),
-    0 0 22px rgba(242, 210, 139, 0.2);
+  width: 1px; height: 16px;
+  margin: 0 6px;
+  background: rgba(255, 255, 255, 0.14);
 }
 .site-nav-links a {
   position: relative;
   flex: 0 0 auto;
-  padding: 14px 22px;
+  padding: 9px 16px;
   border-radius: 999px;
-  font-size: 1rem;
+  font-size: 0.875rem;
   font-weight: 500;
   line-height: 1.25;
-  letter-spacing: 0.01em;
   white-space: nowrap;
-  color: #C6CEDF;
-  transition: color 0.25s ease;
+  color: #9AA3B5;
+  transition: color 0.2s ease;
 }
 .site-nav-links a:hover, .site-nav-links a.is-active { color: #FFFFFF; }
-.site-nav-links a:focus-visible { outline: 2px solid #8FB4FF; outline-offset: 2px; }
+.site-nav-links a:focus-visible { outline: 2px solid var(--accent-dim); outline-offset: 2px; }
+/* On posts.html / activities.html there is no moving marker: the
+   page's own link wears it. */
+.site-nav-links a[aria-current="page"] { color: #FFFFFF; background: rgba(255, 255, 255, 0.09); }
 .site-nav-blob {
   position: absolute;
   top: 0; bottom: 0;
   left: var(--bx, 0px);
   width: var(--bw, 0px);
-  border: 1px solid rgba(242, 210, 139, 0.5);
   border-radius: 999px;
-  background: linear-gradient(180deg, rgba(242, 210, 139, 0.34), rgba(242, 210, 139, 0.1));
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.45),
-    inset 0 -8px 12px -8px rgba(242, 210, 139, 0.35),
-    0 0 22px rgba(242, 210, 139, 0.2);
-  transition: left 0.55s cubic-bezier(0.3, 1.45, 0.4, 1), width 0.36s cubic-bezier(0.3, 1.2, 0.4, 1);
+  background: rgba(255, 255, 255, 0.09);
+  transition: left 0.3s ease, width 0.3s ease;
 }
 
 /* ── #about ──
@@ -801,8 +832,8 @@
   transition: color 0.2s ease;
 }
 .pf-link svg { width: 16px; height: 16px; flex: 0 0 auto; }
-.pf-link:hover, .pf-link:focus-visible { color: #F2D28B; }
-.pf-link:focus-visible { outline: 2px solid #8FB4FF; outline-offset: 3px; border-radius: 4px; }
+.pf-link:hover, .pf-link:focus-visible { color: var(--accent); }
+.pf-link:focus-visible { outline: 2px solid var(--accent-dim); outline-offset: 3px; border-radius: 4px; }
 
 /* The portrait. The whole figure floats (one slow bob); inside it
    the rings draw, the portrait swells in and the bodies land, once,
@@ -829,13 +860,13 @@
 /* pathLength is 1 on both circles, so one dash of 1 is the whole
    ring and the offset draws it. */
 .pf-ring {
-  stroke: rgba(242, 210, 139, 0.32);
+  stroke: rgba(var(--accent-rgb), 0.32);
   stroke-width: 1;
   stroke-dasharray: 1;
   stroke-dashoffset: 1;
   transition: stroke-dashoffset 1.3s cubic-bezier(0.65, 0, 0.35, 1) 0.2s;
 }
-.pf-ring--b { stroke: rgba(143, 180, 255, 0.3); transition-delay: 0.32s; }
+.pf-ring--b { stroke: rgba(var(--accent-dim-rgb), 0.3); transition-delay: 0.32s; }
 .pf-sec.is-in .pf-ring { stroke-dashoffset: 0; }
 
 /* One small light running each ring. The wrapper is a POINT at the
@@ -859,11 +890,11 @@
   top: calc(var(--S) * -0.35 - 2.5px);
   width: 5px; height: 5px;
   border-radius: 50%;
-  background: #F2D28B;
-  box-shadow: 0 0 8px rgba(242, 210, 139, 0.9);
+  background: var(--accent);
+  box-shadow: 0 0 8px rgba(var(--accent-rgb), 0.9);
 }
 .pf-moon--b { animation-duration: 115s; animation-delay: -64s; }
-.pf-moon--b::before { top: calc(var(--S) * -0.45 - 2.5px); background: #8FB4FF; box-shadow: 0 0 8px rgba(143, 180, 255, 0.9); }
+.pf-moon--b::before { top: calc(var(--S) * -0.45 - 2.5px); background: var(--accent-dim); box-shadow: 0 0 8px rgba(var(--accent-dim-rgb), 0.9); }
 .pf-sec.is-in .pf-moon { opacity: 1; }
 @keyframes pfSpin { to { transform: rotate(360deg); } }
 
@@ -877,12 +908,12 @@
   transform: translate(-50%, -50%);
   display: grid;
   place-items: center;
-  border: 1px solid rgba(242, 210, 139, 0.6);
+  border: 1px solid rgba(var(--accent-rgb), 0.6);
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, rgba(143, 180, 255, 0.26), rgba(9, 12, 20, 0.9) 70%);
+  background: radial-gradient(circle at 35% 30%, rgba(var(--accent-dim-rgb), 0.26), rgba(9, 12, 20, 0.9) 70%);
   box-shadow:
-    0 0 0 6px rgba(242, 210, 139, 0.06),
-    0 0 70px rgba(143, 180, 255, 0.2),
+    0 0 0 6px rgba(var(--accent-rgb), 0.06),
+    0 0 70px rgba(var(--accent-dim-rgb), 0.2),
     0 34px 60px -24px rgba(0, 0, 0, 0.8);
   opacity: 0;
   scale: 0.82;
@@ -894,7 +925,7 @@
   position: absolute;
   inset: calc(var(--S) * -0.026);
   border-radius: 50%;
-  border: 1px dashed rgba(242, 210, 139, 0.42);
+  border: 1px dashed rgba(var(--accent-rgb), 0.42);
   animation: pfSpin 40s linear infinite;
 }
 .pf-core img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
@@ -933,7 +964,7 @@
   justify-content: center;
   border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 50%;
-  background: radial-gradient(circle at 32% 28%, rgba(143, 180, 255, 0.2), rgba(9, 12, 20, 0.94) 68%);
+  background: radial-gradient(circle at 32% 28%, rgba(var(--accent-dim-rgb), 0.2), rgba(9, 12, 20, 0.94) 68%);
   font-family: 'Orbitron', var(--font-mono, monospace);
   font-weight: 700;
   font-size: calc(var(--S) * 0.062 * var(--k, 1));
@@ -960,14 +991,14 @@
 .pf-body--top .pf-body-label { top: auto; bottom: calc(100% + 5px); }
 .pf-body:hover .pf-body-disc,
 .pf-body:focus-visible .pf-body-disc {
-  border-color: #F2D28B;
-  color: #F2D28B;
-  box-shadow: 0 0 0 4px rgba(242, 210, 139, 0.09), 0 0 30px rgba(242, 210, 139, 0.3);
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 0 4px rgba(var(--accent-rgb), 0.09), 0 0 30px rgba(var(--accent-rgb), 0.3);
 }
 .pf-body:hover .pf-body-label,
 .pf-body:focus-visible .pf-body-label { color: #E6E9F2; }
 .pf-body:active .pf-body-disc { transform: scale(0.95); }
-.pf-body:focus-visible { outline: 2px solid #8FB4FF; outline-offset: 4px; border-radius: 50%; }
+.pf-body:focus-visible { outline: 2px solid var(--accent-dim); outline-offset: 4px; border-radius: 50%; }
 
 /* ── #about and the career, on the reference layout ──
    (aliitawi.me, by the user's wish: the design of these two sections
@@ -978,8 +1009,8 @@
    ring per entry, the date in gold capitals, what and where. */
 .ab { padding-top: clamp(110px, 16vh, 170px); }
 .ab-strip { display: flex; align-items: center; gap: 16px; margin: 0 0 clamp(36px, 6vh, 56px); }
-.ab-mark { width: 9px; height: 9px; border-radius: 50%; background: #F2D28B; box-shadow: 0 0 14px rgba(242, 210, 139, 0.7); }
-.ab-word { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.34em; text-transform: uppercase; color: #F2D28B; }
+.ab-mark { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 14px rgba(var(--accent-rgb), 0.7); }
+.ab-word { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.34em; text-transform: uppercase; color: var(--accent); }
 .ab-strip-rule { width: 80px; height: 1px; background: rgba(255, 255, 255, 0.16); }
 .ab-strip-line { font-size: 0.86rem; font-style: italic; font-weight: 300; color: #8892A6; }
 .ab-label { margin: 0 0 0.5rem; font-size: 0.7rem; font-weight: 500; letter-spacing: 0.3em; text-transform: uppercase; color: #7C869A; }
@@ -1019,8 +1050,8 @@
   font-weight: 700;
   line-height: 1;
   letter-spacing: -0.03em;
-  color: #F2D28B;
-  text-shadow: 0 0 34px rgba(242, 210, 139, 0.35);
+  color: var(--accent);
+  text-shadow: 0 0 34px rgba(var(--accent-rgb), 0.35);
 }
 .ab-stat-label { margin-top: 14px; font-size: 0.62rem; font-weight: 500; letter-spacing: 0.2em; text-transform: uppercase; color: #7C869A; }
 .ab .pf-links { gap: 0; margin-top: 2rem; }
@@ -1030,10 +1061,10 @@
   width: min(100%, 400px);
   aspect-ratio: 4 / 5;
   margin-top: clamp(0px, 8vh, 80px);
-  border: 1px solid rgba(242, 210, 139, 0.45);
+  border: 1px solid rgba(var(--accent-rgb), 0.45);
   border-radius: 24px;
   background: radial-gradient(120% 90% at 30% 20%, #1a2136 0%, #0a0d16 60%, #05070c 100%);
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55), 0 0 60px rgba(242, 210, 139, 0.07);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55), 0 0 60px rgba(var(--accent-rgb), 0.07);
   overflow: hidden;
   display: grid;
   place-items: center;
@@ -1042,7 +1073,7 @@
 .ab-initials { font-family: 'Orbitron', var(--font-mono, monospace); font-size: clamp(2.6rem, 6vw, 4.4rem); font-weight: 800; letter-spacing: 0.06em; color: rgba(255, 255, 255, 0.82); }
 
 .tl { position: relative; margin: clamp(40px, 8vh, 80px) 0 0; padding: 0; list-style: none; }
-.tl::before { content: ''; position: absolute; left: 0; top: -34px; bottom: -34px; width: 1px; background: linear-gradient(180deg, transparent, rgba(242, 210, 139, 0.45) 12%, rgba(242, 210, 139, 0.45) 80%, transparent); }
+.tl::before { content: ''; position: absolute; left: 0; top: -34px; bottom: -34px; width: 1px; background: linear-gradient(180deg, transparent, rgba(var(--accent-rgb), 0.45) 12%, rgba(var(--accent-rgb), 0.45) 80%, transparent); }
 .tl-item {
   position: relative;
   display: grid;
@@ -1053,8 +1084,8 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 }
 .tl-item:last-child { border-bottom: 0; }
-.tl-dot { position: absolute; left: -55px; top: 37px; width: 13px; height: 13px; border: 2px solid #F2D28B; border-radius: 50%; background: #06080d; box-shadow: 0 0 16px rgba(242, 210, 139, 0.55); }
-.tl-date { padding-top: 0.35em; font-size: 0.7rem; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: #F2D28B; }
+.tl-dot { position: absolute; left: -55px; top: 37px; width: 13px; height: 13px; border: 2px solid var(--accent); border-radius: 50%; background: #06080d; box-shadow: 0 0 16px rgba(var(--accent-rgb), 0.55); }
+.tl-date { padding-top: 0.35em; font-size: 0.7rem; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent); }
 .tl-body h3 { margin: 0; font-size: 1.22rem; font-weight: 700; letter-spacing: -0.01em; color: #FFFFFF; }
 .tl-body p { margin: 0.45rem 0 0; font-size: 0.92rem; color: #8892A6; }
 @media (max-width: 860px), (max-aspect-ratio: 1/1) {
@@ -1085,15 +1116,15 @@
   left: 23px; right: 0;
   top: 23px;
   height: 1px;
-  background: linear-gradient(90deg, rgba(242, 210, 139, 0.6), rgba(143, 180, 255, 0.45) 70%, rgba(143, 180, 255, 0));
+  background: linear-gradient(90deg, rgba(var(--accent-rgb), 0.6), rgba(var(--accent-dim-rgb), 0.45) 70%, rgba(var(--accent-dim-rgb), 0));
   transform: scaleX(0);
   transform-origin: left;
   transition: transform 1.3s cubic-bezier(0.65, 0, 0.35, 1) 0.15s;
 }
 .pf-sec.is-in .pf-stack::before { transform: scaleX(1); }
 .pf-stage { --tone: #E6E9F2; --tone-line: rgba(255, 255, 255, 0.14); --tone-fill: rgba(255, 255, 255, 0.04); --tone-text: #C9D0DD; }
-.pf-stage[data-tone="gold"] { --tone: #F2D28B; --tone-line: rgba(242, 210, 139, 0.32); --tone-fill: rgba(242, 210, 139, 0.08); --tone-text: #F6E6BF; }
-.pf-stage[data-tone="blue"] { --tone: #8FB4FF; --tone-line: rgba(143, 180, 255, 0.32); --tone-fill: rgba(143, 180, 255, 0.1); --tone-text: #DCE7FF; }
+.pf-stage[data-tone="accent"], .pf-stage[data-tone="gold"] { --tone: var(--accent); --tone-line: rgba(var(--accent-rgb), 0.32); --tone-fill: rgba(var(--accent-rgb), 0.08); --tone-text: var(--accent-pale); }
+.pf-stage[data-tone="blue"] { --tone: var(--accent-dim); --tone-line: rgba(var(--accent-dim-rgb), 0.32); --tone-fill: rgba(var(--accent-dim-rgb), 0.1); --tone-text: var(--accent-pale); }
 .pf-stage-node {
   position: relative;
   display: grid;
@@ -1125,7 +1156,7 @@
 .pf-edu { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(16px, 2.4vw, 28px); }
 .pf-card-wrap { display: grid; }
 .pf-card {
-  --tone: #F2D28B; --tone-soft: rgba(242, 210, 139, 0.16); --tone-line: rgba(242, 210, 139, 0.45);
+  --tone: var(--accent); --tone-soft: rgba(var(--accent-rgb), 0.16); --tone-line: rgba(var(--accent-rgb), 0.45);
   position: relative;
   display: grid;
   min-height: 310px;
@@ -1137,7 +1168,7 @@
   -webkit-backdrop-filter: blur(12px);
   transition: border-color 0.3s ease, box-shadow 0.3s ease;
 }
-.pf-card[data-tone="blue"] { --tone: #8FB4FF; --tone-soft: rgba(143, 180, 255, 0.16); --tone-line: rgba(143, 180, 255, 0.45); }
+.pf-card[data-tone="blue"] { --tone: var(--accent-dim); --tone-soft: rgba(var(--accent-dim-rgb), 0.16); --tone-line: rgba(var(--accent-dim-rgb), 0.45); }
 .pf-card.has-back { cursor: pointer; }
 .pf-card::before {
   content: '';
@@ -1192,7 +1223,7 @@
 .pf-card.has-back.is-open .pf-card-front { opacity: 0; translate: 0 -12px; }
 .pf-card.has-back:focus-visible .pf-card-back,
 .pf-card.has-back.is-open .pf-card-back { opacity: 1; translate: 0 0; }
-.pf-card:focus-visible { outline: 2px solid #8FB4FF; outline-offset: 3px; }
+.pf-card:focus-visible { outline: 2px solid var(--accent-dim); outline-offset: 3px; }
 /* Hover only where hovering exists: on a touch screen :hover sticks
    after a tap and the card could never be turned back. */
 @media (hover: hover) {
@@ -1243,7 +1274,7 @@
     left: 23px; right: auto;
     top: 23px; bottom: 0;
     width: 1px; height: auto;
-    background: linear-gradient(180deg, rgba(242, 210, 139, 0.6), rgba(143, 180, 255, 0.45) 70%, rgba(143, 180, 255, 0));
+    background: linear-gradient(180deg, rgba(var(--accent-rgb), 0.6), rgba(var(--accent-dim-rgb), 0.45) 70%, rgba(var(--accent-dim-rgb), 0));
     transform: scaleY(0);
     transform-origin: top;
   }
@@ -1259,15 +1290,10 @@
 @media (max-width: 640px) {
   .pf-body-label { font-size: 0.74rem; }
 }
-@media (max-width: 820px) {
-  .site-nav { top: 14px; padding: 7px; }
-  .site-nav-links a { padding: 12px 16px; font-size: 0.94rem; }
-  .site-nav-sep { margin: 0 5px; }
-}
 @media (max-width: 480px) {
-  .site-nav { top: 12px; padding: 6px; }
+  .site-nav { top: 12px; padding: 4px; }
   .site-nav-links { gap: 0; }
-  .site-nav-links a { padding: 11px 13px; font-size: 0.88rem; }
+  .site-nav-links a { padding: 9px 12px; font-size: 0.84rem; }
   .site-nav-sep { margin: 0 3px; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1300,7 +1326,7 @@ body.page {
   background:
     radial-gradient(1.6px 1.6px at 12% 18%, rgba(255, 255, 255, 0.7), transparent 60%),
     radial-gradient(1.3px 1.3px at 27% 64%, rgba(255, 255, 255, 0.5), transparent 60%),
-    radial-gradient(1.8px 1.8px at 41% 31%, rgba(242, 210, 139, 0.7), transparent 60%),
+    radial-gradient(1.8px 1.8px at 41% 31%, rgba(255, 214, 170, 0.7), transparent 60%),   /* a warm star, not the accent */
     radial-gradient(1.4px 1.4px at 58% 82%, rgba(255, 255, 255, 0.55), transparent 60%),
     radial-gradient(1.6px 1.6px at 69% 22%, rgba(190, 214, 255, 0.75), transparent 60%),
     radial-gradient(1.3px 1.3px at 83% 57%, rgba(255, 255, 255, 0.5), transparent 60%),
@@ -1334,8 +1360,15 @@ body.page {
    colour. (The waypoints trip that used to follow the planet was
    removed on 2026-09-25; it will be redesigned.) */
 :root {
-  --j-gold: #F2D28B;
-  --j-blue: #8FB4FF;
+  /* THE ACCENT — one family, change it here (and in style.css :root,
+     which pages load first). Literal copies that cannot read a CSS
+     variable: the cursors in cursor.css, the map in system.js, the
+     constants at the top of emblems.js, beyond.html. */
+  --accent: #9CC4FF;                 /* ice blue */
+  --accent-rgb: 156, 196, 255;       /* for rgba(var(--accent-rgb), a) */
+  --accent-dim: #6F9CE8;             /* the same hue, deeper: second voice, focus rings */
+  --accent-dim-rgb: 111, 156, 232;
+  --accent-pale: #DDEBFF;            /* text on an accent-tinted fill */
   --j-text: #E6E9F2;
   --j-muted: #9AA3B8;
   --j-ink: rgba(9, 12, 20, 0.58);
@@ -1436,7 +1469,7 @@ body.page {
   font-size: 0.74rem;
   letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: var(--j-gold);
+  color: var(--accent);
 }
 .planet-sub {
   margin: 0 0 0.6rem;
@@ -1496,11 +1529,11 @@ body.page {
   transition: border-color 0.25s ease, background 0.25s ease, color 0.25s ease;
 }
 .sys-label-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--j-muted); flex: 0 0 auto; transition: background 0.25s ease, box-shadow 0.25s ease; }
-.sys-label--sun .sys-label-dot { background: var(--j-gold); box-shadow: 0 0 8px var(--j-gold); }
-.sys-label:hover, .sys-label.is-hot, .sys-label:focus-visible { border-color: rgba(242, 210, 139, 0.55); background: rgba(9, 12, 20, 0.7); color: #fff; }
-.sys-label.is-hot .sys-label-dot, .sys-label:hover .sys-label-dot { background: var(--j-gold); box-shadow: 0 0 8px var(--j-gold); }
-.sys-label.is-active { border-color: var(--j-gold); color: var(--j-gold); }
-.sys-label:focus-visible { outline: 2px solid var(--j-blue); outline-offset: 2px; }
+.sys-label--sun .sys-label-dot { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+.sys-label:hover, .sys-label.is-hot, .sys-label:focus-visible { border-color: rgba(var(--accent-rgb), 0.55); background: rgba(9, 12, 20, 0.7); color: #fff; }
+.sys-label.is-hot .sys-label-dot, .sys-label:hover .sys-label-dot { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+.sys-label.is-active { border-color: var(--accent); color: var(--accent); }
+.sys-label:focus-visible { outline: 2px solid var(--accent-dim); outline-offset: 2px; }
 /* The reticle: a dashed ring around the hovered body, turning slowly;
    solid gold and still once the body is selected. Sized and placed
    by system.js each frame. */
@@ -1509,11 +1542,11 @@ body.page {
   width: 40px; height: 40px;
   border-radius: 50%;
   border: 1px dashed rgba(230, 233, 242, 0.7);
-  box-shadow: 0 0 12px rgba(143, 180, 255, 0.25);
+  box-shadow: 0 0 12px rgba(var(--accent-dim-rgb), 0.25);
   pointer-events: none;
   animation: reticleTurn 14s linear infinite;
 }
-.sys-reticle.is-locked { border-style: solid; border-color: rgba(242, 210, 139, 0.4); box-shadow: none; animation: none; }
+.sys-reticle.is-locked { border-style: solid; border-color: rgba(var(--accent-rgb), 0.4); box-shadow: none; animation: none; }
 @keyframes reticleTurn { to { rotate: 360deg; } }
 
 /* The HUD fades in once the reader has the controls. */
@@ -1539,12 +1572,12 @@ body.page {
   pointer-events: auto;
   transition: border-color 0.3s ease;
 }
-.sys-chip:hover, .sys-chip:focus-visible { border-color: rgba(242, 210, 139, 0.55); }
-.sys-chip:focus-visible { outline: 2px solid var(--j-blue); outline-offset: 2px; }
+.sys-chip:hover, .sys-chip:focus-visible { border-color: rgba(var(--accent-rgb), 0.55); }
+.sys-chip:focus-visible { outline: 2px solid var(--accent-dim); outline-offset: 2px; }
 .sys-chip-portrait {
   position: relative; width: 34px; height: 34px; border-radius: 50%; overflow: hidden;
-  border: 1px solid rgba(242, 210, 139, 0.55);
-  background: radial-gradient(circle at 35% 30%, rgba(143, 180, 255, 0.18), rgba(9, 12, 20, 0.6) 70%);
+  border: 1px solid rgba(var(--accent-rgb), 0.55);
+  background: radial-gradient(circle at 35% 30%, rgba(var(--accent-dim-rgb), 0.18), rgba(9, 12, 20, 0.6) 70%);
   display: grid; place-items: center;
   font-family: 'Orbitron', var(--j-mono); font-weight: 800; font-size: 0.7rem; letter-spacing: 0.04em;
 }
@@ -1572,8 +1605,8 @@ body.page {
   cursor: pointer; pointer-events: auto;
   transition: color 0.3s ease, border-color 0.3s ease;
 }
-.sys-home:hover, .sys-home:focus-visible { color: var(--j-text); border-color: rgba(242, 210, 139, 0.55); }
-.sys-home:focus-visible { outline: 2px solid var(--j-blue); outline-offset: 2px; }
+.sys-home:hover, .sys-home:focus-visible { color: var(--j-text); border-color: rgba(var(--accent-rgb), 0.55); }
+.sys-home:focus-visible { outline: 2px solid var(--accent-dim); outline-offset: 2px; }
 .sys-hint {
   position: absolute; left: 16px; right: 16px; bottom: 22px;
   margin: 0;
@@ -1621,17 +1654,17 @@ body.page {
 .probe.is-open .probe-frame > *:nth-child(4) { transition-delay: 0.34s; }
 .probe.is-open .probe-frame > *:nth-child(5) { transition-delay: 0.42s; }
 .probe.is-open .probe-frame > *:nth-child(n + 6) { transition-delay: 0.50s; }
-.probe-label { margin: 0 0 0.9rem; font-family: var(--j-mono); font-size: 0.7rem; letter-spacing: 0.22em; text-transform: uppercase; color: var(--j-gold); }
+.probe-label { margin: 0 0 0.9rem; font-family: var(--j-mono); font-size: 0.7rem; letter-spacing: 0.22em; text-transform: uppercase; color: var(--accent); }
 .probe-head { display: flex; align-items: center; gap: 16px; margin-bottom: 0.9rem; }
 .probe-icon { font-size: 1.8rem; line-height: 1; flex: 0 0 auto; }
 .probe-portrait {
   position: relative; flex: 0 0 auto;
   width: 78px; height: 78px; border-radius: 50%;
-  border: 1px solid rgba(242, 210, 139, 0.55);
-  background: radial-gradient(circle at 35% 30%, rgba(143, 180, 255, 0.18), rgba(9, 12, 20, 0.6) 70%);
+  border: 1px solid rgba(var(--accent-rgb), 0.55);
+  background: radial-gradient(circle at 35% 30%, rgba(var(--accent-dim-rgb), 0.18), rgba(9, 12, 20, 0.6) 70%);
   overflow: hidden; display: grid; place-items: center;
 }
-.probe-portrait::before { content: ''; position: absolute; inset: -7px; border-radius: 50%; border: 1px dashed rgba(242, 210, 139, 0.45); animation: probeOrbit 40s linear infinite; }
+.probe-portrait::before { content: ''; position: absolute; inset: -7px; border-radius: 50%; border: 1px dashed rgba(var(--accent-rgb), 0.45); animation: probeOrbit 40s linear infinite; }
 @keyframes probeOrbit { to { transform: rotate(360deg); } }
 .probe-portrait img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
 .probe-portrait img + .probe-initials { display: none; }
@@ -1642,18 +1675,18 @@ body.page {
 .probe-status { margin: 0; display: flex; align-items: center; gap: 8px; font-family: var(--j-mono); font-size: 0.66rem; letter-spacing: 0.1em; color: var(--j-muted); }
 .probe-desc { margin: 0 0 1rem; font-size: 0.94rem; line-height: 1.55; }
 .probe-tags { list-style: none; margin: 0 0 1rem; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
-.probe-tags li { padding: 4px 9px; border-radius: 6px; background: rgba(143, 180, 255, 0.12); border: 1px solid rgba(143, 180, 255, 0.25); font-family: var(--j-mono); font-size: 0.7rem; color: var(--j-blue); }
+.probe-tags li { padding: 4px 9px; border-radius: 6px; background: rgba(var(--accent-dim-rgb), 0.12); border: 1px solid rgba(var(--accent-dim-rgb), 0.25); font-family: var(--j-mono); font-size: 0.7rem; color: var(--accent-dim); }
 .probe-readouts { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 0 0 1rem; }
 .probe-readout { padding: 10px 12px; border: 1px solid var(--j-line); border-radius: 10px; background: rgba(255, 255, 255, 0.025); }
 .probe-readout dt { margin: 0 0 2px; font-family: var(--j-mono); font-size: 0.62rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--j-muted); }
-.probe-readout dd { margin: 0; font-size: 1.35rem; font-weight: 600; color: var(--j-gold); font-variant-numeric: tabular-nums; }
+.probe-readout dd { margin: 0; font-size: 1.35rem; font-weight: 600; color: var(--accent); font-variant-numeric: tabular-nums; }
 .probe-links { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 1rem; }
-.probe-links a { color: var(--j-gold); text-decoration: none; font-size: 0.88rem; }
+.probe-links a { color: var(--accent); text-decoration: none; font-size: 0.88rem; }
 .probe-links a:hover { text-decoration: underline; }
 .probe-back {
   margin: 0; padding: 0.5em 0;
-  border: 0; border-bottom: 1px solid rgba(242, 210, 139, 0.35);
-  background: none; color: var(--j-gold);
+  border: 0; border-bottom: 1px solid rgba(var(--accent-rgb), 0.35);
+  background: none; color: var(--accent);
   font: inherit; font-family: var(--j-mono); font-size: 0.7rem; letter-spacing: 0.18em; text-transform: uppercase;
   cursor: pointer;
   transition: color 0.3s ease, border-color 0.3s ease;

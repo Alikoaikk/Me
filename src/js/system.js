@@ -1215,17 +1215,17 @@ import { makeEmblem } from './emblems.js';
     mapCtx.clearRect(0, 0, W, H);
     mapCtx.strokeStyle = 'rgba(255,255,255,0.14)'; mapCtx.lineWidth = 1;
     for (const p of planets) { if (!p) continue; mapCtx.beginPath(); mapCtx.arc(cx, cy, p.orbitR * k, 0, Math.PI * 2); mapCtx.stroke(); }
-    mapCtx.fillStyle = '#000'; mapCtx.strokeStyle = '#F2D28B'; mapCtx.beginPath(); mapCtx.arc(cx, cy, 3, 0, Math.PI * 2); mapCtx.fill(); mapCtx.stroke();
+    mapCtx.fillStyle = '#000'; mapCtx.strokeStyle = '#9CC4FF';   /* accent — keep in step with --accent */ mapCtx.beginPath(); mapCtx.arc(cx, cy, 3, 0, Math.PI * 2); mapCtx.fill(); mapCtx.stroke();
     for (const p of planets) {
       if (!p) continue; p.body.group.getWorldPosition(_mp);
-      mapCtx.fillStyle = focus === p.index ? '#F2D28B' : (hot === p.index ? '#FFFFFF' : 'rgba(230,233,242,0.85)');
+      mapCtx.fillStyle = focus === p.index ? '#9CC4FF' /* accent — keep in step with --accent */ : (hot === p.index ? '#FFFFFF' : 'rgba(230,233,242,0.85)');
       mapCtx.beginPath(); mapCtx.arc(cx + _mp.x * k, cy + _mp.z * k, focus === p.index ? 3 : 2, 0, Math.PI * 2); mapCtx.fill();
     }
     // The camera: a dot with its view line.
     const cxp = cx + camera.position.x * k, cyp = cy + camera.position.z * k;
     const txp = cx + controls.target.x * k, typ = cy + controls.target.z * k;
-    mapCtx.strokeStyle = 'rgba(143,180,255,0.6)'; mapCtx.beginPath(); mapCtx.moveTo(cxp, cyp); mapCtx.lineTo(txp, typ); mapCtx.stroke();
-    mapCtx.fillStyle = '#8FB4FF'; mapCtx.beginPath(); mapCtx.arc(Math.max(2, Math.min(W - 2, cxp)), Math.max(2, Math.min(H - 2, cyp)), 2.5, 0, Math.PI * 2); mapCtx.fill();
+    mapCtx.strokeStyle = 'rgba(111,156,232,0.6)' /* --accent-dim */; mapCtx.beginPath(); mapCtx.moveTo(cxp, cyp); mapCtx.lineTo(txp, typ); mapCtx.stroke();
+    mapCtx.fillStyle = '#6F9CE8'; mapCtx.beginPath(); mapCtx.arc(Math.max(2, Math.min(W - 2, cxp)), Math.max(2, Math.min(H - 2, cyp)), 2.5, 0, Math.PI * 2); mapCtx.fill();
   }
 
   /* ── The collapse ──
