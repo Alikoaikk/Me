@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<!-- Work: the projects of the Koaik system (system.html) as a PLAIN
+     LIST — same projects, same text, same links, no 3D and no motion.
+     Reached from the "3D | List" switch in the system's HUD, and it
+     carries the same switch back. A plain page like posts.html /
+     activities.html (css/galaxy.css "PLAIN PAGES": the static .nav-on,
+     body.page, the gradient night); its own rules are in css/work.css.
+     js/work.js fills the list from js/data.js — no canvas, no WebGL,
+     no modules. Not projects.html: that one belongs to index.html. -->
+<html lang="en" class="nav-on">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Projects — Ali Koaik</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/galaxy.css" />
+  <link rel="stylesheet" href="css/work.css" />
+  <link rel="stylesheet" href="css/cursor.css" />
+</head>
+<body class="page">
+
+  <nav class="site-nav" aria-label="Site">
+    <div class="site-nav-links">
+      <a href="galaxy.html#about">About</a>
+      <a href="galaxy.html#education">Career</a>
+      <a href="galaxy.html#stack">Stack</a>
+      <a href="galaxy.html#build" class="is-active">Projects</a>
+      <span class="site-nav-sep" aria-hidden="true"></span>
+      <a href="posts.html">Posts</a>
+      <a href="activities.html">Activities</a>
+    </div>
+  </nav>
+
+  <!-- Top left, exactly where the system's HUD has them (.sys-top in
+       galaxy.css): the switch does not move between the two views. -->
+  <div class="sys-top work-top">
+    <nav class="sys-nav" aria-label="Views">
+      <a class="sys-back" href="galaxy.html#build" aria-label="Back to the profile"><span aria-hidden="true">←</span> Back</a>
+      <div class="view-toggle" role="group" aria-label="View of the projects">
+        <a class="view-toggle-opt" href="system.html#view" aria-label="Show the projects in 3D">3D</a>
+        <span class="view-toggle-opt" aria-current="true">List</span>
+      </div>
+    </nav>
+  </div>
+
+  <main class="work">
+    <header class="work-head">
+      <div class="work-heading">
+        <p class="work-label">04 &mdash; Projects</p>
+        <h1 class="work-title">What I Build</h1>
+        <p class="work-lead" id="workLead">The same projects that orbit in the system, as a plain list.</p>
+      </div>
+    </header>
+
+    <ol class="work-list" id="workList"></ol>
+
+    <noscript>
+      <p class="work-note">The list is filled in by a script, and scripts are off. The projects are on <a href="https://github.com/alikoaikk">GitHub</a>.</p>
+    </noscript>
+
+    <p class="work-foot">
+      <a class="work-foot-link" href="galaxy.html#build"><span aria-hidden="true">←</span> Back to the profile</a>
+      <a class="work-foot-link" href="system.html">See them in 3D <span aria-hidden="true">→</span></a>
+    </p>
+  </main>
+
+  <script src="js/data.js"></script>
+  <script src="js/work.js"></script>
+</body>
+</html>

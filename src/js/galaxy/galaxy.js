@@ -763,7 +763,8 @@
     layout(location = 1) in vec3 aAttr;   // radius, variation seed, alpha
     layout(location = 2) in vec4 aTint;   // rgb + size
     layout(location = 3) in float aLum;
-    layout(location = 4) in vec3 aName;  // xy = NDC home in the word, z = 1 if a fill star
+    layout(location = 4) in vec3 aName;  // xy = NDC home in the word; z = 0 not a fill star, else
+                                         // 1 + role (0 reserve, 1 dust, 2 body, 3 anchor) + magnitude × 0.98
     layout(location = 5) in float aKind; // 0 star, 1 nebula, 2 giant
     layout(location = 6) in vec3 aOff;   // field only: offset from home, from simulateField
     uniform mat3 uRot;
@@ -797,6 +798,9 @@
     uniform float uSpin;      // its rotation, radians
     uniform float uFlowTime;  // seconds, for the meander (0 under reduced motion)
     uniform vec3  uPtr;       // the pointer (NDC) and its energy
+    uniform float uNameShow;  // 0..1: the fill stars standing in the letters are seen (the DOM text is the name at rest)
+    uniform vec4  uName;      // the name: its size against the one it was tuned at; the entrance, 0..1;
+                              // the word's left and right ends (NDC x)
     uniform float uHalf;      // -1 behind the disc plane, +1 in front, 0 all
     uniform float uMigrate;   // 1: live star, joins the burst; 0: field star, dissolves
     uniform float uPattern;   // rigid rotation, applied here for the field only
@@ -1070,6 +1074,7 @@
          (uWin.w) never gathers: the river keeps running into the
          galaxy, and those melt into the disc as they arrive. */
       if (uFlow > 0.5 && uMigrate > 0.5) {
+        float hold = 0.0;
         if (fill) {
           float Lw = uWin.y;
           float sig = fract(h + uWin.z * (0.75 + 0.50 * h2)) * Lw;
@@ -1083,11 +1088,18 @@
 
           // From its letter: where the river passes it, and how far
           // below the river's line it sits there.
-          float relI = smoothstep(h3 * 0.55, h3 * 0.55 + 0.45, uRel);
+          // Its turn to leave: the attribute's fraction, which the 2D
+          // canvas that draws it in its letter knows too.
+          float lu = fract(aName.z) / 0.98;
+          float relI = smoothstep(lu * 0.40, lu * 0.40 + 0.60, uRel);
           vec2 homePx = vec2((home.x * 0.5 + 0.5) * uView.x,
                              (0.5 - home.y * 0.5) * uView.y + uScroll);
           float sJoin = clamp(homePx.x - uBand.x, 0.0, uBand.z);
-          float s = mix(sJoin, sT, relI);
+          /* Caught by a current, not fired down a wire: it lifts off
+             its letter slowly, gathers speed downstream, and settles
+             into its place (relI is already eased at both ends; the
+             power holds it near its letter for the first third). */
+          float s = mix(sJoin, sT, pow(relI, 1.7));
 
           // The centreline there.
           float pf = clamp(s / uPathInfo.x, 0.0, uPathInfo.y - 1.001);
@@ -1107,7 +1119,10 @@
                                  + 0.55 * sin(s * 0.0263 + uFlowTime * 0.28 + 1.7))
                     + uStream.x * 0.10 * sin(uFlowTime * (0.17 + h * 0.19) + h3 * 6.2831853);
           float latHome = homePx.y - uBand.y;
-          vec2 rp = pp.xy + nrm * mix(latHome, lat, smoothstep(0.0, 0.6, relI));
+          // On the way it is loose: each star swings wide of the thread
+          // on its own side and comes back to it as it arrives.
+          float loose = sin(relI * 3.14159265) * (h2 - 0.5) * 2.6 * uStream.x;
+          vec2 rp = pp.xy + nrm * (mix(latHome, lat, smoothstep(0.0, 0.9, relI)) + loose);
           vec2 rNdc = vec2(rp.x / uView.x * 2.0 - 1.0, 1.0 - (rp.y - uScroll) / uView.y * 2.0);
 
           float wR = smoothstep(0.0, 0.10, relI);
@@ -1122,10 +1137,109 @@
           vec2 gxy = vec2(dxy.x, dxy.y * uMiniTilt.x - aPos.z * uMiniTilt.y);
           vec2 gal = uGal.xy + vec2(gxy.x / uAspect, gxy.y) * uGal.z;
 
-          vec2 p = mix(mix(home, rNdc, wR), gal, wG);
+          float wRib = wR * (1.0 - wG), wName = (1.0 - wR) * (1.0 - wG);
+
+          /* ── THE NAME, ALIVE ──
+             AT REST THE NAME IS DOM TEXT and these stars are unseen
+             (uNameShow 0); they show while the word gathers when the
+             page opens and while it lets go on the scroll. In its
+             letter a star is BODY (role 2, seen) or RESERVE (0, never
+             seen here: the rest of the river); the dust (1) and
+             anchor (3) roles are no longer dealt. Size, light
+             and colour come from the role, not from the star's own
+             luminosity — that lottery is what made the word gravel.
+
+             And nothing stands still (all of it on uFlowTime, which
+             is 0 under reduced motion — then the word is simply set):
+               · every star wanders round its place, the dust widest,
+                 the anchors hardly;
+               · LIGHT passes along the word, left to right, at about
+                 the river's pace: a crest every seven seconds or so,
+                 so the letters are never evenly lit;
+               · each star twinkles on its own; an anchor now and
+                 then flares;
+               · a STREAM runs through the word, the way the river
+                 goes: the dust and a fifth of the body come in from
+                 the left, rest in their letters, and are carried off
+                 to the right, over and over.
+             uName.y is the entrance: when the page opens the stars
+             come in from the sky around and take their places, the
+             word writing itself from the left. */
+          float role = floor(aName.z) - 1.0;
+          float mag  = fract(aName.z) / 0.98;
+          float isDust = step(0.5, role) * step(role, 1.5);
+          float isBody = step(1.5, role) * step(role, 2.5);
+          float isAnch = step(2.5, role);
+          float nk = uName.x;
+          float T = uFlowTime, live = step(1e-4, T);
+
+          vec2 wq = 0.42 + 0.50 * vec2(h, h2);
+          vec2 wn = vec2(sin(T * wq.x + h3 * 6.2831853) + 0.45 * sin(T * wq.y * 1.9 + h * 12.566),
+                         cos(T * wq.y + h * 6.2831853) + 0.45 * cos(T * wq.x * 1.6 + h2 * 12.566));
+          vec2 offPx = wn * (isDust * 2.6 + isBody * 0.9 + isAnch * 0.25) * nk * live;   // CSS px, y down
+
+          /* The stream: a star in it comes in from the left, rests in
+             its place, and leaves to the right and a little up — each
+             on its own clock, so at any moment most are at rest and
+             the word holds. All the dust, a fifth of the body. */
+          float strm = (isDust + isBody * step(fract(h * 23.17 + h2 * 7.7), 0.16)) * live;
+          float cyc = fract(T / (9.0 + 9.0 * h3) + h2);
+          float sIn = clamp(cyc / 0.20, 0.0, 1.0), sOut = clamp((cyc - 0.62) / 0.38, 0.0, 1.0);
+          float eIn = pow(1.0 - sIn, 3.0);               // what is left of the way in (ease-out)
+          float eOut = sOut * sOut;                      // slow to let go, then carried
+          offPx += strm * nk * (eOut * (45.0 + 75.0 * h2) * vec2(1.0, -(0.14 + 0.34 * h3))
+                              - eIn * (30.0 + 50.0 * h) * vec2(1.0, -(0.10 + 0.30 * h3))
+                              + vec2(0.0, 4.0 * eOut * sin(cyc * 15.0 + h * 6.2831853)));
+          float strayA = mix(1.0, smoothstep(0.0, 0.55, sIn) * (1.0 - smoothstep(0.30, 1.0, sOut)), strm);
+
+          vec2 hp = homePx / nk;
+          float wave = sin(hp.x * 0.0115 - T * 0.85 + 1.2 * sin(hp.y * 0.035 + T * 0.21));
+          float crest = pow(0.5 + 0.5 * wave, 2.2);
+          float light = 0.74 + 0.60 * crest + 0.10 * sin(hp.x * 0.0047 + T * 0.33 + 2.0);
+          float tw = 1.0 + live * 0.24 * sin(T * (1.3 + 2.6 * h3) + h * 43.0);
+          float flare = live * pow(0.5 + 0.5 * sin(T * (0.55 + 0.8 * h2) + h * 31.0), 5.0);
+
+          float nSize = uPointScale * (isDust * (0.85 + 0.40 * h2)
+                                     + isBody * (1.15 + 2.10 * mag) * (1.0 + 0.14 * crest)
+                                     + isAnch * (11.0 + 17.0 * mag) * nk * (1.0 + 0.20 * flare));
+          float nAlpha = (isDust * (0.20 + 0.26 * mag)
+                        + isBody * (0.60 + 0.80 * mag)
+                        + isAnch * (0.85 + 0.75 * mag) * (0.80 + 0.55 * flare)) * light * tw * strayA;
+
+          // The entrance: its own stretch of uName.y for each star,
+          // earlier on the left; ease-out, so it lands softly.
+          float xn = clamp((home.x - uName.z) / max(1e-4, uName.w - uName.z), 0.0, 1.0);
+          float it = clamp((uName.y - (xn * 0.42 + h3 * 0.13)) / 0.45, 0.0, 1.0);
+          float ie = 1.0 - pow(1.0 - it, 3.0);
+          vec2 from = mix(home, sNdc, 0.30 + 0.28 * h2);
+          vec2 fd = from - home;
+          from += vec2(-fd.y, fd.x) * 0.35;              // not straight in: a quarter-swirl
+          nAlpha *= smoothstep(0.0, 0.30, it) * (1.0 - smoothstep(0.78, 1.0, it)) * uNameShow;
+
+          // (In its letter the star is drawn by the 2D canvas, not here:
+          // this side takes it over AT its home, as it leaves.)
+          vec2 nameP = home;
+          vec2 p = mix(mix(nameP, rNdc, wR), gal, wG);
           gl_Position = vec4(p, 0.0, 1.0);
 
-          float wRib = wR * (1.0 - wG), wName = (1.0 - wR) * (1.0 - wG);
+          // Its colour in the word: the star's own, drawn toward a cool
+          // white (the dust bluer); one anchor in three keeps its warmth.
+          float warm = isAnch * step(0.66, fract(h * 9.7 + h3 * 3.1));
+          vec3 nameCol = mix(aTint.rgb, vec3(0.84, 0.91, 1.0), 0.62 - 0.40 * warm);
+          nameCol = mix(nameCol, vec3(0.60, 0.76, 1.0), isDust * 0.45);
+          /* On the river a star keeps the colour it has in the name
+             (user: "make the stars in the path the same colour and
+             shade as the Ali Koaik stars"): the 2D canvas's five tints
+             (SPARK_TINTS — white twice, two ice blues, one warm), not
+             the galaxy's warm spectral ones. In the mini galaxy it is
+             a galaxy star again. */
+          float tq = fract(h * 5.0 + h2 * 3.7) * 5.0;
+          vec3 pal = tq < 2.0 ? vec3(1.0) : tq < 3.0 ? vec3(0.867, 0.922, 1.0)
+                   : tq < 4.0 ? vec3(0.749, 0.847, 1.0) : vec3(1.0, 0.914, 0.784);
+          vColor = mix(pal, aTint.rgb, wG);
+          // In the word it is a star whatever it is in the galaxy; an
+          // anchor has a profile of its own (kind 3, the fragment shader).
+          if (wName > 0.5) vKind = isAnch > 0.5 ? 3.0 : 0.0;
           /* Unseen at the conveyor's seam, unless gathered (then it is
              in the disc for good); and one that never gathers melts
              away as it reaches its place. */
@@ -1134,12 +1248,18 @@
           // A few leaders, larger and brighter, give the stream depth.
           float lead = step(0.93, fract(h3 * 7.31 + h * 3.17));
           float galSize = uPointScale * aTint.a * (0.62 + pow(aLum, 0.50) * 0.44) * 0.70;
-          gl_PointSize = wName * fillSize
-                       + wRib * uPointScale * (0.95 + h2 * 0.70 + lead * 0.55)
+          gl_PointSize = wName * nSize
+                       + wRib * uPointScale * (1.10 + h2 * 0.80 + lead * 0.70)
                        + wG * galSize;
-          vAlpha = base * (wName * fillFloor + (wRib * (0.95 + lead * 0.90) + wG * 0.85) * vis);
-          vBright = smoothstep(2.2, 5.0, aLum) * (wName * 0.55 + wRib * 0.30 + wG * 0.30);
-          vSettled = 1.0 - wG * 0.45;
+          // ... and its shade: the name's 0.62–1.0, not the star's own luminosity.
+          float ribA = (0.62 + 0.38 * h2) * (0.80 + lead * 0.75)
+                     * (1.0 + 0.25 * sin(uFlowTime * (1.3 + 2.6 * h3) + h * 43.0));
+          vAlpha = wName * nAlpha + (wRib * ribA + base * wG * 0.85) * vis;
+          vBright = wName * isAnch * (0.25 + 0.75 * mag) + smoothstep(2.2, 5.0, aLum) * (wRib * 0.30 + wG * 0.30);
+          // An anchor is large enough to carry a tight core.
+          vSettled = mix(1.0 - wG * 0.45, 0.30, wName * isAnch);
+          // The hairlines end at the anchors: the pointer does not move those.
+          hold = wName * isAnch;
         }
         /* The pointer parts the stars — every live one, letter, river,
            galaxy or sky. A push away from it in screen space, scaled by
@@ -1150,7 +1270,7 @@
           float pl = length(pd);
           float q = 1.0 - clamp(pl / 0.20, 0.0, 1.0);
           gl_Position.xy += (pd / max(pl, 1e-4)) / vec2(uAspect, 1.0)
-                          * (q * q * 0.055 * uPtr.z);
+                          * (q * q * 0.055 * uPtr.z) * (1.0 - hold);
         }
       }
     }
@@ -1166,6 +1286,21 @@
       vec2 d = gl_PointCoord - 0.5;
       float r2 = dot(d, d);
       if (r2 > 0.25) discard;
+      if (vKind > 2.5) {
+        /* An ANCHOR of the name: a large sprite that is mostly empty —
+           a tight core, a faint glow, and a four-point glint as thin
+           as the canvas can draw. The stock profile below is made for
+           points a few px across; at this size it is a ball. */
+        vec2 ad = abs(d);
+        float coreA = exp(-r2 * 120.0);
+        float glow = exp(-r2 * 16.0) * 0.16;
+        float sp = exp(-ad.y * ad.y * 2400.0) * exp(-ad.x * 8.0)
+                 + exp(-ad.x * ad.x * 2400.0) * exp(-ad.y * 8.0);
+        float edge = smoothstep(0.25, 0.12, r2);
+        float ea = vAlpha * (coreA * 1.9 + glow + sp * vBright * 0.50) * edge;
+        frag = vec4(mix(vColor, vec3(1.0), coreA * 0.65) * ea, 1.0);
+        return;
+      }
       if (vKind > 0.5 && vKind < 1.5) {
         // HII nebula: a wide soft blob. No core, no spikes — this is
         // light from gas, and it should never read as a point.
@@ -1859,7 +1994,7 @@
     for (let i = 0; i < N; i++) {
       nameArr[i * 3]     = nameTargets[i * 2];
       nameArr[i * 3 + 1] = nameTargets[i * 2 + 1];
-      nameArr[i * 3 + 2] = nameReady ? nameIsFill[i] : 0;
+      nameArr[i * 3 + 2] = nameReady ? nameRole[i] : 0;    // > 0.5: a fill star; its role and magnitude
     }
     gl.bindBuffer(gl.ARRAY_BUFFER, nameBuf);
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, nameArr);
@@ -1927,7 +2062,6 @@
      shader, which does its arrival in screen space. */
   const fract = x => x - Math.floor(x);
   const nameTargets = new Float32Array(N * 2);  // NDC xy per star
-  const nameIsFill  = new Float32Array(N);      // 1 = lands in a glyph
   let nameReady = false;
 
   /* Which fraction of the field fills the word. The rest go to the
@@ -1944,7 +2078,11 @@
      have spread thinner over more glyph area.
 
      0.46 -> 0.50 when STAR_COUNT dropped 26k -> 15.5k: the larger
-     points nearly cover the loss, the extra share closes the rest. */
+     points nearly cover the loss, the extra share closes the rest.
+
+     (Since the cast — see THE NAME'S STARS below — only about a third
+     of this share is SEEN in the word; the share itself still decides
+     how many stars the river and the mini galaxy have.) */
   const NAME_FILL_SHARE = 0.50;
 
   /* Mirrors .gname-full in galaxy.css. If these drift apart the
@@ -1978,95 +2116,376 @@
      closer to the optical middle. */
   const NAME_CENTER_Y = 0.52;
 
+  /* ── THE NAME IS REAL TEXT; THE STARS ARE WHAT IT IS MADE OF ──
+     (user, 2026-10-02. Three star-drawn names were rejected: the
+     dense Orbitron fill — "too consistent, a lot of stars, not
+     moving" —, a thinned-out fill with bright anchors, and a
+     constellation of hairlines — "looks blurry / low-res", "I don't
+     like the lines". Asked, the user chose "solid glowing text +
+     stars".) Every one of those drew the letters on THIS canvas,
+     which runs at 0.9 of a CSS pixel: on a 2× screen a star is a soft
+     block, and no dealing of the stars fixes that. So:
+
+       at rest      the name is DOM text (.gname-full: Space Grotesk
+                    700, white, a soft glow) — as sharp as any type on
+                    the page — and over it a small 2D canvas at the
+                    device's full resolution (.gname-sparks, THE
+                    SPARKS below): glints that catch on the letters'
+                    edges, and fine stars that lift off them and drift
+                    away to the right, the way the river goes.
+       on the way   the fill stars of this canvas stand in the same
+                    letters, unseen (uNameShow 0). When the page opens
+                    they gather into the word and the text resolves
+                    over them; when the reader scrolls the text thins
+                    out, they show, and they pour into the river (THE
+                    FLOW). The name is still what the river and the
+                    mini galaxy are made of.
+
+     The letters are sampled from the DOM text itself — each character
+     drawn at the box the browser gave it — so the stars stand exactly
+     where the text is, whatever font loaded. aName.z = 1 + role +
+     magnitude × 0.98 (role 2 seen in the word, 0 reserve: in the
+     letters but never seen there; 0 = not a fill star). */
+  const NAME_SEEN     = 3000;   // fill stars seen in the word while it gathers / lets go (fewer on a small word)
+  const NAME_REF_PX   = 143;    // the font size the shader's sizes were tuned at (1470×840)
+  const NAME_INTRO_S  = 2.0;    // seconds the stars take to gather into the word when the page opens
+  const nameRole = new Float32Array(N);
+  // For the shader: size against NAME_REF_PX, the word's ends (NDC); for the river: its left end (CSS px).
+  const nameInfo = { k: 1, x0: -0.5, x1: 0.5, left: null, fs: 100, pts: null, edge: null };
+
   function buildNameTargets() {
     if (vw === 0 || vh === 0) return;
+    const el = document.querySelector('.gname-full');
+    const node = el && el.firstChild;
+    if (!el || !node || node.nodeType !== 3) { nameReady = false; return; }
     const cssW = vw / dpr, cssH = vh / dpr;
-    const px = Math.round(Math.min(cssW, cssH) * NAME_SIZE_VMIN);
-    if (px < 8) { nameReady = false; return; }
+    const cs = getComputedStyle(el), fs = parseFloat(cs.fontSize) || 100;
+    const shift = Math.max(0, lastShift);            // the box is moved up by --name-scroll: measure as at the top
+    const box = el.getBoundingClientRect();
+    if (box.width < 8 || box.height < 8) { nameReady = false; return; }
 
+    const pad = Math.ceil(fs * 0.2);
+    const ox = Math.floor(box.left) - pad, oy = Math.floor(box.top + shift) - pad;
+    const bw = Math.ceil(box.width) + 2 * pad, bh = Math.ceil(box.height) + 2 * pad;
     const c = document.createElement('canvas');
-    c.width = vw; c.height = vh;
+    c.width = bw; c.height = bh;
     const g = c.getContext('2d', { willReadFrequently: true });
     if (!g) { nameReady = false; return; }
-
-    g.clearRect(0, 0, vw, vh);
     g.fillStyle = '#fff';
-    g.textBaseline = 'middle';
+    g.textBaseline = 'alphabetic';
     g.textAlign = 'left';
-    g.font = NAME_FONT.replace('{SIZE}', String(px * dpr));
-
-    /* Letter spacing is applied by hand: canvas letterSpacing is not
-       supported everywhere, and the CSS outline uses it, so the two
-       would disagree on total width exactly where it matters most. */
-    const track = px * dpr * NAME_LETTER_SPACING;
-    const chars = NAME_TEXT.split('');
-    let total = 0;
-    const widths = chars.map(ch => {
-      const w = g.measureText(ch).width;
-      total += w + track;
-      return w;
-    });
-    total -= track;   // no trailing gap
-
-    let x = (vw - total) / 2;
-    const y = vh * NAME_CENTER_Y;
-    for (let i = 0; i < chars.length; i++) {
-      g.fillText(chars[i], x, y);
-      x += widths[i] + track;
+    g.font = cs.fontStyle + ' ' + cs.fontWeight + ' ' + fs + 'px ' + cs.fontFamily;
+    // The baseline of a one-line box: the font's content area centred in it.
+    const m = g.measureText('Ag');
+    const asc = m.fontBoundingBoxAscent || fs * 0.8, desc = m.fontBoundingBoxDescent || fs * 0.2;
+    const base = box.top + shift + (box.height - (asc + desc)) / 2 + asc;
+    const text = node.nodeValue, range = document.createRange();
+    let inkL = box.right, inkR = box.left;           // the text itself (the box is padded for its glow)
+    for (let i = 0; i < text.length; i++) {
+      if (text[i] === ' ') continue;
+      range.setStart(node, i); range.setEnd(node, i + 1);
+      const cr = range.getBoundingClientRect();
+      inkL = Math.min(inkL, cr.left); inkR = Math.max(inkR, cr.right);
+      g.fillText(text[i], cr.left - ox, base - oy);
     }
-
-    /* Read back and collect interior pixels. Alpha is thresholded
-       high so antialiased edge pixels are not counted — a star
-       sitting half outside the glyph is what makes a filled word look
-       furry instead of crisp. */
     let data;
-    try {
-      data = g.getImageData(0, 0, vw, vh).data;
-    } catch (e) {
-      nameReady = false; return;    // tainted canvas; fall back to sky
-    }
+    try { data = g.getImageData(0, 0, bw, bh).data; }
+    catch (e) { nameReady = false; return; }         // tainted canvas; fall back to sky
 
-    /* Step the scan rather than testing every pixel: at 26k stars a
-       full-resolution list is far more candidates than needed, and the
-       stride keeps the cost flat as resolution rises. */
-    const want = Math.max(1, Math.floor(N * NAME_FILL_SHARE));
-    const pts = [];
-    const stride = Math.max(1, Math.floor(Math.sqrt((vw * vh) / (want * 6))));
-    for (let py = 0; py < vh; py += stride) {
-      for (let pxx = 0; pxx < vw; pxx += stride) {
-        if (data[(py * vw + pxx) * 4 + 3] > 200) pts.push(pxx, py);
-      }
+    // Inside points, and those on the letters' edges (for the glints).
+    const on = (x, y) => x >= 0 && y >= 0 && x < bw && y < bh && data[(y * bw + x) * 4 + 3] > 128;
+    const pts = [], edge = [];
+    for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) {
+      if (!on(x, y)) continue;
+      pts.push(ox + x, oy + y);
+      if (!on(x, y - 1) || !on(x + 1, y) || !on(x - 1, y) || !on(x, y + 1)) edge.push(ox + x, oy + y);
     }
-    if (pts.length < 8) { nameReady = false; return; }
-
     const count = pts.length / 2;
+    if (count < 8) { nameReady = false; return; }
+
+    /* Seeded: the same viewport gives the same word, star for star. */
+    let seed = 0x9E3779B9;
+    const rng = () => {
+      seed = (seed + 0x6D2B79F5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    const nk = Math.min(1.15, Math.max(0.4, fs / NAME_REF_PX));
+    const nSeen = Math.round(NAME_SEEN * Math.min(1, Math.pow(nk, 1.3)));
     /* Assign by star index so the choice is stable across rebuilds —
-       a star that fills the K must not become a sky star on resize. */
+       a star that is in the K must not become a sky star on resize. */
+    /* A SEEN star is drawn sharp on the 2D canvas (nameStars) while it
+       stands in its letter, and by this canvas from the moment it
+       leaves — the same star, the same place: `u`, its turn to leave,
+       is the fraction of aName.z and is what both sides time it by.
+       The seen ones are not spread evenly: a slow wave of density runs
+       through the word (clumps and thin places), sizes follow a power
+       law (most are fine points, a few are bright with a glint). */
+    let cast = 0;
+    const stars = [];
+    const dens = (x, y) => 0.5 + 0.5 * Math.sin(x * 0.047 / nk + 1.4 * Math.sin(y * 0.061 / nk + 0.7) + 2.1);
     for (let i = 0; i < N; i++) {
       const pick = fract(Math.sin(i * 12.9898) * 43758.5453) < NAME_FILL_SHARE;
-      nameIsFill[i] = pick ? 1 : 0;
-      if (!pick) continue;
-      const j = (Math.floor(fract(Math.sin(i * 78.233) * 24634.6345) * count)) % count;
-      /* Jitter within the sampling cell, so the fill is not a visible
-         lattice at the stride's spacing. */
-      const jx = (fract(Math.sin(i * 39.346) * 31415.9265) - 0.5) * stride;
-      const jy = (fract(Math.sin(i * 11.135) * 27182.8182) - 0.5) * stride;
-      const sx = pts[j * 2] + jx, sy = pts[j * 2 + 1] + jy;
-      nameTargets[i * 2]     = (sx / vw) * 2 - 1;
-      nameTargets[i * 2 + 1] = 1 - (sy / vh) * 2;   // GL y is up
+      if (!pick) { nameRole[i] = 0; continue; }
+      const seen = cast++ < nSeen;
+      let j = Math.floor(rng() * count) % count;
+      if (seen) for (let k = 0; k < 5 && rng() > 0.48 + 0.52 * dens(pts[j * 2], pts[j * 2 + 1]); k++)
+        j = Math.floor(rng() * count) % count;
+      const sx = pts[j * 2] + rng(), sy = pts[j * 2 + 1] + rng(), u = rng();
+      nameTargets[i * 2]     = (sx / cssW) * 2 - 1;
+      nameTargets[i * 2 + 1] = 1 - (sy / cssH) * 2;   // GL y is up
+      nameRole[i] = 1 + (seen ? 2 : 0) + u * 0.98;
+      if (seen) {
+        const big = rng() < 0.006, q = rng();
+        const a0 = rng() * 6.2832, d0 = (0.25 + 0.55 * rng()) * fs;
+        stars.push({
+          x: sx, y: sy, u, big,
+          r: (big ? 1.5 + 0.9 * rng() : 0.42 + 1.05 * q * q * q) * (0.72 + 0.28 * Math.min(1, nk)),
+          a: big ? 1 : 0.62 + 0.38 * rng(),
+          t: Math.floor(rng() * 5), ph: rng() * 6.2832, wf: 0.5 + 1.1 * rng(),
+          xn: (sx - inkL) / Math.max(1, inkR - inkL), d: rng(),
+          fx: sx + Math.cos(a0) * d0 * 1.5, fy: sy + Math.sin(a0) * d0 * 0.55,
+        });
+      }
     }
-    /* The centroid of the sampled glyph pixels, in CSS px. This is
-       the ground truth the CSS outline has to line up with. */
-    let sumY = 0;
-    for (let k = 1; k < pts.length; k += 2) sumY += pts[k];
-    starMidY = (sumY / count) / dpr;
+    nameInfo.stars = stars;
+    nameInfo.k = nk;
+    nameInfo.fs = fs;
+    nameInfo.left = inkL;
+    nameInfo.x0 = (inkL / cssW) * 2 - 1;
+    nameInfo.x1 = (inkR / cssW) * 2 - 1;
+    nameInfo.wipe = [(inkL - box.left) / box.width, (inkR - inkL) / box.width];   // the ink, in box widths
+    nameInfo.count = { seen: nSeen, glyphPx: count };
+    nameInfo.pts = pts; nameInfo.edge = edge;
 
     nameReady = true;
     nameDirty = true;
-    alignNameToStars();
+    buildSparks(inkL, box.top + shift + (box.height - fs) / 2, inkR - inkL, fs, fs);
   }
 
-  /* Where the sampled glyphs actually sit, in CSS px from the top. */
+  /* ── THE SPARKS ── the stars at rest on the name: a 2D canvas over
+     the text at the device's full resolution (that is the point of
+     it), a few hundred particles stepped here on the CPU — nothing
+     next to the star passes.
+       glints    a four-point glint catches on a letter's edge, swells
+                 and goes, a dozen at a time, never the same place;
+       drifters  fine stars are born inside the letters (unseen on
+                 the white), lift off, and drift right and a little
+                 up — the way the river leaves — fading as they go.
+                 The pointer pushes them aside.
+     Positions are in window CSS px as at the top of the page; the CSS
+     moves the canvas with the page (--name-scroll) and fades it with
+     the text (--name-text) and on the leave. Not run under reduced
+     motion. */
+  const sparks = { cv: null, ctx: null, ox: 0, oy: 0, w: 0, h: 0, dpr: 1, drift: [], glints: [], live: false };
+  function buildSparks(left, top, w, h, fs) {
+    const host = document.querySelector('.galaxy-name');
+    if (!host || SKY_ONLY) return;
+    if (!sparks.cv) {
+      sparks.cv = document.createElement('canvas');
+      sparks.cv.className = 'gname-sparks';
+      sparks.cv.setAttribute('aria-hidden', 'true');
+      host.appendChild(sparks.cv);
+      sparks.ctx = sparks.cv.getContext('2d');
+    }
+    if (!sparks.ctx) return;
+    sparks.dpr = Math.min(window.devicePixelRatio || 1, 2);
+    sparks.ox = Math.floor(left - fs * 0.5); sparks.oy = Math.floor(top - fs * 0.7);
+    sparks.w = Math.ceil(w + fs * 2.4); sparks.h = Math.ceil(h + fs * 1.2);
+    sparks.cv.width = Math.round(sparks.w * sparks.dpr);
+    sparks.cv.height = Math.round(sparks.h * sparks.dpr);
+    const st = sparks.cv.style;
+    st.left = sparks.ox + 'px'; st.top = sparks.oy + 'px';
+    st.width = sparks.w + 'px'; st.height = sparks.h + 'px';
+    sparks.drift.length = 0; sparks.glints.length = 0;
+    // One soft-cored sprite per tint, drawn scaled: round and sharp at any size.
+    sparks.sprites = SPARK_TINTS.map(col => {
+      const sp = document.createElement('canvas'); sp.width = sp.height = 48;
+      const g = sp.getContext('2d'), gr = g.createRadialGradient(24, 24, 0, 24, 24, 24);
+      const rgb = parseInt(col.slice(1), 16), c = 'rgba(' + (rgb >> 16) + ',' + ((rgb >> 8) & 255) + ',' + (rgb & 255) + ',';
+      gr.addColorStop(0, c + '1)'); gr.addColorStop(0.22, c + '0.95)'); gr.addColorStop(0.34, c + '0.45)');
+      gr.addColorStop(0.6, c + '0.10)'); gr.addColorStop(1, c + '0)');
+      g.fillStyle = gr; g.fillRect(0, 0, 48, 48);
+      return sp;
+    });
+  }
+  const SPARK_TINTS = ['#FFFFFF', '#FFFFFF', '#DDEBFF', '#BFD8FF', '#FFE9C8'];
+  function stepSparks(dt, alpha, intro, rel) {
+    const c = sparks.ctx;
+    if (!c || !nameInfo.pts) return;
+    const H = window.innerHeight;
+    if (rel >= 1 || nameShiftPx > H) {
+      if (sparks.live) { c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, sparks.cv.width, sparks.cv.height); sparks.live = false; }
+      return;
+    }
+    sparks.live = true;
+    const fs = nameInfo.fs, k = fs / NAME_REF_PX, pts = nameInfo.pts, edge = nameInfo.edge;
+    const calm = reduceMotion || intro < 1;
+    const nDrift = calm ? 0 : Math.round(200 * Math.min(1, 0.35 + 0.65 * k)), nGlint = calm ? 0 : Math.round(3 + 4 * Math.min(1, k));
+    const D = sparks.drift, G = sparks.glints;
+    const bornD = (p, warm) => {
+      const j = Math.floor(Math.random() * (pts.length / 2));
+      p.x = pts[j * 2]; p.y = pts[j * 2 + 1];
+      const sp = 0.6 + Math.random() * 0.9;
+      p.vx = (20 + 36 * Math.random()) * k * sp; p.vy = -(2 + 22 * Math.random()) * k * sp;
+      p.life = 3.4 + 3.4 * Math.random(); p.age = warm ? Math.random() * p.life : 0;
+      p.big = Math.random() < 0.10;
+      p.r = (p.big ? 1.35 + 0.8 * Math.random() : 0.55 + 0.85 * Math.pow(Math.random(), 1.4)) * (0.7 + 0.3 * Math.min(1, k));
+      p.a = 0.70 + 0.30 * Math.random();
+      p.ph = Math.random() * 6.283; p.wf = 0.8 + 1.6 * Math.random();
+      p.col = SPARK_TINTS[Math.floor(Math.random() * SPARK_TINTS.length)];
+      if (warm) { p.x += p.vx * p.age; p.y += p.vy * p.age; }
+      return p;
+    };
+    const bornG = (q, warm) => {
+      const j = Math.floor(Math.random() * (edge.length / 2));
+      q.x = edge[j * 2]; q.y = edge[j * 2 + 1];
+      q.life = 1.0 + 1.5 * Math.random(); q.age = warm ? Math.random() * q.life : -Math.random() * 0.8;
+      q.len = (0.045 + 0.085 * Math.pow(Math.random(), 1.8)) * fs;
+      q.rot = (Math.random() - 0.5) * 0.5;
+      return q;
+    };
+    while (D.length < nDrift) D.push(bornD({}, true));
+    while (G.length < nGlint) G.push(bornG({}, true));
+    D.length = nDrift; G.length = nGlint;
+
+    // The pointer, in this canvas's space (the window as at the top of the page).
+    const pOn = flow.pOn, px = (flow.ptx + 1) / 2 * flow.W, py = (1 - flow.pty) / 2 * H + nameShiftPx;
+    const R = 0.75 * fs;
+
+    c.setTransform(sparks.dpr, 0, 0, sparks.dpr, 0, 0);
+    c.clearRect(0, 0, sparks.w, sparks.h);
+    c.globalCompositeOperation = 'lighter';
+
+    /* THE NAME: its stars, each at its place in a letter. They wander,
+       twinkle, take the light that crosses the word, step aside for
+       the pointer; on load they fly in, left letters first; on the
+       scroll each goes out here on its turn (u) — exactly when the
+       star canvas shows it leaving for the river. */
+    if (!reduceMotion) sparks.t = (sparks.t || 0) + dt;
+    const T = sparks.t || 0, sprites = sparks.sprites, pe = 0.30 + 0.70 * flow.pe;
+    for (const st of nameInfo.stars || []) {
+      const lr = Math.min(1, Math.max(0, (rel - st.u * 0.40) / 0.60)), relI = lr * lr * (3 - 2 * lr);
+      const gone = Math.min(1, relI / 0.10);
+      if (gone >= 1) continue;
+      const it = Math.min(1, Math.max(0, (intro - (st.xn * 0.42 + st.d * 0.13)) / 0.45));
+      if (it <= 0) continue;
+      const ie = 1 - Math.pow(1 - it, 3);
+      let x = st.x + (Math.sin(T * st.wf + st.ph) + 0.5 * Math.sin(T * st.wf * 2.3 + st.ph * 1.7)) * 1.1 * k;
+      let y = st.y + (Math.cos(T * st.wf * 0.8 + st.ph * 1.3) + 0.5 * Math.cos(T * st.wf * 1.9 + st.ph)) * 1.1 * k;
+      if (ie < 1) { x = st.fx + (x - st.fx) * ie; y = st.fy + (y - st.fy) * ie; }
+      if (pOn) {
+        const dx = x - px, dy = y - py, d2 = dx * dx + dy * dy;
+        if (d2 < R * R) {
+          const d = Math.sqrt(d2) + 0.01, f = (1 - d / R); 
+          x += dx / d * f * f * 0.30 * fs * pe; y += dy / d * f * f * 0.30 * fs * pe;
+        }
+      }
+      const crest = Math.pow(0.5 + 0.5 * Math.sin(st.x * 0.0115 / k - T * 0.85 + 1.2 * Math.sin(st.y * 0.035 / k + T * 0.21)), 2.2);
+      const tw = 1 + 0.28 * Math.sin(T * (1.3 + 2.6 * st.d) + st.ph * 7);
+      const a = Math.min(1, st.a * (0.62 + 0.55 * crest) * tw) * (1 - gone) * Math.min(1, it / 0.3);
+      if (a <= 0.01) continue;
+      const sz = st.r * 4.2 * (1 + 0.12 * crest);
+      c.globalAlpha = a;
+      c.drawImage(sprites[st.t], x - sparks.ox - sz / 2, y - sparks.oy - sz / 2, sz, sz);
+      if (st.big) {
+        const L = st.r * (3.6 + 1.6 * crest);
+        c.fillStyle = '#FFFFFF';
+        c.globalAlpha = a * 0.7;
+        c.fillRect(x - sparks.ox - L, y - sparks.oy - 0.3, 2 * L, 0.6);
+        c.fillRect(x - sparks.ox - 0.3, y - sparks.oy - L, 0.6, 2 * L);
+      }
+    }
+    for (const p of D) {
+      p.age += dt;
+      if (p.age >= p.life) bornD(p, false);
+      if (pOn) {
+        const dx = p.x - px, dy = p.y - py, d2 = dx * dx + dy * dy;
+        if (d2 < R * R) {
+          const d = Math.sqrt(d2) + 0.01, f = (1 - d / R) * 420 * k * dt;
+          p.vx += dx / d * f; p.vy += dy / d * f;
+        }
+      }
+      p.x += p.vx * dt;
+      p.y += (p.vy + Math.sin(p.age * p.wf + p.ph) * 7 * k) * dt;
+      const t = p.age / p.life;
+      const env = Math.min(1, t / 0.12) * (1 - Math.pow(Math.max(0, (t - 0.5) / 0.5), 1.5));
+      const a = p.a * env * (0.8 + 0.2 * Math.sin(p.age * 5.1 + p.ph)) * alpha;
+      if (a <= 0.01) continue;
+      const x = p.x - sparks.ox, y = p.y - sparks.oy;
+      c.globalAlpha = a;
+      c.fillStyle = p.col;
+      c.beginPath(); c.arc(x, y, p.r, 0, 6.2832); c.fill();
+      if (p.big) {                                  // a hair of a glint on the larger ones
+        const L = p.r * 3.4;
+        c.globalAlpha = a * 0.55;
+        c.fillRect(x - L, y - 0.3, 2 * L, 0.6);
+        c.fillRect(x - 0.3, y - L, 0.6, 2 * L);
+      }
+    }
+    c.fillStyle = '#FFFFFF';
+    for (const q of G) {
+      q.age += dt;
+      if (q.age >= q.life) bornG(q, false);
+      if (q.age <= 0) continue;
+      const s = Math.pow(Math.sin(Math.PI * q.age / q.life), 1.6);
+      const x = q.x - sparks.ox, y = q.y - sparks.oy, L = q.len * (0.35 + 0.65 * s), wd = 0.85;
+      c.save();
+      c.translate(x, y); c.rotate(q.rot);
+      c.globalAlpha = s * alpha;
+      c.beginPath();                                // two tapered blades
+      c.moveTo(-L, 0); c.lineTo(0, -wd); c.lineTo(L, 0); c.lineTo(0, wd); c.closePath();
+      c.moveTo(0, -L); c.lineTo(wd, 0); c.lineTo(0, L); c.lineTo(-wd, 0); c.closePath();
+      c.fill();
+      c.globalAlpha = s * 0.35 * alpha;             // and a breath of light round the core
+      c.beginPath(); c.arc(0, 0, 1.2 + q.len * 0.16, 0, 6.2832); c.fill();
+      c.restore();
+    }
+    c.globalAlpha = 1;
+    c.globalCompositeOperation = 'source-over';
+  }
+
+  /* The text against the stars, once a frame: `text` is how much of
+     the DOM name is there (--name-text), `show` how much of the fill
+     stars standing in its letters (uNameShow). The stars gather, the
+     text resolves over them (entrance); the text thins, the stars
+     show and leave (the first of the scroll). */
+  let lastNameText = -1, lastNameWipe = -9, nameShow = 0;
+  function stepNameText(dt, intro, rel) {
+    const sm = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+    /* On the scroll the text HOLDS while stars leave it and only then
+       thins (a first version swapped it for the star-filled letters
+       within 50 px of scroll — the gravel name the user had rejected,
+       back at the lightest touch of the trackpad). The stars standing
+       in the letters are never shown on the scroll: one is seen only
+       as it leaves for the river (wR in the shader). */
+    /* The entrance is a WIPE, not a cross-fade: each star goes out as
+       it lands (in the shader), and the text is uncovered left to
+       right just behind the landings (--name-wipe, a mask on
+       .gname-full; a star at x lands at intro ≈ 0.51 + 0.42·x). So the
+       star-filled letters are never seen there either. */
+    const out = sm(0.05, 0.55, rel);
+    const text = Math.round((1 - out) * 250) / 250;
+    nameShow = 1;
+    // (In box widths: the box is wider than the ink by its padding.)
+    const wq = nameInfo.wipe || [0, 1];
+    const wipe = intro >= 1 ? 2 : Math.round((wq[0] + wq[1] * (intro - 0.47) / 0.42) * 500) / 500;
+    if (wipe !== lastNameWipe) {
+      lastNameWipe = wipe;
+      document.documentElement.style.setProperty('--name-wipe', String(wipe));
+    }
+    if (text !== lastNameText) {
+      lastNameText = text;
+      document.documentElement.style.setProperty('--name-text', String(text));
+    }
+    stepSparks(dt, text, intro, rel);
+  }
+
+  /* Where the sampled glyphs actually sit, in CSS px from the top.
+     (Unused since the name is DOM text: the stars are sampled FROM the
+     box, so there is nothing to align and --cap-shift stays 0.) */
+  const FLOW_NAME_IS_TEXT = true;
   let starMidY = 0;
 
   /* ── Align the CSS outline to the sampled glyphs ──
@@ -2085,7 +2504,7 @@
      rather than modelling them. */
   function alignNameToStars() {
     const el = document.querySelector('.gname-full');
-    if (!el || !nameReady || !starMidY) return;
+    if (FLOW_NAME_IS_TEXT || !el || !nameReady || !starMidY) return;
     const root = document.documentElement;
     // Measure with the current shift applied, then correct the residual.
     const prev = parseFloat(
@@ -2205,8 +2624,7 @@
      from nameShiftPx = how far the page is past the name screen.
      On the press the profile fades (--leave) and the name glides back
      to the centre (LEAVE_MS) before its letters let go. */
-  const LEAVE_MS = 600, LEAVE_FADE_MS = 420, RELEASE_AFTER = 0.5;
-  let nameShiftPx = 0, nameScreenY = 0, leaving = null, lastShift = -1, lastLeave = -1;
+  let nameShiftPx = 0, nameScreenY = 0, leaving = null, lastShift = -1;
   const burstSection = document.getElementById('burst');
   function measureNameScreen() {
     // The scroll at which the name screen is exactly in view: the end
@@ -2216,12 +2634,7 @@
   measureNameScreen();
   window.addEventListener('resize', measureNameScreen, { passive: true });
   function stepNameShift(now) {
-    if (leaving) {
-      // The press: the page fades (--leave) and that is all — the name
-      // is not on screen to glide anywhere, and nothing is released.
-      const lv = Math.min(1, (now - leaving.t0) / LEAVE_FADE_MS);
-      if (lv !== lastLeave) { lastLeave = lv; document.documentElement.style.setProperty('--leave', lv.toFixed(3)); }
-    }
+    // (--leave is written by the launch handler's own loop, see LAUNCH.)
     nameShiftPx = sealed ? 0 : Math.max(0, window.scrollY - nameScreenY);
     const q = Math.round(nameShiftPx * 2) / 2;
     if (q !== lastShift) {
@@ -2255,6 +2668,8 @@
   window.galaxySky = {
     swallow(amount, u, v) { swallowAmt = Math.min(1, Math.max(0, amount)); swallowHole[0] = u; swallowHole[1] = v; },
     night(amount) { skyNight = Math.min(1, Math.max(0, amount)); },
+    // For the harness: the name's cast (how many of each role) and its entrance.
+    name() { return { ready: nameReady, k: nameInfo.k, count: nameInfo.count || null, intro: flow.intro, text: lastNameText, show: nameShow }; },
   };
 
   function wake() {
@@ -2319,7 +2734,10 @@
      page when its layout changes and hands the vertex shader a few
      uniforms a frame. */
   const FLOW = !SKY_ONLY;
-  const FLOW_REL_SPAN     = 0.40;  // screens of scroll over which the letters let go
+  const FLOW_REL_SPAN     = 0.62;  // screens of scroll over which the letters let go (the name is off the top by then)
+  const FLOW_REL_EASE     = 3.0;   // per second: the letting-go trails the scroll ...
+  const FLOW_REL_RATE     = 0.55;  // ... and never runs faster than this a second: a flick of the wheel
+                                   // does not fire the stars down the river, they pour for ~2 s
   const FLOW_GATHER_START = 0.66;  // screens before the page's end where the gathering starts
   const FLOW_GATHER_SPAN  = 0.52;  // ... and how long it takes: done 0.14 screens before the end, so a
                                    // #build deep link (70 px short of it, scroll-padding-top) is whole
@@ -2343,6 +2761,7 @@
     sheetTop: 1e9, holes: null, seen: true, cut: null,
     y: -1, rel: 0, gather: 0,
     px: 0, py: 0, ptx: 0, pty: 0, pe: 0, pOn: false,
+    intro: 0, introGo: false,             // the name's entrance (uName.y), and whether its font has come
   };
   /* The centreline's texture: RGBA32F, one row, read with texelFetch
      (so it needs no float-filtering extension). A two-texel stand-in
@@ -2454,7 +2873,7 @@
        the galaxy's centre. */
     const nameEl = document.querySelector('.gname-full');
     const nr = nameEl ? nameEl.getBoundingClientRect() : null;
-    flow.x0 = Math.min(nr && nr.width > 0 ? nr.left : W * 0.25, xR - 4 * R);
+    flow.x0 = Math.min(nameInfo.left != null ? nameInfo.left : (nr && nr.width > 0 ? nr.left : W * 0.25), xR - 4 * R);
     const V = [[flow.x0, flow.nameY], [xR, flow.nameY]];
     const crossings = [];
     let x = xR;
@@ -2616,7 +3035,8 @@
     if (!flow.ok) measureFlow();
     if (!flow.ok) return;
     const y = window.scrollY, H = flow.H;
-    if (flow.y < 0 || Math.abs(y - flow.y) > 3 * H) flow.y = y;      // first frame, or a jump (a deep link)
+    const jump = flow.y < 0 || Math.abs(y - flow.y) > 3 * H;
+    if (jump) flow.y = y;                                            // first frame, or a jump (a deep link)
     else flow.y += (y - flow.y) * Math.min(1, dt * FLOW_EASE);
     if (Math.abs(y - flow.y) < 0.4) flow.y = y;
     if (reduceMotion) {
@@ -2626,11 +3046,26 @@
       flow.gather = flow.galY - y < 1.5 * H ? 1 : 0;
       flow.rel = flow.gather;
     } else {
-      flow.rel = Math.min(1, Math.max(0, flow.y / (FLOW_REL_SPAN * H)));
+      const relT = Math.min(1, Math.max(0, y / (FLOW_REL_SPAN * H)));
+      if (jump) flow.rel = relT;
+      else {
+        const lim = FLOW_REL_RATE * dt;
+        flow.rel += Math.max(-lim, Math.min(lim, (relT - flow.rel) * Math.min(1, dt * FLOW_REL_EASE)));
+        if (Math.abs(relT - flow.rel) < 0.0005) flow.rel = relT;
+      }
       flow.gather = Math.min(1, Math.max(0,
         (flow.y - (flow.maxScroll - FLOW_GATHER_START * H)) / (FLOW_GATHER_SPAN * H)));
       flow.cyc += dt * FLOW_SPEED / flow.Lw;      // the conveyor turns on time alone
     }
+    /* The name's entrance, once, when the page opens at its top: it
+       waits for the name's font (the letters are resampled when it
+       arrives — the stars must not gather into the fallback face and
+       then jump), and is skipped when the page opens further down. */
+    if (flow.intro < 1) {
+      if (reduceMotion || y > 0.2 * H) flow.intro = 1;
+      else if (flow.introGo) flow.intro = Math.min(1, flow.intro + dt / NAME_INTRO_S);
+    }
+    stepNameText(dt, flow.intro, flow.rel);
     flow.s0 = riverAt(y - FLOW_PAD * H, false);
     flow.seen = y < flow.sheetTop + 8 || !flow.holes ||
                 flow.holes.some(v => v[1] > y && v[0] < y + H);
@@ -3109,6 +3544,8 @@
         gl.uniform1f(u.uSpin, reduceMotion ? 0 : time * MINI_SPIN);
         gl.uniform1f(u.uFlowTime, reduceMotion ? 0 : time);
         gl.uniform3f(u.uPtr, flow.px, flow.py, flow.pe);
+        gl.uniform4f(u.uName, nameInfo.k, flow.intro, nameInfo.x0, nameInfo.x1);
+        gl.uniform1f(u.uNameShow, 0);
       }
     }
     if (starProg.u.uFloatTime) gl.uniform1f(starProg.u.uFloatTime, time);
@@ -3412,8 +3849,12 @@
     document.fonts.ready.then(() => {
       buildNameTargets();
       alignNameToStars();
+      flow.introGo = true;
       wake();
-    }).catch(() => {});
+    }).catch(() => { flow.introGo = true; });
+    setTimeout(() => { flow.introGo = true; }, 1500);   // a slow font does not hold the name back for long
+  } else {
+    flow.introGo = true;
   }
 
   /* ============================================================
@@ -3482,40 +3923,10 @@
      LAUNCH — the link under the mini galaxy
      ============================================================
      The system lives on its own page (system.html) and the launch
-     link is a real link to it. A plain click is taken here only to
-     fade the page first; anything else (a modified click, no WebGL2,
-     no script) is the link's own business and simply opens the page.
-
-     The press: the page locks (.is-leaving) and the profile fades on
-     --leave over LEAVE_FADE_MS (stepNameShift writes it); the sheet
-     fades with it, so the sky comes back around the mini galaxy,
-     which stays as it is. Then the link is followed.
-     NOTHING of the link animates, and there is no name to release any
-     more (it is at the top of the page, not here) — the old glide /
-     seal / release take-off is gone.
-
-     Under reduced motion: straight to the page. */
-  const launchBtn = document.getElementById('launchBtn');
-  if (launchBtn && !SKY_ONLY) {
-    const root = document.documentElement;
-    const go = () => { window.location.assign(launchBtn.href); };
-    launchBtn.addEventListener('click', e => {
-      if (e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-      e.preventDefault();
-      if (launched) return;
-      launched = true;
-      if (reduceMotion) { go(); return; }
-
-      root.classList.add('is-leaving');          // scroll locked; the profile fades on --leave
-      leaving = { t0: performance.now() };
-      wake();
-      setTimeout(go, LEAVE_FADE_MS + 80);
-    });
-    /* Coming BACK to this page from the system (the back button) can
-       restore it from the back-forward cache exactly as it was left:
-       locked, the profile faded out. Start over. */
-    window.addEventListener('pageshow', e => { if (e.persisted && launched) window.location.reload(); });
-  }
+     link is a plain link to it. NOTHING happens on this page at the
+     press — no fade, no streaks, no delay (the user, twice: the
+     button must not animate, then the page must not either): the
+     browser follows the link and system.html plays its own warp. */
 
   /* ============================================================
      THE PAGE OPENS ON THE NAME — galaxy.html

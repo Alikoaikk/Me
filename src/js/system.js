@@ -46,6 +46,10 @@ import { makeEmblem } from './emblems.js';
 
   const root = document.documentElement;
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  /* No arrival: reduced motion, or the reader switched here from the
+     list (work.html links to system.html#view) and has seen it — the
+     system is simply there. Motion inside it is reduceMotion's alone. */
+  const instant = reduceMotion || window.location.hash === '#view';
   const data = window.portfolioData || {};
   const projects = Array.isArray(data.projects) ? data.projects : [];
 
@@ -614,7 +618,7 @@ import { makeEmblem } from './emblems.js';
       if (!body || !ready) { l.el.style.display = 'none'; return; }
       // Each label eases in a little after the last, once the system is live.
       const since = (now - readyAt) / 1000 - 0.08 * k;
-      l.in = reduceMotion ? 1 : smooth01(since / 0.6);
+      l.in = instant ? 1 : smooth01(since / 0.6);
       body.group.getWorldPosition(_lv);
       const dist = _lv.distanceTo(camera.position);
       _lv.project(camera);
@@ -1342,7 +1346,7 @@ import { makeEmblem } from './emblems.js';
     const dt = Math.min(0.05, lastNow ? (now - lastNow) / 1000 : 0.016);
     if (lastNow) stepQuality(now - lastNow);
     lastNow = now;
-    if (!armed && !reduceMotion) { renderer.clear(); return; }
+    if (!armed && !instant) { renderer.clear(); return; }
     if (!sun) return;
     if (!reduceMotion) time += dt;
 
@@ -1354,28 +1358,28 @@ import { makeEmblem } from './emblems.js';
     }
 
     // Koaik: grow in, then hold (and shrink to a point in the collapse).
-    const rev = reduceMotion ? 1 : !revealAt ? 0 : Math.min(1, (now - revealAt) / config.REVEAL_MS);
-    const s = reduceMotion ? 1 : 0.02 + 0.98 * easeOutCubic(rev);
+    const rev = instant ? 1 : !revealAt ? 0 : Math.min(1, (now - revealAt) / config.REVEAL_MS);
+    const s = instant ? 1 : 0.02 + 0.98 * easeOutCubic(rev);
     const cs = stepCollapse(now);
     sun.mesh.scale.setScalar(Math.max(1e-4, config.BH_R * s * cs.core));
 
     // The pull-back: a beat after the reveal, out to the overview.
-    if (!pullAt && (reduceMotion || (revealAt && now - revealAt >= config.REVEAL_MS + config.PULLBACK_DELAY_MS))) {
+    if (!pullAt && (instant || (revealAt && now - revealAt >= config.REVEAL_MS + config.PULLBACK_DELAY_MS))) {
       pullAt = now;
-      if (reduceMotion) { const o = overviewPose(); camera.position.copy(o.pos); controls.target.copy(o.target); camera.lookAt(o.target); becomeReady(); }
+      if (instant) { const o = overviewPose(); camera.position.copy(o.pos); controls.target.copy(o.target); camera.lookAt(o.target); becomeReady(); }
       else fly(overviewPose(), config.PULLBACK_MS, becomeReady);
     }
-    const pull = !pullAt ? 0 : reduceMotion ? 1 : Math.min(1, (now - pullAt) / config.PULLBACK_MS);
+    const pull = !pullAt ? 0 : instant ? 1 : Math.min(1, (now - pullAt) / config.PULLBACK_MS);
     // The system is revealed in order as the camera pulls back: each
     // orbit draws itself from its planet's position, then the planet
     // grows in on it, the next one a beat behind — inner to outer.
     for (const p of planets) {
       if (!p) continue;
       const start = 0.22 + 0.06 * p.index;
-      const q = reduceMotion ? 1 : smooth01((pull - start) / 0.30);
+      const q = instant ? 1 : smooth01((pull - start) / 0.30);
       const drawn = Math.round(q * p.orbitPts) + 1;
       p.ring.geometry.setDrawRange(0, 6 * Math.max(0, Math.min(p.orbitPts, drawn - 1)));   // indices: 6 per segment
-      p.born = !emblemsLive ? 0 : reduceMotion ? 1 : smooth01((pull - start - 0.10) / 0.28);
+      p.born = !emblemsLive ? 0 : instant ? 1 : smooth01((pull - start - 0.10) / 0.28);
       // In the collapse: stretched toward the hole, then gone into it.
       const f = p.fall;
       const gone = 1 - smooth01((f - 0.78) / 0.22);
@@ -1482,7 +1486,7 @@ import { makeEmblem } from './emblems.js';
 
   window.koaik = {
     arm() {
-      if (reduceMotion) return;
+      if (instant) return;
       armed = true; revealAt = 0; pullAt = 0;
       lastIn = 0; root.style.setProperty('--planet-in', '0');
       resize();
@@ -1495,7 +1499,7 @@ import { makeEmblem } from './emblems.js';
   };
   /* Reduced motion: no arrival, the system is simply there once the
      section exists. */
-  if (reduceMotion) { armed = true; resize(); build(); }
+  if (instant) { armed = true; resize(); build(); }
 
   window.system = {
     select, overview, collapse: startCollapse,

@@ -34,6 +34,10 @@
     <div class="galaxy-name" aria-label="Ali Koaik">
       <span class="gname-full">Ali Koaik</span>
       <!-- Above the name: the greeting. -->
+      <!-- Where to find him: three round glass buttons, each with its
+           logo, and the résumé beside them, in the top-right corner
+           (profile.js fills it). -->
+      <nav class="gname-social" id="gnameLinks" aria-label="Find me"></nav>
       <p class="gname-hello">Hello, I'm</p>
       <!-- Below it, one block in normal flow, hung from the name's
            anchor (see .gname-below in galaxy.css). Type and hairlines
@@ -51,10 +55,6 @@
         <p class="gname-role" id="gnameRole"></p>
         <p class="gname-focus" id="gnameFocus"></p>
         <p class="gname-meta" id="gnameMeta"></p>
-        <nav class="gname-actions" aria-label="Links">
-          <a class="gname-go" href="#build" id="gnameWork">View my work<span class="gname-arrow" aria-hidden="true">&darr;</span></a>
-          <span class="gname-links" id="gnameLinks"></span>
-        </nav>
         <p class="gname-quote" id="gnameQuote" aria-live="off">
           <span class="gname-quote-text"></span>
         </p>
@@ -148,7 +148,7 @@
         <div class="ab-left">
           <div class="ab-copy pf-rise" id="profileBio"></div>
           <div class="ab-stats pf-rise" id="aboutStats"></div>
-          <p class="pf-links pf-rise" id="profileLinks"></p>
+          <ul class="ab-contact pf-rise" id="profileLinks" aria-label="Contact"></ul>
         </div>
         <div class="ab-frame pf-rise">
           <img id="pfPhoto" alt="" hidden>

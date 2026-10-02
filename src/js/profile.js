@@ -65,9 +65,18 @@
     meta.innerHTML = bits.map(b => `<span>${esc(b)}</span>`).join('');
     meta.hidden = !bits.length;
   }
+  // The three ways to reach him sit in the top-right corner as round
+  // buttons, each with its mark (the name is the accessible label).
+  const MARKS = {
+    github: '<path fill="currentColor" d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2.2c-3.2.7-3.88-1.36-3.88-1.36-.52-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.25.73-1.54-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.78 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.41-2.69 5.39-5.25 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/>',
+    linkedin: '<path fill="currentColor" d="M20.45 20.45h-3.56v-5.57c0-1.33-.02-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.35V9h3.41v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28ZM5.34 7.43a2.06 2.06 0 1 1 0-4.13 2.06 2.06 0 0 1 0 4.13ZM7.12 20.45H3.56V9h3.56v11.45Z"/>',
+    email: '<path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M3.5 6.5h17v11h-17zM3.8 7l8.2 6.4L20.2 7"/>',
+  };
   const linksEl = $('gnameLinks');
   if (linksEl) linksEl.innerHTML = links.map(l =>
-    `<a class="gname-link" href="${esc(l.href)}"${l.ext ? ' target="_blank" rel="noopener"' : ''}>${esc(l.label)}</a>`).join('');
+    `<a class="gname-icon" href="${esc(l.href)}" aria-label="${esc(l.label)}" title="${esc(l.label)}"${l.ext ? ' target="_blank" rel="noopener"' : ''}><svg viewBox="0 0 24 24" aria-hidden="true">${MARKS[l.key] || ''}</svg></a>`).join('') +
+    // ... and the résumé, a download (personal.resume in data.js; none → no button).
+    (pp.resume ? `<a class="gname-icon gname-cv" href="${esc(pp.resume)}" download><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19.5h14"/></svg><span>Resume</span></a>` : '');
 
   /* ── Going to a section ──
      One function for the cue, the top bar and the orbit's bodies.
@@ -80,8 +89,6 @@
   }
   const cue = $('gnameCue');
   if (cue) cue.addEventListener('click', e => { if (goTo(profile)) e.preventDefault(); });
-  const work = $('gnameWork');
-  if (work) work.addEventListener('click', e => { if (goTo($('build'))) e.preventDefault(); });
 
   /* ── About ──
      The copy is the bio, its first paragraph larger; names worth the
@@ -94,9 +101,25 @@
   const bio = $('profileBio');
   if (bio) bio.innerHTML = (pp.bio || [pp.brief]).filter(Boolean).map(p => `<p>${esc(p).replace(KEY, '<strong>$1</strong>')}</p>`).join('');
   set('aboutStatus', [pp.location, pp.status].filter(Boolean).join(' — '));
+  /* The ways to reach him: one row each under the numbers — the mark,
+     the name, and where it leads (the handle or the address, read
+     from the link itself). */
+  const handle = l => {
+    if (l.key === 'email') return l.href.replace(/^mailto:/, '');
+    const path = l.href.replace(/^https?:\/\/(www\.)?[^/]+\/?/, '').replace(/\/+$/, '');
+    if (!path) return l.href.replace(/^https?:\/\/(www\.)?/, '').replace(/\/+$/, '');
+    return l.key === 'github' ? '@' + path : path;
+  };
   const pfLinks = $('profileLinks');
-  if (pfLinks) pfLinks.innerHTML = links.map(l =>
-    `<a class="gname-link" href="${esc(l.href)}"${l.ext ? ' target="_blank" rel="noopener"' : ''}>${esc(l.label)}</a>`).join('');
+  if (pfLinks) {
+    pfLinks.innerHTML = links.map(l => `
+      <li><a class="ab-link" href="${esc(l.href)}"${l.ext ? ' target="_blank" rel="noopener"' : ''}>
+        <svg class="ab-link-mark" viewBox="0 0 24 24" aria-hidden="true">${MARKS[l.key] || ''}</svg>
+        <span class="ab-link-name">${esc(l.label)}</span>
+        <span class="ab-link-to">${esc(handle(l))}</span>
+        <span class="ab-link-go" aria-hidden="true">${l.ext ? '↗' : '→'}</span>
+      </a></li>`).join('');
+  }
   const STATS = [
     { label: 'Projects', value: projects.length || st.projects },
     { label: '42 level', value: st.level42 },
@@ -125,27 +148,58 @@
     { label: 'Technologies', items: skills.technologies, tone: 'blue',
       icon: '<path d="m12 4 8 4-8 4-8-4 8-4Zm-8 8 8 4 8-4M4 16l8 4 8-4"/>' },
   ].filter(g => g.items && g.items.length);
+  /* Each name wears its own logo, in its own colours (assets/logos/,
+     one small SVG each). A name with no entry here is shown bare. */
+  const LOGOS = {
+    'C': ['c'], 'C++': ['cplusplus'], 'Java': ['java'], 'Python': ['python'],
+    'JavaScript': ['javascript'], 'HTML / CSS': ['html5', 'css3'], 'SQL': ['sql'],
+    'VS Code': ['vscode'], 'Android Studio': ['androidstudio'],
+    'Apache NetBeans': ['netbeans'], 'Linux': ['linux'], 'Git': ['git'],
+    'GitHub': ['github'], 'GDB': ['gdb'], 'Bootstrap': ['bootstrap'],
+  };
+  const logos = name => (LOGOS[name] || []).map(f =>
+    `<img class="pf-logo" src="assets/logos/${f}.svg" alt="" width="20" height="20" loading="lazy" decoding="async">`).join('');
   const stack = $('profileStack');
   if (stack) stack.innerHTML = STAGES.map((g, i) => `
     <li class="pf-stage pf-rise" data-tone="${g.tone}" style="--d:${i}">
       <span class="pf-stage-node" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${g.icon}</svg></span>
       <h3 class="pf-stage-title">${esc(g.label)}</h3>
-      <ul class="pf-chips">${g.items.map(x => `<li>${esc(x)}</li>`).join('')}</ul>
+      <ul class="pf-chips">${g.items.map(x => `<li>${logos(x)}${esc(x)}</li>`).join('')}</ul>
     </li>`).join('');
 
   /* ── Career: a timeline ──
      One row per entry of data.education, newest first as written:
-     the period, then what and where. */
+     the period, then what and where, with the school's logo beside
+     it on a small tile (`logo` in data.js; `logoTile: "light"` for a
+     logo made for a white page). The initials are under the image and
+     are what shows when there is no logo or it does not load. */
+  const mono = s => (/^\d+\b/.exec(String(s || '')) || [(String(s || '').match(/(?:^|\s)[A-Z]/g) || []).map(w => w.trim()).join('')])[0].slice(0, 2);
   const edu = $('profileEdu');
-  if (edu) edu.innerHTML = education.map((e, i) => `
+  if (edu) {
+    edu.innerHTML = education.map((e, i) => `
     <li class="tl-item pf-rise" style="--d:${i + 2}">
       <span class="tl-dot" aria-hidden="true"></span>
       <span class="tl-date">${esc(e.period || '')}</span>
       <div class="tl-body">
-        <h3>${esc(e.institution || '')}</h3>
-        <p>${esc(e.program || '')}${e.level ? ` · ${esc(e.level)}` : ''}</p>
+        <span class="tl-logo"${e.logo && e.logoTile ? ` data-tile="${esc(e.logoTile)}"` : ''} aria-hidden="true">
+          <span class="tl-mono">${esc(mono(e.institution))}</span>
+          ${e.logo ? `<img src="${esc(e.logo)}" alt="" width="56" height="56" loading="lazy" decoding="async">` : ''}
+        </span>
+        <div class="tl-text">
+          <h3>${esc(e.institution || '')}</h3>
+          <p>${esc(e.program || '')}${e.level ? ` · ${esc(e.level)}` : ''}</p>
+        </div>
       </div>
     </li>`).join('');
+    edu.querySelectorAll('.tl-logo img').forEach(img => {
+      const tile = img.parentNode;
+      const done = () => tile.classList.add('has-logo');
+      const fail = () => { tile.removeAttribute('data-tile'); img.remove(); };
+      img.addEventListener('load', done);
+      img.addEventListener('error', fail);
+      if (img.complete && img.naturalWidth) done();
+    });
+  }
 
   /* ── What I build ── */
   set('profileLead', projects.length
@@ -164,6 +218,7 @@
   let navOn = false, navTick = false, activeSec = '';
   function placeBlob() {
     const a = secLinks.find(l => l.dataset.sec === activeSec);
+    if (blob && !a) blob.style.setProperty('--bw', '0px');     // on the name screen: no marker
     if (!blob || !a) return;
     // Set on a change of section only, so the CSS may ease it: the
     // left and the width run on different curves and the pill
@@ -187,8 +242,9 @@
   }
   function navCheck() {
     navTick = false;
-    const on = !!profile && profile.offsetParent !== null &&
-      window.scrollY >= profile.offsetTop - window.innerHeight * 0.5;
+    // On from the top of the page (the user asked for it there), as
+    // soon as the profile exists — not only once the reader is in it.
+    const on = !!profile && profile.offsetParent !== null;
     if (on === navOn) return;
     navOn = on;
     root.classList.toggle('nav-on', on);
@@ -265,13 +321,17 @@
       secs.forEach(el => io.observe(el));
     }
     const mid = new IntersectionObserver(entries => {
-      for (const e of entries) if (e.isIntersecting) setActive(e.target.id);
+      for (const e of entries) {
+        if (e.isIntersecting) setActive(e.target.id);
+        // Back up on the name screen: no section is the current one.
+        else if (e.target === secs[0] && e.boundingClientRect.top > 0 && activeSec === secs[0].id) setActive('');
+      }
     }, { rootMargin: '-45% 0px -54% 0px' });
     secs.forEach(el => mid.observe(el));
   } else {
     secs.forEach(el => el.classList.add('is-in'));
   }
-  if (!activeSec && secs.length) setActive(secs[0].id);
+  if (!activeSec && secs.length && !('IntersectionObserver' in window)) setActive(secs[0].id);
 
   /* ── Arriving at a section: galaxy.html#education ──
      The top bar on the other pages links here by hash. galaxy.js has

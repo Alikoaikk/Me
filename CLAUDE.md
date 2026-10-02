@@ -1145,6 +1145,220 @@ Done, in order, all in `src/js/galaxy/galaxy.js` unless noted:
     window's size against the lead text and the label; (3) rewrite
     item 32's FLOW paragraph and docs/ once it is right.
 
+34. THE NAME: WRITTEN BY SHARP STARS (2026-10-02, five rounds). The
+    user rejected, in order: the dense Orbitron fill on the WebGL
+    canvas ("too consistent, contain a lot of stars, and not moving,
+    the design of it is bad"); a thinned-out fill with bright anchor
+    stars; a constellation of single-stroke letters with hairlines
+    ("looks blurry / low-res", "I don't like the lines"); solid white
+    DOM text with sparks on it ("wtf are this", then "ali koaik is no
+    longer written using stars, so the animation isn't work as
+    expected"). THE RULES THAT CAME OUT OF IT: the name must be
+    WRITTEN BY STARS, and those same stars must be the ones that flow
+    into the river; it must be SHARP (the WebGL canvas runs at 0.9 of
+    a CSS pixel, so letters drawn there are soft on a 2× screen — do
+    not draw the standing name there); no lines; not a uniform fill.
+    NOW: `.gname-full` is DOM text ("Ali Koaik", Space Grotesk 700,
+    −0.035em, padded box) with `color: transparent` — it paints only
+    a faint ice-blue text-shadow haze in the letters' shape, and is
+    the box the stars are sampled from (`buildNameTargets` draws each
+    character at its Range rect, so the stars follow the CSS; size
+    `--S` on `.galaxy-name` = clamp(2.8rem, min(17vmin, 19vw), 11rem),
+    `.gname-hello` −0.62 S, `.gname-below` +0.50 S; `--cap-shift`
+    stays 0, `NAME_FONT` / `NAME_SIZE_VMIN` / `NAME_LETTER_SPACING`
+    are dead). THE STARS OF THE NAME are drawn on `.gname-sparks`, a
+    2D canvas over the name at DEVICE resolution (dpr ≤ 2;
+    `buildSparks` / `stepSparks`): `nameInfo.stars`, `NAME_SEEN` 3000
+    (× k^1.3 on a small word), density on a slow wave (clumps and
+    thin places), sizes on a power law, 0.6 % "big" with a cross
+    glint, five tints, drawn as scaled sprites. They wander, twinkle,
+    take a crest of light crossing the word, step aside for the
+    pointer; on load they fly in left letters first (`flow.intro`,
+    `NAME_INTRO_S` 2.0; the haze is wiped in behind, `--name-wipe`).
+    Plus ~200 drifters shed to the right and a few edge glints.
+    THE HAND-OFF: every fill star's fraction of `aName.z` is `u`, its
+    turn to leave; the shader's `relI` uses it (not a hash), and the
+    2D star goes out over the first 0.10 of the same `relI` — exactly
+    as the WebGL star, at the same home, appears and runs to the
+    river. WebGL never shows a star standing in a letter
+    (`uNameShow` 0); reserve fill stars (not among the 3000) simply
+    appear as they leave. Scrolling up reverses it. The haze fades on
+    `--name-text` (rel 0.05→0.55). Reduced motion: the stars are set
+    and still. Harness: `window.galaxySky.name()`;
+    `tools/render/name.js`.
+    THE RIVER WEARS THE NAME'S COLOURS (user: "now the stars look in
+    ali koaik is much better … make the stars in the path the same
+    color and shade"): in the ribbon state the shader takes one of
+    the five `SPARK_TINTS` (as literals — keep the two in step) and
+    an alpha of 0.62–1.0 with the same twinkle, instead of the
+    galaxy's warm spectral tint and the star's own luminosity; in
+    the mini galaxy a star is a galaxy star again (`wG`).
+    Verified on the real GPU at 1470×840 (@1, @2) and 390×844 @3: at
+    rest, the entrance, the hand-off at 0.1–0.3 screens and back,
+    reduced motion; no errors. The Chrome extension IS connectable
+    now (the user's tab must be in front or the page's frames stop).
+    NOT watched in motion. (Item 33's river renders and works; its
+    uncommitted tuning was already in the tree.)
+
+35. LOGOS IN THE STACK (2026-10-02, user: "use the colored logo in
+    the section of tech stack … side the name"). Each chip in `#stack`
+    has its logo before the name: `src/assets/logos/*.svg` (16 files,
+    ~45 KB; devicon and Iconify "logos" sets, the GitHub mark recoloured
+    white, GDB = the GNU head tinted red, SQL = a drawn cylinder — it
+    has no logo), mapped by NAME in profile.js (`LOGOS`; "HTML / CSS"
+    gets two). A skill added to data.js with no entry there shows
+    bare — add the file and the entry. Seen in the user's Chrome.
+
+36. THE LETTING-GO IS SLOWER AND LOOSER (2026-10-02, user: "while
+    scrolling from the hero section down, the stars move too fast …
+    more realistic"). The cause: a star runs from its letter to a
+    conveyor slot anywhere in the populated stretch (up to thousands
+    of px) inside a third of a screen of scroll. Now `FLOW_REL_SPAN`
+    0.62 (was 0.40); `flow.rel` no longer rides `flow.y` — it trails
+    the raw scroll (`FLOW_REL_EASE` 3/s) and is RATE-LIMITED
+    (`FLOW_REL_RATE` 0.55/s), so a flick pours the stars over ~2 s
+    instead of firing them (a jump / deep link still sets it at
+    once); each star's own window is `u·0.40 … +0.60` (was 0.55 /
+    0.45 — the 2D canvas in `stepSparks` uses the same numbers, keep
+    them in step); progress along the river is `pow(relI, 1.7)` (slow
+    off the letter, faster downstream) and on the way a star swings
+    wide of the thread (`loose`) and comes back as it arrives. The
+    river's own speed (`FLOW_SPEED` 78) was not touched. Seen as
+    stills in the user's Chrome at 0.18 / 0.36 / 0.9 screens.
+
+37. THE HERO'S BUTTONS ARE GLASS PILLS, HIGHER (2026-10-02, user: "in
+    the hero section I want the three buttons get up and the other
+    buttons a little bit bigger and have some liquid glass
+    background"). This OVERRIDES item 29's "no pills, no glass" for
+    `.gname-actions` only: the row now sits right under the focus
+    line (above the place / status line and the quote — the markup
+    order changed), and "View my work" + GitHub / LinkedIn / Email
+    are rounded glass pills (0.8rem, tint + rim + top light,
+    backdrop blur; the work link tinted with the accent; they lift
+    2px on hover). The underline-on-hover and the hairline are gone.
+    Phone: the work pill, then the three on a second row. Seen in the
+    user's Chrome at desktop size; the phone layout was not rendered.
+
+38. THE BAR IS ON FROM THE TOP (2026-10-02, user: "add the navbar
+    from the top of the page"). profile.js `navCheck`: `.nav-on` as
+    soon as `#profile` exists, no longer only half a screen before
+    it. On the name screen no section is marked (the marker's width
+    is 0; the first section is un-marked again when the reader
+    scrolls back up above it).
+
+39. THE THREE CONTACT LINKS ARE ICONS, TOP RIGHT (2026-10-02; the
+    user repeated item 37's request, so it was ASKED: the three =
+    GitHub / LinkedIn / Email, "up" = the top-right corner, "better"
+    = icons with logos). `.gname-social` (`#gnameLinks`, now a nav
+    directly inside `.galaxy-name`, level with the bar; under it at
+    ≤ 900 px): three round glass `.gname-icon` buttons with inline
+    SVG marks from profile.js (`MARKS`), `aria-label` = the name.
+    It scrolls away with the name screen (`--name-scroll`), shows on
+    `.is-written`, fades on `--leave`. "View my work" stays alone as
+    the glass pill under the focus line. About's `#profileLinks`
+    still uses `.gname-link` (text pills). Lesson: when this user's
+    wording is ambiguous a second time, ask with concrete options.
+
+40. DOWNLOAD RÉSUMÉ (2026-10-02, user: "add a button to download
+    that resume"). `#gnameResume` (`.gname-link.gname-cv`, a glass
+    pill with a download glyph) beside "View my work" in the hero;
+    `personal.resume` in data.js = `assets/Ali_Koaik_CV.pdf`,
+    profile.js sets the href and un-hides it (no entry → no button).
+    The PDF was COPIED from `~/Downloads/Ali_Koaik_CV.pdf` (dated
+    2026-04-01, the newer of two found; the other is
+    `~/Desktop/AliKoaikCv.pdf`) — the user did not name the file, so
+    confirm it is the right one before it is deployed.
+
+    MOVED the same day (user: "call it Resume … top right of the
+    hero with the other buttons"): it is now `.gname-icon.gname-cv`,
+    a glass pill "Resume" with a download glyph, last in
+    `.gname-social` (profile.js appends it); `#gnameResume` beside
+    "View my work" is gone. The group drops under the bar at
+    ≤ 1100 px.
+
+41. SIX FIXES BY THREE AGENTS (2026-10-02, user asked for "multy
+    agents"). Seen in the user's Chrome at 1470×812 only; phone
+    layouts, reduced motion and a modified click were NOT checked.
+    ABOUT LINKS: `#profileLinks` is `<ul class="ab-contact">`, a
+    hairline frame under `.ab-stats` with three `a.ab-link` rows
+    (mark from `MARKS`, name, the handle / address in mono via
+    `handle()` in profile.js, an arrow). The hero's `.gname-link`
+    glass pill is no longer used in About; `.pf-links` is dead.
+    CAREER LOGOS: `education[].logo` (+ `logoTile: "light"`) in
+    data.js → a `.tl-logo` tile beside each entry; `assets/logos/
+    42.svg` (simple-icons, white) and `usal.webp` (the seal from
+    usal.edu.lb, on a white tile). No logo / load failure → a
+    monogram (`.tl-mono`).
+    STACK HOVER: `.pf-chips li:hover` lifts 2 px, brightens in the
+    stage tone (`--tone-hot`, `--tone-fill-hot`), logo ×1.14; CSS
+    only, `(hover: hover)`.
+    THE PRESS (user: "the animation … is not handled well"; measured:
+    a 420 ms fade, a frozen frame, then a hard cut to a sky with the
+    galaxy gone and a warp starting from rest). Now one clock in
+    galaxy.js's LAUNCH block: `--leave` fade `LEAVE_FADE_S` 0.28,
+    then a full-screen 2D canvas `.leave-warp` (created on the press
+    only) runs `LEAVE_STREAKS` 420 streaks out of the centre of
+    `#miniGalaxy` (`LEAVE_RUN` 0.04–0.64), the dark closes
+    (`LEAVE_DARK` 0.48–0.66) and at `LEAVE_GO_S` 0.68 it sets
+    `sessionStorage['koaik:jump']` and follows the link. system.html's
+    head script reads the flag (fresh < 8 s) → `.is-jumping` (the
+    warp layer is dark from first paint) and the boot calls
+    `warpSequence.start({ jump: true })`: the clock starts at
+    `T.JUMP_IN` 1.45 (flash out of the dark, then light speed) —
+    ~2.2 s instead of 3.6. A direct load plays the full warp. The
+    BUTTON still does not animate (item 31). The streak code is a
+    small copy of warp.js's; warp.js itself is not loaded on
+    galaxy.html. Scroll is held by wheel/touch/key listeners during
+    the leave, not `overflow: hidden`. `LEAVE_MS` / `LEAVE_FADE_MS` /
+    `RELEASE_AFTER` are gone.
+    SYSTEM HUD: `.sys-top` (top-left, inside `.sys-hud`, so it shows
+    with `.is-system` and hides with `.is-collapsing`) holds
+    `.sys-nav` — `a.sys-back` "← Back" → `galaxy.html#build`, and
+    `.view-toggle` "3D | List" (List → `work.html`) — then the pilot
+    chip (no longer absolutely placed). Under `.planet--css` only
+    Back and the toggle show. This resolves the "no way back" open
+    item.
+    `work.html` + `js/work.js` + `css/work.css`: the same projects as
+    a plain list (number, icon, name, description, tech tags, Demo /
+    Source links — the fields of hud.js's `projectHtml()`), on the
+    plain-page shell with the bar, the same toggle reversed, no
+    canvas. Its header says "04 — Projects" (the agent's numbering).
+
+    CHANGED the same day (user: "don't let galaxy.html animate
+    anything, redirect me directly and start the animation of it"):
+    THE PRESS paragraph above is history. The launch link is a PLAIN
+    LINK — galaxy.js has no click handler on it, no `--leave` fade,
+    no `.leave-warp` canvas, no `koaik:jump` flag; system.html plays
+    its full warp. Do not add a leaving animation on galaxy.html
+    again. The jump path in warp.js (`start({ jump })`, `T.JUMP_IN`)
+    and system.html's head script / `.is-jumping` are now DEAD (the
+    flag is never set). And the view switch stays put: work.html has
+    `.sys-top.work-top` (fixed, same Back + toggle markup as the
+    HUD), so the toggle is at the same x/y on both pages (measured
+    108,18 at 1470 wide); under 900 px work.html's bar drops a row
+    (not viewed). Toggling List → 3D plays the full warp.
+
+    THEN (user: "after toggling … the animation should not start
+    again"): work.html's "3D" link is `system.html#view`. With that
+    hash system.html skips the warp (its boot adds `.is-arrived` and
+    drops `.is-jumping`) and system.js's `instant` (= reduceMotion ||
+    `#view`) puts the system in its settled state at once — no
+    reveal, no pull-back, no staged orbits. Motion inside the system
+    (orbiting, spin) is unchanged. Verified: List → 3D shows the
+    finished system with 9 live bodies after 2 s; → List returns.
+    A direct load of system.html, or the launch link, still plays
+    the full arrival. And "View my work" (`#gnameWork`, the glass
+    pill under the focus line in the hero) was REMOVED on request;
+    `.gname-actions` / `.gname-go` CSS is now unused by the hero.
+
+    work.html's list is now SEPARATE CARDS (user: "cards, separated,
+    and look like the prot website" — read as the portfolio's own
+    project cards, style.css `.project-card`; if they meant another
+    site, ask): a 1.5rem gap grid, each card its own glass surface,
+    big icon with the number at the right, mono name, tech tags,
+    bordered Demo / Source buttons, lift + ice-blue glow on hover
+    (`(hover: hover)`). The one-bordered-sheet grid is gone.
+
 Open items and ideas, none started:
 
 - Nothing has been watched in a real browser at 60 fps: the launch

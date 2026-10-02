@@ -1,0 +1,214 @@
+/* ============================================================
+   WORK — work.html, the projects as a plain list
+   ============================================================
+   Loaded after galaxy.css, which gives this page its night
+   (body.page), the top bar, the tokens (--accent*, --j-*) and the
+   view switch (.view-toggle, shared with the system's HUD). Type and
+   hairlines only: a numbered label and a large title like About, then
+   separate cards. Nothing moves on its own; hover lifts a card. */
+
+.work {
+  flex: 1;
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: clamp(110px, 16vh, 160px) clamp(16px, 4vw, 40px) 96px;
+}
+
+/* ── Back and the view switch: fixed where the system's HUD has them
+   (.sys-top, galaxy.css), so the switch stays put between the views.
+   Under 900px the bar would run into them: it drops a row. */
+.work-top { position: fixed; z-index: 6; }
+@media (max-width: 900px) {
+  .site-nav:has(~ .work-top) { top: 68px; }
+  .work { padding-top: 156px; }
+}
+
+/* ── The header: label, title, a line. */
+.work-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px 32px;
+  margin-bottom: clamp(32px, 6vh, 56px);
+}
+.work-heading { min-width: 0; }
+.work-label {
+  margin: 0 0 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: #7C869A;
+}
+.work-title {
+  margin: 0;
+  font-size: clamp(2.6rem, 7.4vw, 5.6rem);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.035em;
+  color: #FFFFFF;
+}
+.work-lead {
+  margin: 1.2rem 0 0;
+  max-width: 34em;
+  font-size: 1.02rem;
+  line-height: 1.7;
+  color: #9AA3B8;
+}
+
+/* ── The list: separate cards, the way the portfolio's project cards
+   are (style.css .project-card): each its own glass surface with its
+   own border and a gap between, a big icon, the name in mono, tech
+   tags, bordered link buttons, and a lift on hover. The accent is the
+   site's ice blue. */
+.work-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+  gap: 1.5rem;
+}
+.work-list:empty { display: none; }
+.work-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 2rem;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  border-radius: var(--radius-md, 16px);
+  background: rgba(255, 255, 255, 0.045);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  overflow: hidden;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.work-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(135deg, rgba(var(--accent-rgb), 0.9), rgba(var(--accent-dim-rgb), 0.5));
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+@media (hover: hover) {
+  .work-card:hover {
+    transform: translateY(-6px);
+    border-color: rgba(var(--accent-rgb), 0.35);
+    box-shadow: 0 24px 60px rgba(var(--accent-dim-rgb), 0.16), 0 0 30px rgba(var(--accent-rgb), 0.12);
+  }
+  .work-card:hover::before { opacity: 0.05; }
+}
+.work-card:focus-within { border-color: rgba(var(--accent-rgb), 0.35); }
+.work-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+.work-card-icon { font-size: 2.25rem; line-height: 1; }
+.work-card-num {
+  font-family: var(--j-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.22em;
+  color: var(--accent);
+}
+.work-card-title {
+  margin: 0 0 0.75rem;
+  min-width: 0;
+  font-family: var(--j-mono);
+  font-size: 1.05rem;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: 0.5px;
+  color: #FFFFFF;
+  overflow-wrap: anywhere;
+}
+.work-card-desc {
+  flex-grow: 1;
+  margin: 0 0 1.5rem;
+  font-size: 0.9rem;
+  line-height: 1.75;
+  color: #9AA3B8;
+}
+.work-card-tags {
+  list-style: none;
+  margin: 0 0 1.5rem;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.work-card-tags li {
+  padding: 0.2rem 0.65rem;
+  border: 1px solid rgba(var(--accent-dim-rgb), 0.25);
+  border-radius: 4px;
+  background: rgba(var(--accent-dim-rgb), 0.1);
+  font-family: var(--j-mono);
+  font-size: 0.73rem;
+  color: var(--accent-dim);
+}
+.work-card-links {
+  margin: auto 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.work-card-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 40px;
+  padding: 0 1rem;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  border-radius: var(--radius-sm, 8px);
+  font-family: var(--j-mono);
+  font-size: 0.82rem;
+  color: #9AA3B8;
+  transition: color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+}
+.work-card-links a:hover {
+  color: var(--accent);
+  border-color: var(--accent-dim);
+  box-shadow: 0 0 24px rgba(var(--accent-rgb), 0.18);
+}
+.work-card-links a:focus-visible,
+.work-foot-link:focus-visible,
+.work-note a:focus-visible { outline: 2px solid var(--accent-dim); outline-offset: 3px; border-radius: 4px; }
+
+/* ── Under the list. */
+.work-note { margin: 0; font-size: 0.95rem; line-height: 1.7; color: #9AA3B8; }
+.work-note a { color: var(--accent); text-decoration: underline; text-underline-offset: 4px; }
+.work-foot {
+  margin: clamp(28px, 5vh, 48px) 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 24px;
+}
+.work-foot-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  font-family: var(--j-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #9AA3B8;
+  transition: color 0.2s ease;
+}
+.work-foot-link:hover, .work-foot-link:focus-visible { color: #FFFFFF; }
+
+@media (max-width: 480px) {
+  .work-card { padding: 1.5rem 1.25rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .work-card, .work-card::before, .work-card-links a, .work-foot-link { transition: none; }
+  .work-card:hover { transform: none; }
+}

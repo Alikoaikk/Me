@@ -9,6 +9,12 @@
    window.system.overview() to back out. Also the no-WebGL fallback:
    a plain list of the same content.
 
+   The two controls beside the chip — "← Back" (galaxy.html#build) and
+   the "3D | List" switch (work.html, built by work.js from the same
+   data) — are plain links in system.html and need nothing from here.
+   work.js renders a project's card from the same fields as
+   projectHtml() below: change the two together.
+
    galaxy.js owns the sky and the name, system.js the scene; this file
    never touches either. It only needs the DOM and data.js.
    ============================================================ */

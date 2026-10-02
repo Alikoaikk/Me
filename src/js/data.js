@@ -11,6 +11,7 @@ const portfolioData = {
        Drop the photo at src/assets/portrait.jpg; until it exists the
        dashboard shows the initials instead. */
     photo: "assets/portrait.jpg",
+    resume: "assets/Ali_Koaik_CV.pdf",
     /* One line for the dashboard; the full story is `bio` below. */
     brief: "Computer Science student in Lebanon, at USAL and 42 Beirut. Low-level programming, systems design, and building things from scratch.",
     bio: [
@@ -48,6 +49,11 @@ const portfolioData = {
       period: "2025 – Present",
       level: "Level 5",
       badge: "Project-Based & Peer-to-Peer Learning",
+      /* The school's mark beside its entry in the timeline (galaxy.html).
+         `logoTile: "light"` puts it on a white tile — for a logo drawn
+         for a white page; without it the tile is dark. No `logo` → the
+         tile shows the initials. */
+      logo: "assets/logos/42.svg",
       /* Shown when the card is hovered (galaxy.html, profile.js). */
       description: "A project-based, peer-to-peer coding school with no lectures or teachers. Learning happens through hands-on projects, collaboration, and peer review — pushing students through systems programming, algorithms, and real-world software engineering."
     },
@@ -56,6 +62,8 @@ const portfolioData = {
       program: "Bachelor of Science in Computer Science – Computing",
       period: "2022 – Present",
       badge: "Computer Science – Computing",
+      logo: "assets/logos/usal.webp",
+      logoTile: "light",
       description: "A traditional university offering a structured Computer Science curriculum covering algorithms, data structures, software engineering, databases, operating systems, and networking — building a solid theoretical and practical foundation in computing."
     }
   ],

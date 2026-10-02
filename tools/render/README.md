@@ -52,6 +52,12 @@ Scripts — all paths are absolute or relative to where you run them:
   single-frame jump vs its neighbours (a snap; 1.0 = none), settle
   time relative to the orbiting body, card-open time, final framing.
   `retarget` re-selects 600 ms in.
+- `name.js <prefix> [W H DPR]` (real GPU) — the star-written name on
+  `galaxy.html`, cropped, one still per entry of `TIMES=ms,ms,…` after
+  load (`150,600,1000,1400` catches the entrance). `FULL=1` for the
+  whole window, `REDUCE=1`, `HASH=#build`, `URL=`, `CH=` / `CW=` (the
+  crop, in window heights). Prints `window.galaxySky.name()` — how
+  many anchors / body / dust stars the word was dealt.
 - `ab-hover-det.js <url> <out.png> <scrollVh> x0 y0 x1 y1 [postFrames]`
   Deterministic sweep: seeds `Math.random` and hand-steps
   `requestAnimationFrame`/`performance.now`, so two runs are

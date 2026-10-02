@@ -135,6 +135,8 @@
    The geometry note now lives on .gname-full itself, next to the
    numbers it constrains. */
 .galaxy-name {
+  /* The name's font size: everything round it is hung from this. */
+  --S: clamp(2.8rem, min(17vmin, 19vw), 11rem);
   position: fixed;
   inset: 0;
   z-index: 2;
@@ -169,45 +171,51 @@
   margin: 0;
   white-space: nowrap;
   display: block;
-  transform: translate(-50%, calc(-50% + var(--cap-shift, 0px)));
+  transform: translate(-50%, calc(-50% - var(--name-scroll, 0px)));
 
-  /* Must match NAME_FONT / NAME_SIZE_VMIN / NAME_LETTER_SPACING. */
-  font-family: 'Orbitron', var(--font-heading, 'Space Grotesk'), system-ui, sans-serif;
-  font-weight: 800;
-  font-size: clamp(1.6rem, 11vmin, 7.5rem);
-  letter-spacing: 0.08em;
-  text-indent: 0.08em;
-  text-transform: uppercase;
+  /* THE NAME IS REAL TEXT (see "THE NAME IS REAL TEXT" in galaxy.js):
+     the page's own heading face, heavy and tight, white with a soft
+     light round it. The stars are sampled FROM this box, character by
+     character, so any change of face, size or tracking here is
+     followed by them — nothing to mirror in the JS. --name-text is
+     written by galaxy.js every frame (the stars gather and the text
+     resolves; the reader scrolls and it thins into stars): no
+     transition on it. */
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-weight: 700;
+  font-size: var(--S);
+  letter-spacing: -0.035em;
   line-height: 1;
-
-  /* FULLY INVISIBLE — no fill, no stroke. The stars are the only
-     thing that draws this name.
-
-     An outline, even a hairline, competes with the fill: it states
-     the letterform exactly, so the eye reads the stroke as the real
-     word and the stars as decoration landing inside it. Removing it
-     inverts that — the constellation IS the letterform, and its edges
-     are as soft or as ragged as the stars that happen to be there.
-
-     The element is still rendered (not display:none) because
-     alignNameToStars() measures its box every resize to align the
-     star centroid, and a removed box has no geometry to measure. */
+  /* Room for the glow inside the box: the entrance's mask clips to it. */
+  padding: 0.6em 0.7em;
+  /* The letters themselves are NOT painted: the name is written by
+     stars (the 2D canvas over this box). What this element gives is
+     the soft light behind them, in the letters' shape — a shadow of
+     transparent text — and the box the stars are sampled from. */
   color: transparent;
-  -webkit-text-fill-color: transparent;
-  -webkit-text-stroke: 0;
-  text-stroke: 0;
-
-  /* Defensive: neutralise the gradient-fill and animation style.css
-     applies to its own hero heading, in case a future rule there
-     widens its selector to reach this one. */
+  text-shadow:
+    0 0 0.05em rgba(var(--accent-rgb, 156, 196, 255), 0.11),
+    0 0 0.40em rgba(var(--accent-rgb, 156, 196, 255), 0.08);
   background: none;
-  -webkit-background-clip: border-box;
-  background-clip: border-box;
   animation: none;
 
-  opacity: var(--name-ali, 0);
+  opacity: calc(var(--name-text, 0) * (1 - var(--leave, 0)));
   will-change: opacity;
+  /* The entrance: uncovered left to right as the stars land
+     (--name-wipe, galaxy.js; 2 = all of it, also the default). */
+  -webkit-mask-image: linear-gradient(90deg, #000 calc((var(--name-wipe, 2) - 0.20) * 100%), transparent calc((var(--name-wipe, 2) + 0.03) * 100%));
+          mask-image: linear-gradient(90deg, #000 calc((var(--name-wipe, 2) - 0.20) * 100%), transparent calc((var(--name-wipe, 2) + 0.03) * 100%));
 }
+
+/* The sparks: a 2D canvas at device resolution over the name (placed
+   and sized by buildSparks in galaxy.js). */
+.gname-sparks {
+  position: absolute;
+  pointer-events: none;
+  transform: translateY(calc(-1 * var(--name-scroll, 0px)));
+  opacity: calc(1 - var(--leave, 0));
+}
+:root[data-no-webgl] .gname-sparks { display: none; }
 
 /* ── Under the name ──
    "Ali Koaik" alone is a title card; this block is what makes it a
@@ -226,13 +234,12 @@
    (--name-scroll, galaxy.js) and fades on the leave (--leave). No
    transitions on any of those: they are written every frame. */
 .gname-below {
-  --S: clamp(1.6rem, 11vmin, 7.5rem);      /* the name's font size */
   position: absolute;
   left: 50%;
   top: 52%;                 /* = NAME_CENTER_Y, as above */
   width: min(90vw, 44rem);
   transform: translate(-50%,
-    calc(var(--cap-shift, 0px) + 0.78 * var(--S) - var(--name-scroll, 0px)));
+    calc(var(--cap-shift, 0px) + 0.50 * var(--S) - var(--name-scroll, 0px)));
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -272,7 +279,7 @@
 }
 /* Where, and that he is available: plain words, a dash between. */
 .gname-meta {
-  margin: 0.95rem 0 0;
+  margin: 1.5rem 0 0;
   font-size: 0.82rem;
   font-weight: 400;
   letter-spacing: 0.03em;
@@ -288,9 +295,9 @@
   vertical-align: 0.3em;
 }
 
-/* The links: text, nothing else. The way to the work first, in gold;
-   a hairline; then where to find him. Each underlines itself on
-   hover — the line grows from the left. They exist (and take the
+/* The links: four pills of liquid glass, right under the focus line
+   (the user asked for them higher, bigger, and on glass). The way to
+   the work first, in the accent; then where to find him. They exist (and take the
    pointer and the keyboard) only once the name is written — before
    that the screen is the galaxy's — and come in on that class. */
 .gname-actions {
@@ -298,8 +305,8 @@
   flex-wrap: wrap;
   justify-content: center;
   align-items: center;
-  gap: 0.9rem 0;
-  margin-top: 2rem;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
   pointer-events: auto;
   opacity: 0;
   visibility: hidden;
@@ -312,46 +319,133 @@
   translate: 0 0;
   transition-delay: 0s;
 }
-.gname-links { display: inline-flex; align-items: center; }
-/* The hairline between the work link and the others. */
-.gname-links::before {
-  content: '';
-  width: 1px; height: 0.95em;
-  margin: 0 1.5rem;
-  background: rgba(255, 255, 255, 0.22);
+/* Where to find him: three round glass buttons in the top-right
+   corner, level with the bar, each with its logo. They belong to the
+   name screen: they scroll away with it (--name-scroll), come in once
+   the name is written and fade on the leave. */
+.gname-social {
+  position: absolute;
+  top: 16px;
+  right: clamp(14px, 2.4vw, 32px);
+  display: flex;
+  gap: 10px;
+  pointer-events: auto;
+  transform: translateY(calc(-1 * var(--name-scroll, 0px)));
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.6s ease, visibility 0s linear 0.6s;
 }
+:root.is-written .gname-social {
+  opacity: calc(1 - var(--leave, 0));
+  visibility: visible;
+  transition-delay: 0s;
+}
+.gname-icon {
+  display: grid;
+  place-items: center;
+  width: 46px; height: 46px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 50%;
+  color: #D5DBE8;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.03) 46%, rgba(255, 255, 255, 0.06)),
+    rgba(150, 175, 225, 0.05);
+  -webkit-backdrop-filter: blur(14px) saturate(170%);
+  backdrop-filter: blur(14px) saturate(170%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -1px 0 rgba(var(--accent-rgb), 0.14),
+    0 8px 24px rgba(0, 0, 0, 0.30);
+  transition: color 0.3s ease, border-color 0.3s ease, background-color 0.3s ease,
+              translate 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.gname-icon svg { width: 21px; height: 21px; }
+/* The résumé: the same glass, stretched to a pill to hold its word. */
+.gname-cv {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6em;
+  width: auto;
+  padding: 0 1.25em 0 1.05em;
+  border-radius: 999px;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 0.82rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.gname-cv svg { width: 18px; height: 18px; }
+.gname-icon:hover, .gname-icon:focus-visible {
+  color: #FFFFFF;
+  border-color: rgba(var(--accent-rgb), 0.6);
+  background-color: rgba(var(--accent-rgb), 0.18);
+  translate: 0 -2px;
+}
+.gname-icon:focus-visible { outline: 1px solid var(--accent-dim); outline-offset: 3px; }
+/* The bar takes the whole top on a narrow screen: the three go under it. */
+@media (max-width: 1100px) {
+  .gname-social { top: 76px; gap: 8px; }
+  .gname-icon { width: 42px; height: 42px; }
+  .gname-cv { width: auto; }
+}
+/* The glass: a faint tint that blurs what is behind it, a rim, a line
+   of light along the top edge and a soft one from below. */
 .gname-go, .gname-link {
-  padding: 0.35em 0;
-  font-size: 0.72rem;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.95em 1.55em 0.95em 1.81em;   /* the tracking adds 0.26em after the last letter */
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  font-size: 0.8rem;
   font-weight: 500;
   letter-spacing: 0.26em;
   text-transform: uppercase;
   text-decoration: none;
   white-space: nowrap;
-  color: #B4BCCC;
-  background: linear-gradient(currentColor, currentColor) 0 100% / 0 1px no-repeat;
-  transition: color 0.3s ease, background-size 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
+  color: #D5DBE8;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.03) 46%, rgba(255, 255, 255, 0.06)),
+    rgba(150, 175, 225, 0.05);
+  -webkit-backdrop-filter: blur(14px) saturate(170%);
+  backdrop-filter: blur(14px) saturate(170%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -1px 0 rgba(var(--accent-rgb), 0.14),
+    inset 0 0 14px rgba(255, 255, 255, 0.04),
+    0 8px 24px rgba(0, 0, 0, 0.30);
+  transition: color 0.3s ease, border-color 0.3s ease, background-color 0.3s ease,
+              translate 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-.gname-link + .gname-link { margin-left: 1.9rem; }
-.gname-go { color: var(--accent); }
+.gname-go {
+  color: var(--accent-pale);
+  border-color: rgba(var(--accent-rgb), 0.42);
+  background-color: rgba(var(--accent-rgb), 0.16);
+}
 .gname-go:hover, .gname-go:focus-visible,
-.gname-link:hover, .gname-link:focus-visible { background-size: calc(100% - 0.26em) 1px; }   /* not under the trailing tracking */
-.gname-link:hover, .gname-link:focus-visible { color: #F4F6FA; }
+.gname-link:hover, .gname-link:focus-visible {
+  color: #FFFFFF;
+  border-color: rgba(255, 255, 255, 0.32);
+  background-color: rgba(190, 210, 255, 0.14);
+  translate: 0 -2px;
+}
+.gname-go:hover, .gname-go:focus-visible { border-color: rgba(var(--accent-rgb), 0.75); background-color: rgba(var(--accent-rgb), 0.26); }
 .gname-arrow {
   display: inline-block;
-  margin-left: 0.55em;
+  margin-left: 0.3em;
   letter-spacing: 0;
   font-family: var(--font-mono, 'JetBrains Mono', monospace);
   transition: translate 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
+.gname-go { padding-right: 1.55em; }
 .gname-go:hover .gname-arrow, .gname-go:focus-visible .gname-arrow { translate: 0 3px; }
-.gname-go:focus-visible, .gname-link:focus-visible { outline: 1px solid var(--accent-dim); outline-offset: 6px; }
+.gname-go:focus-visible, .gname-link:focus-visible { outline: 1px solid var(--accent-dim); outline-offset: 3px; }
 
 /* The rotating line from the film, last and quiet. Two lines are
    reserved so the swap never moves the block; only the inner span
    fades and lifts. */
 .gname-quote {
-  margin: 2.3rem 0 0;
+  margin: 1.5rem 0 0;
   width: min(86vw, 40ch);
   min-height: calc(2 * 1.6em);
   display: flex;
@@ -383,7 +477,7 @@
   top: 52%;                 /* = NAME_CENTER_Y */
   margin: 0;
   transform: translate(-50%,
-    calc(-50% + var(--cap-shift, 0px) - 0.86 * clamp(1.6rem, 11vmin, 7.5rem) - var(--name-scroll, 0px)));
+    calc(-50% + var(--cap-shift, 0px) - 0.62 * var(--S) - var(--name-scroll, 0px)));
   font-family: var(--font-mono, 'JetBrains Mono', monospace);
   font-size: clamp(0.78rem, 1.7vmin, 1rem);
   letter-spacing: 0.32em;
@@ -477,23 +571,12 @@
 }
 
 @media (max-width: 640px) {
-  /* A 1px stroke around a name this wide reads as heavy on a phone. */
-  .gname-full {
-    -webkit-text-stroke-width: 0.75px;
-    text-stroke-width: 0.75px;
-    letter-spacing: 0.05em;
-    text-indent: 0.05em;
-  }
-
   .gname-below { width: 90vw; }
   .gname-rule { margin-bottom: 1.1rem; }
   .gname-role { letter-spacing: 0.32em; text-indent: 0.32em; }
-  .gname-actions { margin-top: 1.6rem; }
-  /* Two rows: the work link, then the three. No hairline between rows. */
-  .gname-go { flex: 0 0 100%; }
-  .gname-go:hover, .gname-go:focus-visible { background-size: 0 1px; }
-  .gname-links::before { display: none; }
-  .gname-link + .gname-link { margin-left: 1.5rem; }
+  .gname-actions { margin-top: 1.3rem; gap: 0.6rem; }
+  /* Two rows: the work link, then the three. */
+  .gname-go, .gname-link { font-size: 0.7rem; letter-spacing: 0.2em; padding: 0.9em 1.2em 0.9em 1.4em; }
   .gname-quote { margin-top: 1.7rem; font-size: 0.8rem; }
 }
 
@@ -505,7 +588,7 @@
   .gname-hello,
   .gname-cue { opacity: 1; }
   .gname-quote-text { opacity: 1; transform: none; }
-  .gname-actions, .gname-go, .gname-link, .gname-arrow { transition: none; }
+  .gname-actions, .gname-go, .gname-link, .gname-arrow, .gname-social, .gname-icon { transition: none; }
 }
 
 /* ── No WebGL: the stars can never arrive ──
@@ -515,14 +598,7 @@
    screen. Here the name is painted conventionally instead — a gradient
    fill in the site's accent colours — and the reveal tokens are
    forced on, since the burst that would have driven them never runs. */
-:root[data-no-webgl] .gname-full {
-  opacity: 1;
-  -webkit-text-fill-color: transparent;
-  background: var(--accent-gradient, linear-gradient(135deg, #6c63ff, #00d4ff));
-  -webkit-background-clip: text;
-  background-clip: text;
-  filter: drop-shadow(0 0 26px rgba(108, 99, 255, 0.34));
-}
+:root[data-no-webgl] .gname-full { opacity: 1; color: #F5F8FF; }
 
 :root[data-no-webgl] .gname-below,
 :root[data-no-webgl] .gname-hello,
@@ -649,12 +725,10 @@
 }
 .sheet-edge path { fill: none; stroke-linejoin: round; }
 .sheet-edge-rim { stroke: rgba(255, 255, 255, 0.17); stroke-width: 2; }
-.sheet-edge-shade--near { stroke: rgba(0, 0, 0, 0.42); stroke-width: 12; }
-.sheet-edge-shade--far { stroke: rgba(0, 0, 0, 0.26); stroke-width: 34; }
+.sheet-edge-shade--near { stroke: rgba(0, 0, 0, 0.30); stroke-width: 10; }
+.sheet-edge-shade--far { stroke: rgba(0, 0, 0, 0.16); stroke-width: 30; }
 :root:not(.is-written) .profile,
 :root.is-launched .profile { display: none; }
-:root.is-leaving { overflow: hidden; }
-
 .pf-sec {
   --pf-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   max-width: 1120px;
@@ -1054,7 +1128,60 @@
   text-shadow: 0 0 34px rgba(var(--accent-rgb), 0.35);
 }
 .ab-stat-label { margin-top: 14px; font-size: 0.62rem; font-weight: 500; letter-spacing: 0.2em; text-transform: uppercase; color: #7C869A; }
-.ab .pf-links { gap: 0; margin-top: 2rem; }
+/* The ways to reach him, under the numbers and in the same frame: a
+   row each — the mark, the name, where it leads, an arrow. Flat on
+   the sheet (no glass: there is nothing behind it to blur). */
+.ab-contact {
+  max-width: 496px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 22px;
+  background: rgba(6, 8, 14, 0.5);
+  overflow: hidden;
+}
+.ab-contact:empty { display: none; }
+.ab-contact li + li { border-top: 1px solid rgba(255, 255, 255, 0.1); }
+.ab-link {
+  display: grid;
+  grid-template-columns: 20px auto minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 16px;
+  padding: 19px 26px 19px 28px;
+  text-decoration: none;
+  color: #C3CAD8;
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+.ab-link-mark { width: 20px; height: 20px; color: #8892A6; transition: color 0.25s ease; }
+.ab-link-name { font-size: 0.98rem; font-weight: 600; letter-spacing: -0.005em; color: #FFFFFF; }
+.ab-link-to {
+  justify-self: end;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--j-mono, 'JetBrains Mono', ui-monospace, monospace);
+  font-size: 0.78rem;
+  color: #7C869A;
+  transition: color 0.25s ease;
+}
+.ab-link-go {
+  font-family: var(--j-mono, 'JetBrains Mono', ui-monospace, monospace);
+  font-size: 0.9rem;
+  color: #5E677A;
+  transition: color 0.25s ease, translate 0.3s var(--pf-ease, ease);
+}
+@media (hover: hover) {
+  .ab-link:hover { background-color: rgba(var(--accent-rgb), 0.07); }
+  .ab-link:hover .ab-link-mark, .ab-link:hover .ab-link-go { color: var(--accent); }
+  .ab-link:hover .ab-link-to { color: var(--accent-pale); }
+  .ab-link:hover .ab-link-go { translate: 3px 0; }
+}
+.ab-link:active { background-color: rgba(var(--accent-rgb), 0.12); }
+/* Inside the frame: the list clips, so the ring is drawn inward. */
+.ab-link:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; border-radius: 18px; background-color: rgba(var(--accent-rgb), 0.07); }
+.ab-link:focus-visible .ab-link-mark, .ab-link:focus-visible .ab-link-go { color: var(--accent); }
 .ab-frame {
   position: relative;
   justify-self: end;
@@ -1086,6 +1213,26 @@
 .tl-item:last-child { border-bottom: 0; }
 .tl-dot { position: absolute; left: -55px; top: 37px; width: 13px; height: 13px; border: 2px solid var(--accent); border-radius: 50%; background: #06080d; box-shadow: 0 0 16px rgba(var(--accent-rgb), 0.55); }
 .tl-date { padding-top: 0.35em; font-size: 0.7rem; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent); }
+/* The school's logo beside its entry, on a small tile: dark with a
+   hairline for a white mark (42), white for a logo drawn for a white
+   page (data-tile="light", USAL's seal). The initials sit under the
+   image and show when there is none. */
+.tl-body { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 22px; }
+.tl-logo {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 56px; height: 56px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.04);
+  overflow: hidden;
+}
+.tl-mono { font-size: 0.86rem; font-weight: 700; letter-spacing: 0.06em; color: #9AA3B8; }
+.tl-logo img { position: absolute; inset: 0; width: 100%; height: 100%; padding: 13px; object-fit: contain; }
+.tl-logo.has-logo .tl-mono { visibility: hidden; }
+.tl-logo[data-tile="light"] { border-color: rgba(255, 255, 255, 0.5); background: #FFFFFF; }
+.tl-logo[data-tile="light"] img { padding: 2px; }
 .tl-body h3 { margin: 0; font-size: 1.22rem; font-weight: 700; letter-spacing: -0.01em; color: #FFFFFF; }
 .tl-body p { margin: 0.45rem 0 0; font-size: 0.92rem; color: #8892A6; }
 @media (max-width: 860px), (max-aspect-ratio: 1/1) {
@@ -1095,6 +1242,10 @@
   .ab-stat { padding: 22px 20px 26px; }
   .tl-item { grid-template-columns: minmax(0, 1fr); gap: 10px; margin-left: 34px; }
   .tl-dot { left: -41px; }
+  .tl-body { column-gap: 16px; align-items: start; }
+  .tl-logo { width: 48px; height: 48px; border-radius: 13px; }
+  .tl-logo img { padding: 11px; }
+  .ab-link { column-gap: 13px; padding: 17px 18px 17px 20px; }
 }
 
 /* ── #stack ──
@@ -1122,9 +1273,9 @@
   transition: transform 1.3s cubic-bezier(0.65, 0, 0.35, 1) 0.15s;
 }
 .pf-sec.is-in .pf-stack::before { transform: scaleX(1); }
-.pf-stage { --tone: #E6E9F2; --tone-line: rgba(255, 255, 255, 0.14); --tone-fill: rgba(255, 255, 255, 0.04); --tone-text: #C9D0DD; }
-.pf-stage[data-tone="accent"], .pf-stage[data-tone="gold"] { --tone: var(--accent); --tone-line: rgba(var(--accent-rgb), 0.32); --tone-fill: rgba(var(--accent-rgb), 0.08); --tone-text: var(--accent-pale); }
-.pf-stage[data-tone="blue"] { --tone: var(--accent-dim); --tone-line: rgba(var(--accent-dim-rgb), 0.32); --tone-fill: rgba(var(--accent-dim-rgb), 0.1); --tone-text: var(--accent-pale); }
+.pf-stage { --tone: #E6E9F2; --tone-line: rgba(255, 255, 255, 0.14); --tone-fill: rgba(255, 255, 255, 0.04); --tone-text: #C9D0DD; --tone-hot: rgba(255, 255, 255, 0.38); --tone-fill-hot: rgba(255, 255, 255, 0.09); }
+.pf-stage[data-tone="accent"], .pf-stage[data-tone="gold"] { --tone: var(--accent); --tone-line: rgba(var(--accent-rgb), 0.32); --tone-fill: rgba(var(--accent-rgb), 0.08); --tone-text: var(--accent-pale); --tone-hot: rgba(var(--accent-rgb), 0.7); --tone-fill-hot: rgba(var(--accent-rgb), 0.16); }
+.pf-stage[data-tone="blue"] { --tone: var(--accent-dim); --tone-line: rgba(var(--accent-dim-rgb), 0.32); --tone-fill: rgba(var(--accent-dim-rgb), 0.1); --tone-text: var(--accent-pale); --tone-hot: rgba(var(--accent-dim-rgb), 0.75); --tone-fill-hot: rgba(var(--accent-dim-rgb), 0.2); }
 .pf-stage-node {
   position: relative;
   display: grid;
@@ -1139,12 +1290,30 @@
 .pf-stage-title { margin: 1.2rem 0 0.9rem; font-size: 1.2rem; font-weight: 600; letter-spacing: -0.01em; }
 .pf-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .pf-chips li {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   padding: 7px 13px;
   border: 1px solid var(--tone-line);
   border-radius: 9px;
   background: var(--tone-fill);
   font-size: 0.92rem;
   color: var(--tone-text);
+  transition: translate 0.3s var(--pf-ease, ease), border-color 0.25s ease, background-color 0.25s ease,
+              color 0.25s ease, box-shadow 0.3s ease;
+}
+.pf-logo { width: 20px; height: 20px; flex: none; object-fit: contain; transition: scale 0.3s var(--pf-ease, ease); }
+/* Under the pointer a chip lifts a little and lights up in its
+   stage's tone; its logo grows a touch. Not a link — the arrow stays. */
+@media (hover: hover) {
+  .pf-chips li:hover {
+    translate: 0 -2px;
+    border-color: var(--tone-hot);
+    background: var(--tone-fill-hot);
+    color: #FFFFFF;
+    box-shadow: 0 10px 22px -14px var(--tone);
+  }
+  .pf-chips li:hover .pf-logo { scale: 1.14; }
 }
 
 /* ── #education ──
@@ -1303,6 +1472,9 @@
   .pf-moon { opacity: 1; animation: none; transition: none; }
   .pf-core, .pf-body { opacity: 1; scale: 1; transition: none; }
   .pf-stack::before { transform: none; transition: none; }
+  .pf-chips li, .pf-logo, .ab-link, .ab-link-mark, .ab-link-to, .ab-link-go { transition: none; }
+  .pf-chips li:hover, .ab-link:hover .ab-link-go { translate: none; }
+  .pf-chips li:hover .pf-logo { scale: none; }
   .pf-card-front, .pf-card-back, .site-nav, .site-nav-blob { transition: none; }
   .gname-cue-chevron { animation: none; }
   .guide-dots i { animation: none; }
@@ -1557,8 +1729,54 @@ body.page {
    the screen before the next page. */
 .planet.is-system.is-collapsing .sys-hud { opacity: 0; visibility: hidden; transition: opacity 0.6s ease, visibility 0s 0.6s; }
 .sys-void { position: fixed; inset: 0; z-index: 20; background: #000; opacity: 0; pointer-events: none; }
-.sys-chip {
+/* Top left: [← Back] [3D | List] [pilot chip], one row; on a tall
+   screen the chip drops to a second row (the ⌂ System button is top
+   right there). The box itself takes no pointer: only its controls. */
+.sys-top {
   position: absolute; top: 18px; left: 18px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  max-width: calc(100% - 36px);
+  pointer-events: none;
+}
+.sys-nav { display: flex; align-items: center; gap: 8px; pointer-events: none; }
+.sys-back {
+  display: inline-flex; align-items: center; gap: 8px;
+  min-height: 48px; padding: 0 18px 0 15px;
+  border: 1px solid var(--j-line); border-radius: 999px;
+  background: var(--j-ink);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  color: var(--j-muted);
+  font-family: var(--j-mono); font-size: 0.66rem; letter-spacing: 0.14em; text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: auto;
+  transition: color 0.3s ease, border-color 0.3s ease;
+}
+.sys-back:hover, .sys-back:focus-visible { color: var(--j-text); border-color: rgba(var(--accent-rgb), 0.55); }
+.sys-back:focus-visible { outline: 2px solid var(--accent-dim); outline-offset: 2px; }
+/* The view switch — the same projects in 3D (system.html) or as a
+   list (work.html, which uses this block too). Two segments: the
+   current one is a marked <span aria-current>, the other a link. */
+.view-toggle {
+  display: inline-flex; align-items: center; gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--j-line); border-radius: 999px;
+  background: var(--j-ink);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  font-family: var(--j-mono); font-size: 0.66rem; letter-spacing: 0.14em; text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: auto;
+}
+.view-toggle-opt {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 46px; min-height: 40px; padding: 0 14px;
+  border-radius: 999px;
+  color: var(--j-muted);
+  transition: color 0.3s ease, background-color 0.3s ease;
+}
+.view-toggle-opt[aria-current] { color: var(--accent-pale); background: rgba(var(--accent-rgb), 0.16); }
+a.view-toggle-opt:hover, a.view-toggle-opt:focus-visible { color: var(--j-text); background: rgba(255, 255, 255, 0.06); }
+a.view-toggle-opt:focus-visible { outline: 2px solid var(--accent-dim); outline-offset: 2px; }
+.sys-chip {
   display: flex; align-items: center; gap: 10px;
   padding: 6px 14px 6px 6px;
   border: 1px solid var(--j-line);
@@ -1706,7 +1924,12 @@ body.page {
   .probe-readout dd { font-size: 1.1rem; }
   .sys-map { display: none; }
   .sys-home { right: 12px; bottom: auto; top: 14px; }
-  .sys-chip { top: 12px; left: 12px; }
+  /* Back and the view switch on the first row (⌂ System is top right,
+     level with them), the chip under them. */
+  .sys-top { top: 12px; left: 12px; max-width: calc(100% - 24px); flex-direction: column; align-items: flex-start; gap: 8px; }
+  .sys-back { min-height: 42px; padding: 0 14px 0 12px; }
+  .view-toggle { padding: 0; }
+  .view-toggle-opt { min-width: 44px; padding: 0 12px; }
   .sys-hint { bottom: 14px; font-size: 0.6rem; }
   .sys-label { font-size: 0.6rem; padding: 3px 7px 3px 5px; }
 }
@@ -1714,7 +1937,7 @@ body.page {
   .probe-readouts { grid-template-columns: repeat(2, 1fr); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .probe, .probe.is-open, .probe-frame > *, .probe.is-open .probe-frame > *, .sys-hud, .sys-label { transition: none; }
+  .probe, .probe.is-open, .probe-frame > *, .probe.is-open .probe-frame > *, .sys-hud, .sys-label, .sys-back, .view-toggle-opt { transition: none; }
   .probe-portrait::before, .sys-reticle { animation: none; }
 }
 
@@ -1722,7 +1945,11 @@ body.page {
    list of cards, over the sky. The section may scroll then. */
 .planet--css canvas, .planet--css .sys-labels, .planet--css .sys-hud, .planet--css .probe, .planet--css .planet-caption { display: none; }
 .planet--css { height: auto; min-height: 100vh; overflow: auto; }
-.sys-fallback { display: grid; gap: 14px; max-width: 640px; margin: 0 auto; padding: 10vh 16px; }
+/* …but Back and the view switch stay: this is the state where a way
+   out to the plain list matters most. They scroll away with the list. */
+.planet--css .sys-hud { display: block; opacity: 1; visibility: visible; transition: none; }
+.planet--css .sys-chip, .planet--css .sys-home, .planet--css .sys-hint { display: none; }
+.sys-fallback { display: grid; gap: 14px; max-width: 640px; margin: 0 auto; padding: max(10vh, 84px) 16px 10vh; }
 .sys-fallback .probe-frame { position: static; }
 
 /* ============================================================
@@ -1739,6 +1966,10 @@ body.page {
   visibility: hidden;
 }
 .warp.is-on { visibility: visible; }
+/* Opened from the press: dark from the first paint, the same dark
+   galaxy.html left in; warp.js takes the class off on its first frame
+   (its canvas carries the dark from there) and brings the flash up. */
+:root.is-jumping .warp { visibility: visible; background: rgb(4, 5, 10); }
 .warp canvas {
   position: absolute;
   inset: 0;

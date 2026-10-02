@@ -25,6 +25,18 @@
   <link rel="stylesheet" href="css/style.css" />
   <link rel="stylesheet" href="css/galaxy.css" />
   <link rel="stylesheet" href="css/cursor.css" />
+  <!-- Opened from the press on galaxy.html (its launch handler leaves
+       this mark as it follows the link, in the dark): the page opens
+       dark too (.is-jumping, galaxy.css) and the warp starts at the
+       jump instead of running up to it again. Used once. -->
+  <script>
+    try {
+      var j = sessionStorage.getItem('koaik:jump');
+      sessionStorage.removeItem('koaik:jump');
+      if (j && Date.now() - j < 8000 && !matchMedia('(prefers-reduced-motion: reduce)').matches)
+        document.documentElement.classList.add('is-jumping');
+    } catch (e) {}
+  </script>
 </head>
 <body>
 
@@ -53,16 +65,29 @@
       <p class="planet-sub" id="planetSub"></p>
       <p class="planet-hint" id="planetHint"></p>
     </div>
-    <!-- The HUD: pilot chip (top), map and hint (bottom). Shown once
+    <!-- The HUD: back, view switch and pilot chip (top), map and hint (bottom). Shown once
          the section has .is-system. -->
     <div class="sys-hud">
-      <button class="sys-chip" id="sysChip" type="button" aria-label="Open the pilot card">
-        <span class="sys-chip-portrait" aria-hidden="true"><img id="chipPhoto" alt="" hidden><span id="chipInitials"></span></span>
-        <span class="sys-chip-text">
-          <span class="sys-chip-name" id="chipName"></span>
-          <span class="sys-chip-status"><span class="dash-dot" aria-hidden="true"></span><span id="chipStatus"></span></span>
-        </span>
-      </button>
+      <!-- Top left, one row (two on a tall screen): the way back to the
+           page the reader came from, the switch to the same projects as
+           a plain list (work.html), then the pilot chip. Real links: no
+           script needed, and they also show over the fallback list. -->
+      <div class="sys-top">
+        <nav class="sys-nav" aria-label="Leave the system">
+          <a class="sys-back" id="sysBack" href="galaxy.html#build" aria-label="Back to the previous page"><span aria-hidden="true">←</span> Back</a>
+          <div class="view-toggle" role="group" aria-label="View of the projects">
+            <span class="view-toggle-opt" aria-current="true">3D</span>
+            <a class="view-toggle-opt" href="work.html" aria-label="Show the projects as a list">List</a>
+          </div>
+        </nav>
+        <button class="sys-chip" id="sysChip" type="button" aria-label="Open the pilot card">
+          <span class="sys-chip-portrait" aria-hidden="true"><img id="chipPhoto" alt="" hidden><span id="chipInitials"></span></span>
+          <span class="sys-chip-text">
+            <span class="sys-chip-name" id="chipName"></span>
+            <span class="sys-chip-status"><span class="dash-dot" aria-hidden="true"></span><span id="chipStatus"></span></span>
+          </span>
+        </button>
+      </div>
       <canvas class="sys-map" id="sysMap" width="150" height="150" aria-hidden="true"></canvas>
       <button class="sys-home" id="sysHome" type="button" aria-label="Back to the whole system">⌂ System</button>
       <p class="sys-hint" id="sysHint"></p>
@@ -104,9 +129,12 @@
       const root = document.documentElement;
       const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       function begin() {
-        if (reduce) { root.classList.add('is-arrived'); return; }
-        if (window.warpSequence) { window.warpSequence.start(); return; }
-        // No warp overlay: arrive at once.
+        const jump = root.classList.contains('is-jumping');
+        // Reduced motion, or switched here from the list (#view): no warp.
+        if (reduce || location.hash === '#view') { root.classList.remove('is-jumping'); root.classList.add('is-arrived'); return; }
+        if (window.warpSequence) { window.warpSequence.start({ jump }); return; }
+        // No warp overlay: arrive at once (and lift the dark it would have lifted).
+        root.classList.remove('is-jumping');
         root.classList.add('is-arrived');
         if (window.koaik) { window.koaik.arm(); window.koaik.reveal(); }
       }

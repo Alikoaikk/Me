@@ -18,6 +18,15 @@
                  streaks (system.js, told at 2.1).
      3.6   END   overlay hidden, scrolling unlocked.
 
+   OPENED FROM THE PRESS (start({ jump: true })): galaxy.html has
+   already played the run-up — streaks out of the mini galaxy, then
+   the dark — and followed the link in that dark. The page then opens
+   dark (.is-jumping, set in system.html's head) and the sequence
+   starts AT the jump: the clock begins at T.JUMP_IN, the flash comes
+   up out of the dark on the first frames, and light speed, the
+   deceleration and the arrival follow as above — about 2.2 s here.
+   Loaded directly, the page plays the whole timeline from 0.
+
    While the sequence runs the root carries .is-warping, which locks
    user scrolling (overflow: hidden keeps the scroll offset and still
    allows scrollTo). galaxy.js calls start() from the button and owns
@@ -45,7 +54,11 @@
     JUMP:         1.12,
     ARRIVE:       2.1,
     END:          3.6,
+    JUMP_IN:      1.45,         // where the clock starts when the page opens from the press
+    IN_RISE:      0.07,         // ... the flash coming up out of the dark
+    IN_FALL:      0.55,         // ... and going
   };
+  const DARK = '4,5,10';        // the dark galaxy.html leaves in (its LAUNCH block) and .is-jumping paints
 
   /* ── Maths ── */
   const clamp01 = v => Math.min(1, Math.max(0, v));
@@ -122,10 +135,18 @@
       ctx.fillRect(0, 0, vw, vh);
       ctx.globalCompositeOperation = 'source-over';
     }
-    // A sharp white flash at the jump, gone in half a second.
-    const flash = t >= T.WARP_FULL - 0.08
-      ? (t < T.WARP_FULL ? ramp(t, T.WARP_FULL - 0.08, T.WARP_FULL) : Math.max(0, 1 - (t - T.WARP_FULL) / 0.5))
-      : 0;
+    // A sharp white flash at the jump, gone in half a second. Opened
+    // from the press it is the first thing there is: up out of the
+    // dark, then away.
+    let flash;
+    if (jumpIn) {
+      const e = t - T.JUMP_IN;
+      flash = e < T.IN_RISE ? clamp01(e / T.IN_RISE) : Math.max(0, 1 - (e - T.IN_RISE) / T.IN_FALL);
+    } else {
+      flash = t >= T.WARP_FULL - 0.08
+        ? (t < T.WARP_FULL ? ramp(t, T.WARP_FULL - 0.08, T.WARP_FULL) : Math.max(0, 1 - (t - T.WARP_FULL) / 0.5))
+        : 0;
+    }
     if (flash > 0) {
       ctx.fillStyle = `rgba(235,242,255,${(flash * flash).toFixed(3)})`;
       ctx.fillRect(0, 0, vw, vh);
@@ -134,6 +155,7 @@
 
   /* ── The sequence ── */
   let running = false, t0 = 0, last = 0, jumped = false, arrived = false;
+  let jumpIn = false, skip = 0;
 
   function resize() {
     const w = window.innerWidth, h = window.innerHeight;
@@ -156,6 +178,11 @@
     resize();
     const speed = speedAt(t);
     ctx.clearRect(0, 0, vw, vh);
+    if (jumpIn) {
+      // The dark the page opened in, lifting off the sky under the flash.
+      const dark = 1 - smooth(ramp(t - T.JUMP_IN, T.IN_RISE * 0.5, T.IN_RISE + 0.3));
+      if (dark > 0) { ctx.fillStyle = `rgba(${DARK},${dark.toFixed(3)})`; ctx.fillRect(0, 0, vw, vh); }
+    }
     drawGlow(t, speed);
     drawStars(dt, speed);
   }
@@ -163,10 +190,12 @@
   function frame(now) {
     if (!running) return;
     if (!t0) { t0 = now; last = now; }
-    const t = (now - t0) / 1000;
+    const t = skip + (now - t0) / 1000;
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
     paint(t, dt);
+    // The canvas carries the dark itself from its first frame.
+    if (jumpIn) root.classList.remove('is-jumping');
 
     root.style.setProperty('--warp-fade',
       smooth(ramp(t, T.NAME_FADE[0], T.NAME_FADE[1])).toFixed(3));
@@ -193,9 +222,10 @@
     if (!jumped) jumpToPlanet();
   }
 
-  function start() {
+  function start(opts) {
     if (running) return;
     running = true; t0 = 0; jumped = false; arrived = false;
+    jumpIn = !!(opts && opts.jump); skip = jumpIn ? T.JUMP_IN : 0;
     resize();
     seedAll();
     overlay.classList.add('is-on');
@@ -216,6 +246,7 @@
      be, not a first-frame burst. */
   function renderAt(t) {
     if (running) return;
+    jumpIn = false;
     overlay.classList.add('is-on');
     seedAll();
     resize();
