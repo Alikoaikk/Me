@@ -72,6 +72,8 @@ const portfolioData = {
     {
       name: "MINISHELL",
       icon: "🐚",
+      tagline: "A Unix shell in C",
+      type: "Systems · shell",
       description: "A fully functional Unix shell built in C, replicating core Bash behavior — command execution, pipes, redirections, environment variables, built-in commands, and signal handling. One of the most comprehensive systems projects.",
       tech: ["C", "Bash", "Processes", "Pipes", "Unix"],
       github: "https://github.com/akoaik-msafa/minishell"
@@ -79,6 +81,8 @@ const portfolioData = {
     {
       name: "CPP MODULES",
       icon: "⚙️",
+      tagline: "Object-oriented C++, module by module",
+      type: "Language · OOP",
       description: "42 School C++ modules covering OOP fundamentals — classes, memory allocation, operator overloading, inheritance, polymorphism, and abstract classes. A structured progression through modern C++ concepts.",
       tech: ["C++", "OOP", "Inheritance", "Polymorphism"],
       github: "https://github.com/Alikoaikk/cpp"
@@ -86,6 +90,8 @@ const portfolioData = {
     {
       name: "SO_LONG",
       icon: "🎮",
+      tagline: "2D game in C · MiniLibX",
+      type: "Game",
       description: "A Harry Potter-themed 2D top-down game in C using the MiniLibX graphics library. Features sprite rendering, four-directional movement, map validation via .ber files, collision detection, and a move counter.",
       tech: ["C", "MiniLibX", "Graphics", "Game Dev"],
       github: "https://github.com/Alikoaikk/SO_LONG",
@@ -94,6 +100,8 @@ const portfolioData = {
     {
       name: "PUSH_SWAP",
       icon: "🔢",
+      tagline: "Sorting with two stacks",
+      type: "Algorithm",
       description: "Sorts a stack of integers using only two stacks and a minimal set of operations. Implements radix sort for large sets (100+ numbers) and optimized algorithms for small sets — achieving O(n log n) efficiency.",
       tech: ["C", "Algorithms", "Sorting", "Stacks"],
       github: "https://github.com/Alikoaikk/PUSH_SWAP"
@@ -101,6 +109,8 @@ const portfolioData = {
     {
       name: "PHILOSOPHERS",
       icon: "🧵",
+      tagline: "Dining philosophers on POSIX threads",
+      type: "Concurrency",
       description: "Multithreaded Dining Philosophers simulation in C using POSIX threads and mutexes. Handles race conditions, deadlock prevention, and precise timing — a deep dive into concurrent programming.",
       tech: ["C", "Threads", "Mutexes", "POSIX"],
       github: "https://github.com/alikoaikk/PHILOSOPHERS"
@@ -108,6 +118,8 @@ const portfolioData = {
     {
       name: "C_FULL_LIB",
       icon: "📚",
+      tagline: "libft + ft_printf + get_next_line",
+      type: "Library",
       description: "A unified C library combining libft, ft_printf, and get_next_line into one reusable static library — string manipulation, formatted output, and line-by-line file reading all in one package.",
       tech: ["C", "Variadic", "File I/O", "Static Lib"],
       github: "https://github.com/Alikoaikk/C_Full_Lib"
@@ -115,6 +127,8 @@ const portfolioData = {
     {
       name: "PIPEX",
       icon: "🔗",
+      tagline: "Shell pipelines in C",
+      type: "Systems · processes",
       description: "Replicates Unix shell pipelines by executing multiple commands with proper input/output redirection. Involves fork(), execve(), and pipe management.",
       tech: ["C", "Processes", "Pipes", "Unix"],
       github: "https://github.com/alikoaikk/PIPEX"
@@ -122,6 +136,8 @@ const portfolioData = {
     {
       name: "CUB3D",
       icon: "🎮",
+      tagline: "A raycasting engine in C",
+      type: "Graphics · game engine",
       description: "A raycasting 3D game engine in C inspired by Wolfenstein 3D. Features real-time rendering with textured walls, configurable floor/ceiling colors, player movement, and custom .cub map support.",
       tech: ["C", "Raycasting", "DDA", "Graphics", "MiniLibX"],
       github: "https://github.com/Alikoaikk/Cub3D"
@@ -129,11 +145,19 @@ const portfolioData = {
     {
       name: "Python Music Application",
       icon: "🎵",
+      tagline: "A desktop music player in Python",
+      type: "Desktop app",
       description: "A desktop music player built with Python using Tkinter for the GUI, Pygame for audio playback, and Pandas for managing music metadata. A full-featured media application.",
       tech: ["Python", "Tkinter", "Pygame", "Pandas"],
       github: "https://github.com/alikoaikk/Python-music-Application"
     }
   ],
+
+  // posts.html — LinkedIn posts, newest first, shown as LinkedIn's own
+  // embeds (js/posts.js). An entry is the post's link (from "Copy link
+  // to post"), or the whole <iframe> code from "Embed this post", or
+  // { url, height, date } — height (px) when a long post is cut short.
+  posts: [],
 
   skills: {
     languages: ["C", "C++", "Java", "Python", "JavaScript", "HTML / CSS", "SQL"],

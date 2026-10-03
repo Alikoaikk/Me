@@ -1,0 +1,134 @@
+/* ============================================================
+   POSTS — posts.html, the LinkedIn posts (js/posts.js)
+   ============================================================
+   Loaded after galaxy.css, which gives the page its night
+   (body.page), the bar and the tokens (--accent*, --j-*). The header
+   is work.html's (a numbered label, a large title, a line). The posts
+   are LinkedIn's own frames — white, not restylable — so the page
+   only frames them: two columns of them where there is room (a
+   masonry: CSS columns, a post never split), one on a phone, a dark
+   placeholder until a frame has loaded, the date and a link under
+   each. LinkedIn's embed is at most 504 px wide. */
+
+.posts {
+  flex: 1;
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: clamp(110px, 16vh, 160px) clamp(16px, 4vw, 40px) 96px;
+}
+
+/* ── The header: as work.html's. */
+.posts-head { margin-bottom: clamp(40px, 7vh, 64px); }
+.posts-label {
+  margin: 0 0 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: #7C869A;
+}
+.posts-title {
+  margin: 0;
+  font-size: clamp(2.6rem, 7.4vw, 5.6rem);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.035em;
+  color: #FFFFFF;
+}
+.posts-lead {
+  margin: 1.2rem 0 0;
+  max-width: 34em;
+  font-size: 1.02rem;
+  line-height: 1.7;
+  color: #9AA3B8;
+}
+
+/* ── The posts. */
+.posts-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  columns: 2 440px;
+  column-gap: 2rem;
+}
+.posts-list:empty { display: none; }
+.post {
+  break-inside: avoid;
+  max-width: 504px;
+  margin: 0 auto 2.5rem;
+}
+.post-frame {
+  position: relative;
+  height: var(--h, 620px);
+  border: 1px solid var(--j-line, rgba(255, 255, 255, 0.09));
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  overflow: hidden;
+}
+/* The placeholder: a slow sheen across the empty frame. */
+.post-frame::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.05) 50%, transparent 70%) 0 0 / 250% 100%;
+  animation: postWait 1.6s linear infinite;
+}
+.post-frame.is-loaded::before { display: none; }
+.post-frame iframe {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+.post-frame.is-loaded iframe { opacity: 1; }
+@keyframes postWait { from { background-position: 100% 0; } to { background-position: -150% 0; } }
+
+.post-meta {
+  margin: 0.8rem 2px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-family: var(--j-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.post-date { color: #7C869A; }
+.post-open { color: var(--accent); text-decoration: none; }
+.post-open:hover, .post-open:focus-visible { color: var(--accent-pale); text-decoration: underline; text-underline-offset: 4px; }
+
+/* ── Empty, and under the list. */
+.posts-empty { margin: 0; font-size: 1rem; line-height: 1.7; color: #9AA3B8; }
+.posts-empty a { color: var(--accent); text-underline-offset: 4px; }
+.posts-foot { margin: 0.5rem 0 0; text-align: center; }
+.posts-foot-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 22px;
+  border: 1px solid rgba(var(--accent-rgb), 0.32);
+  border-radius: 999px;
+  font-family: var(--j-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent);
+  text-decoration: none;
+  transition: background-color 0.25s ease, border-color 0.25s ease;
+}
+.posts-foot-link:hover, .posts-foot-link:focus-visible { background: rgba(var(--accent-rgb), 0.12); border-color: rgba(var(--accent-rgb), 0.6); }
+.post-open:focus-visible, .posts-foot-link:focus-visible, .posts-empty a:focus-visible { outline: 2px solid var(--accent-dim); outline-offset: 3px; }
+
+@media (max-width: 900px) {
+  .posts { padding-top: 120px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .post-frame::before { animation: none; }
+  .post-frame iframe, .posts-foot-link { transition: none; }
+}

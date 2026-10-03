@@ -98,19 +98,27 @@
       </div>
       <button class="probe-back" type="button">← Back to the system</button>`;
   }
+  /* The project card is a mission dossier: a header strip, the name and
+     one line (`tagline`), the description, spec rows (Stack from `tech`,
+     Type from `type`) and Source / Demo as buttons, hairlines between. */
   function projectHtml(i, pr) {
+    const n = String(i + 1).padStart(2, '0');
+    const tech = pr.tech || [];
+    const tagline = pr.tagline || tech.slice(0, 2).join(' · ');
+    const row = (k, v) => v ? `<div class="dossier-spec"><dt>${k}</dt><dd>${esc(v)}</dd></div>` : '';
+    const links = [
+      pr.github ? `<a class="dossier-btn dossier-btn--main" href="${esc(pr.github)}" target="_blank" rel="noopener"><span aria-hidden="true">↗</span> Source</a>` : '',
+      pr.demo ? `<a class="dossier-btn" href="${esc(pr.demo)}" target="_blank" rel="noopener"><span aria-hidden="true">▶</span> Demo</a>` : ''
+    ].join('');
     return `
-      <p class="probe-label">Mission ${String(i + 1).padStart(2, '0')} <span class="sep">—</span> orbit ${i + 1}</p>
-      <div class="probe-head">
-        <span class="probe-icon" aria-hidden="true">${pr.icon || ''}</span>
-        <div class="probe-id"><h2 class="probe-title">${esc(pr.name)}</h2></div>
+      <p class="probe-label dossier-strip"><span>Mission ${n}</span><i aria-hidden="true"></i><span>Orbit ${i + 1}</span></p>
+      <div class="dossier-id">
+        <h2 class="probe-title dossier-name">${esc(pr.name)}</h2>
+        ${tagline ? `<p class="dossier-tagline">${esc(tagline)}</p>` : ''}
       </div>
-      <p class="probe-desc">${esc(pr.description || '')}</p>
-      <ul class="probe-tags">${(pr.tech || []).map(t => `<li>${esc(t)}</li>`).join('')}</ul>
-      <div class="probe-links">
-        ${pr.demo ? `<a href="${esc(pr.demo)}" target="_blank" rel="noopener">▶ Demo</a>` : ''}
-        ${pr.github ? `<a href="${esc(pr.github)}" target="_blank" rel="noopener">↗ Source</a>` : ''}
-      </div>
+      <p class="dossier-desc">${esc(pr.description || '')}</p>
+      <dl class="dossier-specs">${row('Stack', tech.join(' · '))}${row('Type', pr.type)}</dl>
+      ${links ? `<div class="dossier-actions">${links}</div>` : ''}
       <button class="probe-back" type="button">← Back to the system</button>`;
   }
 

@@ -5,9 +5,45 @@
    (body.page), the top bar, the tokens (--accent*, --j-*) and the
    view switch (.view-toggle, shared with the system's HUD). Type and
    hairlines only: a numbered label and a large title like About, then
-   separate cards. Nothing moves on its own; hover lifts a card. */
+   separate cards, with the star river (.work-river) running through
+   the margins and gaps; hover lifts a card. */
+
+/* ── The river (js/work-river.js) and the sheet, as on the home page:
+   the sky (#hero .hero-bg, z 0 — galaxy.js in sky-only mode), the
+   river's stars on a fixed canvas (z 1), then the page's SHEET (z 2):
+   solid ink (galaxy.css .sheet::before's) on ::before, CUT by
+   --sheet-cut along the river, with .sheet-edge (galaxy.css) giving
+   the cut its rim and shade from underneath. Content is z 3. The
+   stream runs in the side margins and LEVEL through some of the gaps
+   (under the header, between rows, above the foot) — hence their
+   height. Without the script the sheet is whole. */
+body.page { position: relative; }
+.work-river {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  pointer-events: none;
+}
+.work-sheet {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+.work-sheet::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(180deg, #12151C 0, #0C0E13 70vh);
+  clip-path: var(--sheet-cut, none);
+}
 
 .work {
+  position: relative;
+  z-index: 3;
   flex: 1;
   width: 100%;
   max-width: 1180px;
@@ -31,7 +67,7 @@
   align-items: flex-end;
   justify-content: space-between;
   gap: 24px 32px;
-  margin-bottom: clamp(32px, 6vh, 56px);
+  margin-bottom: clamp(64px, 9vh, 88px);
 }
 .work-heading { min-width: 0; }
 .work-label {
@@ -69,7 +105,7 @@
   padding: 0;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
-  gap: 1.5rem;
+  gap: 5rem 1.5rem;
 }
 .work-list:empty { display: none; }
 .work-card {
@@ -185,7 +221,7 @@
 .work-note { margin: 0; font-size: 0.95rem; line-height: 1.7; color: #9AA3B8; }
 .work-note a { color: var(--accent); text-decoration: underline; text-underline-offset: 4px; }
 .work-foot {
-  margin: clamp(28px, 5vh, 48px) 0 0;
+  margin: clamp(64px, 9vh, 88px) 0 0;
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
@@ -207,6 +243,7 @@
 
 @media (max-width: 480px) {
   .work-card { padding: 1.5rem 1.25rem; }
+  .work-list { row-gap: 4rem; }
 }
 @media (prefers-reduced-motion: reduce) {
   .work-card, .work-card::before, .work-card-links a, .work-foot-link { transition: none; }

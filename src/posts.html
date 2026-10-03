@@ -1,10 +1,14 @@
 <!DOCTYPE html>
-<!-- Posts: a page of its own, reached from the top bar. EMPTY FOR NOW,
-     by the user's wish — the bar, a title and one line. No script and
-     no canvas: css/galaxy.css "PLAIN PAGES" paints the night. The bar
-     is shown by the static .nav-on; its section links go back to
-     galaxy.html, which opens straight at that section (see "ARRIVING
-     AT A SECTION" in galaxy.js). -->
+<!-- Posts: the user's LinkedIn posts, each one LinkedIn's own embed
+     (the user's choice over cards in the site's style or a feed
+     widget: LinkedIn gives a personal site no API to read a member's
+     posts, so the list is kept by hand — `posts` in js/data.js, one
+     entry per post, newest first). js/posts.js turns each entry's
+     link into the embed frame; css/posts.css lays them out. A plain
+     page like activities.html (css/galaxy.css "PLAIN PAGES": the
+     static .nav-on, body.page, the gradient night). The bar's
+     section links go back to galaxy.html, which opens straight at
+     that section (see "ARRIVING AT A SECTION" in galaxy.js). -->
 <html lang="en" class="nav-on">
 <head>
   <meta charset="UTF-8" />
@@ -12,9 +16,11 @@
   <title>Posts — Ali Koaik</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet" />
+  <link rel="preconnect" href="https://www.linkedin.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/style.css" />
   <link rel="stylesheet" href="css/galaxy.css" />
+  <link rel="stylesheet" href="css/posts.css" />
   <link rel="stylesheet" href="css/cursor.css" />
 </head>
 <body class="page">
@@ -31,11 +37,30 @@
     </div>
   </nav>
 
-  <main class="page-main">
-    <p class="pf-tag">// posts</p>
-    <h1 class="pf-title">Posts</h1>
-    <p class="page-empty">Nothing here yet.</p>
+  <main class="posts">
+    <header class="posts-head">
+      <p class="posts-label">05 &mdash; Posts</p>
+      <h1 class="posts-title">Posts</h1>
+      <p class="posts-lead">What I share on LinkedIn &mdash; projects, 42, and what I&rsquo;m learning.</p>
+    </header>
+
+    <ol class="posts-list" id="postsList"></ol>
+
+    <p class="posts-empty" id="postsEmpty" hidden>
+      Nothing here yet. Follow along on
+      <a id="postsEmptyLink" href="https://www.linkedin.com/in/alikoaik" target="_blank" rel="noopener">LinkedIn&nbsp;&#8599;</a>
+    </p>
+
+    <noscript>
+      <p class="posts-empty">The posts are loaded by a script, and scripts are off. They are all on <a href="https://www.linkedin.com/in/alikoaik">LinkedIn</a>.</p>
+    </noscript>
+
+    <p class="posts-foot" id="postsFoot" hidden>
+      <a class="posts-foot-link" id="postsProfile" href="https://www.linkedin.com/in/alikoaik" target="_blank" rel="noopener">All posts on LinkedIn <span aria-hidden="true">&#8599;</span></a>
+    </p>
   </main>
 
+  <script src="js/data.js"></script>
+  <script src="js/posts.js"></script>
 </body>
 </html>

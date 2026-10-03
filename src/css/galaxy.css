@@ -1911,6 +1911,34 @@ a.view-toggle-opt:focus-visible { outline: 2px solid var(--accent-dim); outline-
 }
 .probe-back:hover, .probe-back:focus-visible { color: var(--j-text); border-color: var(--j-text); }
 
+/* The project card: a mission dossier (hud.js projectHtml). Type and
+   hairlines; the only filled thing is the Source button. */
+.dossier-strip { display: flex; align-items: center; gap: 12px; margin-bottom: 1.3rem; }
+.dossier-strip i { flex: 1; height: 1px; background: linear-gradient(90deg, rgba(var(--accent-rgb), 0.45), rgba(var(--accent-rgb), 0.12)); }
+.dossier-strip span:last-child { color: var(--j-muted); }
+.dossier-id { margin-bottom: 1.1rem; }
+.dossier-name { margin: 0 0 0.35rem; font-size: clamp(1.45rem, 2.4vw, 1.9rem); font-weight: 700; letter-spacing: -0.01em; line-height: 1.1; overflow-wrap: anywhere; }
+.dossier-tagline { margin: 0; font-size: 0.92rem; color: var(--j-muted); }
+.dossier-desc, .dossier-specs, .dossier-actions { margin: 0; padding: 1rem 0; border-top: 1px solid var(--j-line); }
+.dossier-desc { font-size: 0.92rem; line-height: 1.6; color: rgba(230, 233, 242, 0.86); }
+.dossier-specs { display: grid; gap: 0.55rem; }
+.dossier-specs:empty { display: none; }
+.dossier-spec { display: grid; grid-template-columns: 4.6rem 1fr; gap: 12px; align-items: baseline; }
+.dossier-spec dt { font-family: var(--j-mono); font-size: 0.64rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--j-muted); }
+.dossier-spec dd { margin: 0; font-size: 0.86rem; color: var(--j-text); }
+.dossier-actions { display: flex; gap: 10px; margin-bottom: 0.6rem; }
+.dossier-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 42px; padding: 0 16px;
+  border: 1px solid rgba(var(--accent-rgb), 0.32); border-radius: 8px;
+  color: var(--accent); text-decoration: none;
+  font-family: var(--j-mono); font-size: 0.72rem; letter-spacing: 0.16em; text-transform: uppercase;
+  transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease;
+}
+.dossier-btn--main { flex: 1; background: rgba(var(--accent-rgb), 0.10); }
+.dossier-btn:hover, .dossier-btn:focus-visible { background: rgba(var(--accent-rgb), 0.18); border-color: rgba(var(--accent-rgb), 0.6); color: var(--accent-pale); }
+.dossier-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
 /* Portrait screens: the panel is a sheet at the bottom, the map goes. */
 @media (max-aspect-ratio: 1/1) {
   .probe { right: 12px; left: 12px; top: auto; bottom: 12px; width: auto; max-height: 58vh; overflow: auto; transform: translateY(24px); }

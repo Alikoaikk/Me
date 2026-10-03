@@ -1,13 +1,16 @@
 <!DOCTYPE html>
 <!-- Work: the projects of the Koaik system (system.html) as a PLAIN
-     LIST — same projects, same text, same links, no 3D and no motion.
+     LIST — same projects, same text, same links, no 3D.
      Reached from the "3D | List" switch in the system's HUD, and it
      carries the same switch back. A plain page like posts.html /
      activities.html (css/galaxy.css "PLAIN PAGES": the static .nav-on,
      body.page, the gradient night); its own rules are in css/work.css.
-     js/work.js fills the list from js/data.js — no canvas, no WebGL,
-     no modules. Not projects.html: that one belongs to index.html. -->
-<html lang="en" class="nav-on">
+     js/work.js fills the list from js/data.js; js/work-river.js runs
+     a stream of stars through the margins and the gaps (a 2D canvas,
+     no WebGL, no modules). THE SKY is the home page's: galaxy.js in
+     its sky-only state (data-sky; .is-launched collapses #hero to its
+     fixed backdrop), as on system.html. Not projects.html: that one belongs to index.html. -->
+<html lang="en" class="nav-on is-launched is-sealed" data-sky>
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -21,6 +24,26 @@
   <link rel="stylesheet" href="css/cursor.css" />
 </head>
 <body class="page">
+
+  <!-- The sky: the same fixed canvas as galaxy.html's hero, drawn by
+       galaxy.js in its sky-only state (see system.html). -->
+  <section id="hero" aria-hidden="true">
+    <div class="hero-bg">
+      <canvas id="heroCanvas"></canvas>
+    </div>
+  </section>
+
+  <!-- The sheet: the page's solid ink, as on galaxy.html's profile.
+       work-river.js cuts it along the river (--sheet-cut) so the sky
+       and the river's stars show only in the channel; the edge SVG
+       puts the home page's rim and shade on the cut. -->
+  <div class="work-sheet" id="workSheet" aria-hidden="true">
+    <svg class="sheet-edge" focusable="false">
+      <path class="sheet-edge-shade sheet-edge-shade--far" />
+      <path class="sheet-edge-shade sheet-edge-shade--near" />
+      <path class="sheet-edge-rim" />
+    </svg>
+  </div>
 
   <nav class="site-nav" aria-label="Site">
     <div class="site-nav-links">
@@ -67,7 +90,9 @@
     </p>
   </main>
 
+  <script src="js/galaxy/galaxy.js"></script>
   <script src="js/data.js"></script>
   <script src="js/work.js"></script>
+  <script src="js/work-river.js"></script>
 </body>
 </html>

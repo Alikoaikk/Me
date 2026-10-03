@@ -66,9 +66,9 @@ import { makeEmblem } from './emblems.js';
     FOV:        45,                     // degrees
     FILL:       0.72,                   // arrival: the disk's diameter / limiting viewport dimension
     ARRIVE_EL:  13 * Math.PI / 180,     // arrival: just above the disk, so it reads as a disk
-    REVEAL_MS:  2000,
-    PULLBACK_DELAY_MS: 450,             // after the reveal: a beat on the world alone
-    PULLBACK_MS: 3400,                  // the swoop out to the overview
+    REVEAL_MS:  900,
+    PULLBACK_DELAY_MS: 100,             // after the reveal: a beat on the world alone
+    PULLBACK_MS: 2000,                  // the swoop out to the overview
     ELEVATION:  32 * Math.PI / 180,     // overview: camera above the orbital plane
     ELEVATION_PORTRAIT: 52 * Math.PI / 180,
     AZIMUTH:   -18 * Math.PI / 180,
@@ -1375,11 +1375,13 @@ import { makeEmblem } from './emblems.js';
     // grows in on it, the next one a beat behind — inner to outer.
     for (const p of planets) {
       if (!p) continue;
-      const start = 0.22 + 0.06 * p.index;
+      // Spread over the same stretch whatever the count, so the outermost
+      // is fully born when the pull-back ends.
+      const start = 0.18 + 0.36 * p.index / Math.max(1, planets.length - 1);
       const q = instant ? 1 : smooth01((pull - start) / 0.30);
       const drawn = Math.round(q * p.orbitPts) + 1;
       p.ring.geometry.setDrawRange(0, 6 * Math.max(0, Math.min(p.orbitPts, drawn - 1)));   // indices: 6 per segment
-      p.born = !emblemsLive ? 0 : instant ? 1 : smooth01((pull - start - 0.10) / 0.28);
+      p.born = !emblemsLive ? 0 : instant ? 1 : smooth01((pull - start - 0.10) / 0.26);
       // In the collapse: stretched toward the hole, then gone into it.
       const f = p.fall;
       const gone = 1 - smooth01((f - 0.78) / 0.22);

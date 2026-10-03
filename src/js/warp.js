@@ -7,16 +7,18 @@
    canvas (#warp) over everything. No ship: the reader IS the ship,
    and the sky itself does the travelling.
 
-     0.0 – 1.1   the stars begin to streak toward us and the speed
+     0.0 – 0.55  the stars begin to streak toward us and the speed
                  ramps up; whatever is left of the name fades beneath.
-     1.1         JUMP — white flash; under it the page is moved to
+     0.57        JUMP — white flash; under it the page is moved to
                  the planet section (which, the hero having collapsed
                  on launch, is the top of the page: a no-op today,
                  kept so the sequence is right if that changes).
-     1.1 – 2.3   LIGHT SPEED — full streaks with chromatic fringes.
-     2.3 – 3.4   deceleration; the planet grows in behind the last
-                 streaks (system.js, told at 2.1).
-     3.6   END   overlay hidden, scrolling unlocked.
+     0.55 – 1.0  LIGHT SPEED — full streaks with chromatic fringes.
+     1.0 – 1.7   deceleration; the hole grows in behind the last
+                 streaks (system.js, told at 0.95).
+     1.8   END   overlay hidden, scrolling unlocked.
+   (Halved on 2026-10-03 — it was 3.6 s — so a reader is not kept
+   waiting; system.js's REVEAL_MS / PULLBACK_MS were cut with it.)
 
    OPENED FROM THE PRESS (start({ jump: true })): galaxy.html has
    already played the run-up — streaks out of the mini galaxy, then
@@ -46,15 +48,15 @@
   const root = document.documentElement;
 
   const T = {
-    NAME_FADE:    [0.0, 0.7],
+    NAME_FADE:    [0.0, 0.4],
     WARP_START:   0.0,
-    WARP_FULL:    1.1,
-    WARP_HOLD:    2.3,
-    WARP_END:     3.4,
-    JUMP:         1.12,
-    ARRIVE:       2.1,
-    END:          3.6,
-    JUMP_IN:      1.45,         // where the clock starts when the page opens from the press
+    WARP_FULL:    0.55,
+    WARP_HOLD:    1.0,
+    WARP_END:     1.7,
+    JUMP:         0.57,
+    ARRIVE:       0.95,
+    END:          1.8,
+    JUMP_IN:      0.6,          // where the clock starts when the page opens from the press
     IN_RISE:      0.07,         // ... the flash coming up out of the dark
     IN_FALL:      0.55,         // ... and going
   };
